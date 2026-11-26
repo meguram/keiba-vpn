@@ -18,9 +18,9 @@
 
 ```bash
 # 作業ツリーの内容をそのまま送る
-python -m src.scripts.ops.stage_deploy create --id 20261022-megu-table --desc "めぐ指数の専用テーブル" \
+python -m src.scripts.ops.stage_deploy create --id 20261126-result-marks --desc "レース結果の表のめぐ印" \
     --steps frontend_build_switch \
-    --file frontend/components/MeguTable.tsx --file frontend/lib/pastRunsView.ts
+    --file frontend/components/RaceResult.tsx --file frontend/lib/tableSort.ts
 
 # コミット済みの内容を送る（未コミットの変更を混ぜない。推奨）
 python -m src.scripts.ops.stage_deploy create --id 20261022-prob-cal --desc "確率の市場補正" --ref aadc366 \

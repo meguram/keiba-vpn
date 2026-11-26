@@ -17,26 +17,19 @@ import { sameRoundIn } from "@/lib/raceGrade";
 import { RaceStrip } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
 import { MarkNote } from "@/components/MarkNote";
-import { MeguTable } from "@/components/MeguTable";
 import { WeeklyBetTab } from "@/components/WeeklyBetTab";
 import { RaceResult } from "@/components/RaceResult";
+import { MARK_ORDER } from "@/lib/tableSort";
 import { useRaceResult } from "@/lib/hooks/useRaceResult";
 import ProbCalNote from "@/components/ProbCalNote";
 import { EntriesDaySummary, EntriesStatusBadge } from "@/components/EntriesStatus";
 import type { EntriesStatus } from "@/lib/entriesStatus";
 import type { ProbCalibration } from "@/lib/probCalibration";
-import { PredExtras } from "@/components/PredExtras";
-import type { L3fCoherent, PaceUnified } from "@/components/PredExtras";
-import type { LapForecast } from "@/lib/lapForecast";
 import { bracketChipStyle, bracketOf } from "@/lib/bracket";
-import type { GateBias, PaceForecast, PositionForecast as PosFc, TrackingV2 } from "@/lib/positionForecast";
-import type { PaceType, ScenarioForecast } from "@/lib/paceType";
-import type { ClassBenchmark, ExpectedMegu, ExpectedMeguMeta } from "@/lib/expectedMegu";
 import { firstDateOf, likelyDefaultDates, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 
 const SHOW_HORSE_LINK = featureEnabled("horse-detail");
 /* ── 型 ── */
-import { turnOf } from "@/lib/courseTurn";
 import { IntentLink } from "@/components/IntentLink";
 
 type RaceItem = {
@@ -61,8 +54,6 @@ type RaceItem = {
 };
 
 const MARK_SYMBOL: Record<string, string> = { honmei: "◎", pair: "○", show_val: "▲", anchor: "△", star: "★", kesi: "消" };
-/** 印の並び（ユーザーの指定 2026-11-25）: ◎ > ○ > ▲ > ★ > △ > 無印 > 消 */
-const MARK_ORDER: Record<string, number> = { "◎": 0, "○": 1, "▲": 2, "★": 3, "△": 4, "": 5, "消": 6 };
 const markOf = (p: { mark?: string; mark_type?: string }) => p.mark || MARK_SYMBOL[p.mark_type ?? ""] || "";
 
 type PredEntry = {
@@ -101,10 +92,6 @@ type PredEntry = {
   place_odds_min?: number | null;
   place_odds_max?: number | null;
   buy_tier?: string;
-  expected_megu?: ExpectedMegu | null;
-  position_forecast?: PosFc | null;
-  l3f_coherent?: L3fCoherent | null;
-  tracking_v2?: TrackingV2 | null;
 };
 
 type PredData = {
@@ -117,14 +104,6 @@ type PredData = {
   message?: string;
   total_horses?: number;
   predictions?: PredEntry[];
-  expected_megu_meta?: ExpectedMeguMeta | null;
-  pace_forecast?: PaceForecast | null;
-  pace_unified?: PaceUnified | null;
-  class_benchmark?: ClassBenchmark | null;
-  lap_forecast?: LapForecast | null;
-  pace_type?: PaceType | null;
-  scenario_forecast?: ScenarioForecast | null;
-  gate_bias?: GateBias | null;
   prob_calibration?: ProbCalibration | null;
   /** 出馬表の公示の段階と最終更新 */
   entries_status?: EntriesStatus | null;
@@ -240,7 +219,7 @@ const TABLE_CSS = `
 `;
 
 /* ── 予測テーブル ── */
-function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string; megu?: ExpectedMeguMeta | null }) {
+function PredTable({ raceId, preds, hasPred, message }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string }) {
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null);
   const [card, setCard] = useState<{ horseId: string; tab: CardTab } | null>(null);   // 馬名のタップで開く情報パネル（騎手・調教師のタブもここ）
   const defaultOrder = (a: PredEntry, b: PredEntry) => (a.horse_number ?? 0) - (b.horse_number ?? 0);      // 既定は馬番順
@@ -293,7 +272,6 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
   const panelHorses = sorted.filter((p) => p.horse_id).map((p) => ({
     horse_id: p.horse_id as string, horse_number: p.horse_number, horse_name: p.horse_name, bracket_number: p.bracket_number, sex_age: p.sex_age,
     jockey_name: p.jockey_name, jockey_weight: p.jockey_weight, trainer_name: p.trainer_name, weight: p.weight, weight_change: p.weight_change,
-    expected_megu: p.expected_megu ?? null, expected_through: megu?.data_through ?? null, expected_meta: megu ?? null,
   }));
 
   // 総合順位の上位 3 頭は行をうっすら色付け（sticky の列にも同じ色が乗るよう CSS 変数で渡す）
@@ -459,11 +437,11 @@ function RacePanel({
   useEffect(() => { userPicked.current = false; setTab("predict"); }, [race.race_id]);
   // 結果が出たレースを開いたときは、結果を先に見せる（ユーザーが自分でタブを選んだ後は動かさない）
   useEffect(() => { if (result && !userPicked.current) setTab("result"); }, [result?.status, result?.official, race.race_id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const predRank = useMemo(() => {
-    const m: Record<number, number> = {};
+  const resultMarks = useMemo(() => {             // レース結果の表のめぐ印（予測の表と同じ印）
+    const m: Record<number, string> = {};
     for (const p of preds) {
-      const r = p.composite_rank ?? p.pred_rank;
-      if (p.horse_number != null && r) m[p.horse_number] = r;
+      const mk = markOf(p);
+      if (p.horse_number != null && mk) m[p.horse_number] = mk;
     }
     return m;
   }, [preds]);
@@ -564,20 +542,14 @@ function RacePanel({
           <WeeklyBetTab raceId={race.race_id} hasPred={hasPred} lock={locked} authLoading={authLoading} resultKey={result ? `${result.status}-${result.official ? 1 : 0}` : ""} />
         )}
         {pred && !failed && tab === "result" && (result
-          ? <RaceResult result={result} predRank={predRank} />
+          ? <RaceResult result={result} marks={resultMarks} />
           : <div role="status" style={{ padding: "16px 0", color: "var(--text-dim)", fontSize: 13 }}>レース結果を待っています。発走の約15分後に速報を取得し、取得でき次第この画面に表示します（1分ごとに自動で確認します）。</div>)}
         {pred && !failed && tab === "predict" && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
         {pred && !failed && tab === "predict" && locked && preds.length > 0 && <MemberLockNote />}
         {pred && !failed && <PublicModeNote access={pred.access} />}
         {pred && !failed && tab === "predict" && <ProbCalNote pc={pred.prob_calibration} preds={preds} />}
         {pred && !failed && tab === "predict" && (
-          <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} />
-        )}
-        {pred && !failed && tab === "predict" && !locked && preds.length > 0 && (
-          <MeguTable preds={preds} bench={pred.class_benchmark} meta={pred.expected_megu_meta} today={{ surface: race.surface, distance: Number(race.distance) || undefined }} />
-        )}
-        {pred && !failed && tab === "predict" && !locked && preds.length > 0 && (
-          <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} lapForecast={pred.lap_forecast} paceType={pred.pace_type} scenarioForecast={pred.scenario_forecast} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} direction={turnOf(race.direction, race.venue, race.surface, race.distance)} />
+          <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} />
         )}
       </div>
     </section>

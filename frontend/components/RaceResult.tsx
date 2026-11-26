@@ -2,21 +2,23 @@
 
 import type { CSSProperties } from "react";
 import type { RaceResultData } from "@/lib/hooks/useRaceResult";
+import { MARK_ORDER } from "@/lib/tableSort";
 
 const TH: CSSProperties = { padding: "5px 8px", textAlign: "right", fontSize: 12, color: "var(--text-dim)", fontWeight: 600, whiteSpace: "nowrap" };
 const TD: CSSProperties = { padding: "5px 8px", textAlign: "right", fontSize: 12.5, borderTop: "1px solid var(--border)", verticalAlign: "middle", whiteSpace: "nowrap" };
 const POS_COLOR: Record<number, string> = { 1: "#fbbf24", 2: "#cbd5e1", 3: "#d97706" };
 const yen = (n: number) => `${n.toLocaleString("ja-JP")}円`;
 
-/** 予測の順位（馬番 → 順位）。着順と並べて、当たり外れの目安に使う */
-export type PredRankMap = Record<number, number>;
+/** そのレースのめぐAI印（馬番 → ◎○▲★△消。無印は入れない）。予測の表と同じ印（確定したレースは発走前の最後のオッズで付けた印） */
+export type MarkMap = Record<number, string>;
 
-/** 週間予測の『レース結果』タブ。着順表（AI の予想順位つき）と払戻表。速報は払戻が揃うまで『速報』と出す。 */
-export function RaceResult({ result, predRank }: { result: RaceResultData; predRank?: PredRankMap }) {
+
+/** 週間予測の『レース結果』タブ。着順表（めぐAI印つき）と払戻表。速報は払戻が揃うまで『速報』と出す。 */
+export function RaceResult({ result, marks }: { result: RaceResultData; marks?: MarkMap }) {
   const finish = result.finish ?? [];
   const payoff = result.payoff ?? [];
   const provisional = result.status === "provisional" || !result.official;
-  const hasPredRank = !!predRank && Object.keys(predRank).length > 0;
+  const hasMarks = !!marks && Object.keys(marks).length > 0;
   return (
     <div style={{ padding: "12px 0" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8, fontSize: 12.5 }}>
@@ -40,12 +42,12 @@ export function RaceResult({ result, predRank }: { result: RaceResultData; predR
               <th style={TH}>上がり3F</th>
               <th style={TH}>人気</th>
               <th style={TH}>単勝</th>
-              {hasPredRank && <th style={TH} title="AI の予測（勝率順）での順位">AI予想順位</th>}
+              {hasMarks && <th style={{ ...TH, textAlign: "center" }} title="このレースで出しためぐAI印">めぐ印</th>}
             </tr>
           </thead>
           <tbody>
             {finish.map((f) => {
-              const pr = f.horse_number != null ? predRank?.[f.horse_number] : undefined;
+              const mk = (f.horse_number != null ? marks?.[f.horse_number] : undefined) ?? "";
               return (
                 <tr key={`${f.pos}-${f.horse_number}`} style={{ background: f.pos <= 3 ? "rgba(251,191,36,0.05)" : undefined }}>
                   <td style={{ ...TD, fontWeight: 800, color: POS_COLOR[f.pos] }} data-sort={f.pos}>{f.pos}</td>
@@ -57,7 +59,7 @@ export function RaceResult({ result, predRank }: { result: RaceResultData; predR
                   <td style={TD} data-sort={f.last_3f ?? 999}>{f.last_3f != null ? f.last_3f.toFixed(1) : "—"}</td>
                   <td style={TD} data-sort={f.popularity ?? 999}>{f.popularity ?? "—"}</td>
                   <td style={TD} data-sort={f.odds ?? 0}>{f.odds != null ? `${f.odds.toFixed(1)}倍` : "—"}</td>
-                  {hasPredRank && <td style={TD} data-sort={pr ?? 999}>{pr ?? "—"}</td>}
+                  {hasMarks && <td style={{ ...TD, textAlign: "center", fontWeight: 800, color: "#fbbf24" }} data-sort={MARK_ORDER[mk] ?? MARK_ORDER[""]} title={mk ? "めぐAI印" : undefined}>{mk}</td>}
                 </tr>
               );
             })}

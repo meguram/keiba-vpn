@@ -1,7 +1,10 @@
 /** 表の列ソート用の値の解釈と比較（DOM に依存しない部分）。画面側は components/TableSorter.tsx。 */
 
 const NULLS = new Set(["", "—", "–", "-", "－", "ー", "−", "N/A", "n/a", "🔒", "未", "なし"]);
-export const MARK_RANK: Record<string, number> = { "◎": 0, "○": 1, "▲": 2, "★": 3, "△": 4, "消": 5 };
+/** 印の並び（ユーザーの指定 2026-11-25）: ◎ > ○ > ▲ > ★ > △ > 無印 > 消。予測の表・レース結果の表・列の並べ替えで共有する */
+export const MARK_ORDER: Record<string, number> = { "◎": 0, "○": 1, "▲": 2, "★": 3, "△": 4, "": 5, "消": 6 };
+/** セルの文字から読む印の順（無印は空のセルなので入れない） */
+export const MARK_RANK: Record<string, number> = Object.fromEntries(Object.entries(MARK_ORDER).filter(([k]) => k !== ""));
 
 export type Cell = { n: number | null; s: string; empty: boolean; numericLike: boolean };
 

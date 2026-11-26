@@ -39,6 +39,60 @@ def pick_snapshot(doc: dict | None, phase: str = LATEST) -> dict | None:
     return None
 
 
+def _parse_at(v: Any) -> Any:
+    from datetime import datetime, timedelta, timezone
+
+    try:
+        t = datetime.fromisoformat(str(v))
+    except (TypeError, ValueError):
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=timezone(timedelta(hours=9)))     # 時差の無い時刻は日本時間
+
+
+def pre_race_snapshot(doc: dict | None, start_at: Any = None, now: Any = None) -> dict | None:
+    """発走の時刻（start_at。日本時間の datetime）を過ぎたレースなら、発走前に時点つき（t60・t15・t10・t05・t02 など）で取ったオッズの
+    うち最も遅いもののフラットな文書を返す。発走前・発走の時刻が分からない・発走前の時点が無いときは、そのまま返す（最新のまま）。
+
+    予測の画面の印（市場補正・消印・★）は単勝オッズで決まる。発走の後に確定オッズで付け直すと、発走前に出した印と変わるため、
+    発走の後は発走前のオッズで付ける（予測の表とレース結果の表の印を同じにする。2026-11-26 の統括役の判断）。
+    phase=final は使わない: 時点を付けない取り直しは発走前でも final になり、確定オッズの final を積むと上書きされて消える
+    （src/scraper/odds_snapshot.py の merge_snapshot）。final を候補にすると、確定オッズを取る前と後で印が変わる。
+    先頭が時点つきで発走前のもの（確定オッズをまだ取っていない）も候補に入れ、確定オッズを取った後と同じ時点を選ぶ。"""
+    from datetime import datetime, timedelta, timezone
+
+    if not isinstance(doc, dict) or not doc or start_at is None:
+        return doc
+    now = now or datetime.now(timezone(timedelta(hours=9)))
+    if now < start_at:
+        return doc
+    pre = []
+    top = {k: v for k, v in doc.items() if k != "snapshots"}
+    for i, s in enumerate([*(doc.get("snapshots") or []), top]):
+        if not isinstance(s, dict) or not s.get("entries") or not s.get("phase") or s.get("phase") == "final":
+            continue
+        at = _parse_at(s.get("snapshot_at"))
+        if at is not None and at < start_at:
+            pre.append((at, i, s))
+    if not pre:
+        return doc
+    return _flatten(doc, max(pre, key=lambda t: (t[0], t[1]))[2])
+
+
+def race_start_at(card: dict | None) -> Any:
+    """出馬表（race_shutuba）の日付と発走の時刻から、発走の日本時間を返す。分からなければ None。"""
+    from datetime import datetime, timedelta, timezone
+
+    if not isinstance(card, dict):
+        return None
+    d = str(card.get("date") or "").replace("-", "").replace("/", "")[:8]
+    t = str(card.get("start_time") or "").strip()
+    try:
+        hh, mm = t.split(":")[:2]
+        return datetime(int(d[:4]), int(d[4:6]), int(d[6:8]), int(hh), int(mm), tzinfo=timezone(timedelta(hours=9)))
+    except (ValueError, IndexError):
+        return None
+
+
 def list_phases(doc: dict | None) -> list[dict[str, Any]]:
     """文書から取れる phase 一覧 [{"phase", "as_of"}]（最新が先頭）。"""
     if not isinstance(doc, dict) or not doc:

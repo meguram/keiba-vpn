@@ -154,3 +154,57 @@ def test_variance_nan_race_left_out_of_day():
     d = Y.day_raw(R)
     last = d[d["date"] == d["date"].max()].iloc[0]
     assert last["n_front_early"] == 3 and last["n_races"] == 4
+
+
+def test_parse_order_groups_and_b_prime():
+    g = D.parse_order_groups("(*5,2)-(3,4,6)1")
+    assert g == {5: (0, 2), 2: (1, 2), 3: (0, 3), 4: (1, 3), 6: (2, 3), 1: (0, 1)}
+    cp = '[{"corner": 4, "order_text": "1,(2,3,4)5,6,7,8,9,10"}]'
+    h = D.horse_values(D.clean(_race("G", "2020-01-05", cp=cp))).set_index("horse_number")
+    assert h.loc[1, "g_b_g"] == 0 and h.loc[2, "g_b_g"] == pytest.approx(0.5) and h.loc[4, "g_b_g"] == pytest.approx(-0.5)
+    assert h.loc[3, "g_b_g"] == pytest.approx(0.0)
+
+
+def test_extras_are_asof():
+    R = D.race_values(D.horse_values(D.clean(_many())))
+    R["meet_band"], R["rail"], R["firm_band"] = "1〜2日目", "A", "?"
+    e1 = B.expect(R, "inner_b_g", 50, ("meet", "firm"))
+    R2 = R.copy()
+    R2.loc[R2["date"] == R2["date"].max(), "inner_b_g"] += 100.0
+    assert np.allclose(e1, B.expect(R2, "inner_b_g", 50, ("meet", "firm")), equal_nan=True)
+
+
+def test_pick_rule():
+    from src.research.track_bias import compare as C
+    base = {"true_share": 0.1, "split_half": 0.1, "next_day": 0.1, "same_meet": 0.1}
+    ys = {"a": base, "b": {**base, "split_half": 0.2, "next_day": 0.2}, "c": {**base, "split_half": 0.3, "next_day": 0.3, "true_share": 0.05}}
+    assert C.pick("a", ("a", "b", "c"), ys)[0] == "b"          # c は割合が下がるので採らない
+    ys["b"] = {**base, "split_half": 0.2}
+    assert C.pick("a", ("a", "b"), ys)[0] == "a"               # 1 つだけ高いのは替えない
+
+
+def test_set_main_resets_to_default():
+    Y.set_main({"main": {"front": "front_4c", "inner": "inner_a"}})
+    assert (Y.FRONT_MAIN, Y.INNER_MAIN) == ("front_4c", "inner_a")
+    Y.set_main({})                                            # main の無い JSON は既定に戻す
+    assert (Y.FRONT_MAIN, Y.INNER_MAIN) == (Y.DEFAULT_FRONT, Y.DEFAULT_INNER)
+
+
+def test_choose_extras_both_falls_back_to_better_single(monkeypatch):
+    from src.research.track_bias import compare as C
+    R = D.race_values(D.horse_values(D.clean(_many())))
+    errs = {(): 1.0, ("meet",): 0.9, ("firm",): 0.8, ("meet", "firm"): 0.85}
+    monkeypatch.setattr(C.B, "expect", lambda R_, c, k, extras=(): extras)
+    monkeypatch.setattr(C, "_mse", lambda R_, c, e, lo, hi: errs[tuple(e)])
+    chosen, table = C.choose_extras(R, {"front_early": 50}, ["front_early"])
+    assert chosen["front_early"] == ["firm"] and "both" in table["front_early"]
+
+
+def test_persistence_averages_surfaces(monkeypatch):
+    from src.research.track_bias import compare as C
+    vals = {"芝": {"split_half": 0.2, "next_day": 0.1, "same_meet": 0.3, "split_days": 1, "next_pairs": 2, "meet_days": 3},
+            "ダ": {"split_half": 0.0, "next_day": 0.3, "same_meet": 0.1, "split_days": 4, "next_pairs": 5, "meet_days": 6}}
+    monkeypatch.setattr(C, "_persistence", lambda R_, d_, col: vals[R_["surf"].iloc[0]])
+    R = pd.DataFrame({"surf": ["芝", "ダ"]})
+    out = C.persistence(R, R, "front_early")
+    assert out["split_half"] == pytest.approx(0.1) and out["next_day"] == pytest.approx(0.2) and out["split_days"] == 5

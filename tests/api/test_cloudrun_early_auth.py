@@ -235,9 +235,13 @@ def test_preload_models_runs_each_step_and_survives_failures(entry, monkeypatch)
     monkeypatch.setattr(tracking_v2_service, "tv2_load_model", lambda: calls.append("tv2"))
     monkeypatch.setattr(pace_type, "_boosters", lambda: (_ for _ in ()).throw(RuntimeError("no model")))
     monkeypatch.setattr(expected_megu, "runs_for_horse", lambda hid, d: calls.append(("megu", hid, d)) or ([], ""))
+    monkeypatch.setenv("KEIBA_PRED_SLIM", "0")                                   # 付け足しを計算する従来の版
     took = entry.preload_models("20261123")
     assert calls == ["tv2", ("megu", "", "20261123")]
     assert set(took) == {"tracking_v2", "pace_type", "expected_megu"}
+    calls.clear()
+    monkeypatch.setenv("KEIBA_PRED_SLIM", "1")                                   # 軽くした版（既定）: 追走の v2・ペースの型・めぐ指数は読まない
+    assert entry.preload_models("20261123") == {} and calls == []
 
 
 def _bundle_pulled(entry, monkeypatch, ok: bool):
