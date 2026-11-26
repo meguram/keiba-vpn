@@ -50,13 +50,34 @@ def day_speed(F: pd.DataFrame) -> np.ndarray:
     return F["race_id"].map(W.set_index("race_id")["day_bias"]).to_numpy(float)
 
 
+def cushion(F: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """日付 × 場 → クッション値・芝の含水率（ゴール前）。track_bias.data.cushion_info と同じ読み方（その日の朝の測り・発表は発走前）。"""
+    import glob
+    rows = []
+    for p in sorted(glob.glob("/home/jovyan/work/keiba-vpn/data/page_reference/cushion/cushion_20*.json")):
+        rows += json.load(open(p, encoding="utf-8"))
+    c = pd.DataFrame(rows)
+    c = c[c["date"].astype(str).str.len() >= 10].rename(columns={"venue_name": "venue"})
+    for k in ("cushion_value", "turf_moisture_goal"):
+        c[k] = pd.to_numeric(c.get(k), errors="coerce")
+    c["date"] = pd.to_datetime(c["date"])
+    c = c.drop_duplicates(["date", "venue"], keep="last").set_index(["date", "venue"])
+    idx = pd.MultiIndex.from_arrays([F["date"], F["venue"]])
+    return c["cushion_value"].reindex(idx).to_numpy(float), c["turf_moisture_goal"].reindex(idx).to_numpy(float)
+
+
 def main() -> None:
-    data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", "turf_going", "芝の馬場と時計の出方での血統の適性（尤度だけ・記述）"))
+    data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", "turf_going" + ("_cushion" if "--cushion" in __import__("sys").argv else ""), "芝の馬場と時計の出方での血統の適性（尤度だけ・記述）"))
     F = ap_.base_frame()
     turf = (F["surf"] == "T").to_numpy()
     db = day_speed(F)
     types = {"芝の稍重": turf & F["going"].eq("S").to_numpy(), "芝の重・不良": turf & F["going"].eq("W").to_numpy(),
              "芝の時計の遅い日": turf & (db >= 0.5), "芝の時計の速い日": turf & (db <= -0.5)}
+    import sys
+    if "--cushion" in sys.argv:
+        cv, mo = cushion(F)
+        types = {"芝・クッション値 〜8.9": turf & (cv < 9), "芝・クッション値 9〜9.9": turf & (cv >= 9) & (cv < 10), "芝・クッション値 10〜": turf & (cv >= 10),
+                 "芝・含水率 〜9.9": turf & (mo < 10), "芝・含水率 10〜14.9": turf & (mo >= 10) & (mo < 15), "芝・含水率 15〜": turf & (mo >= 15)}
     L = ap_.maternal_long(F, drop_common=False)
     res = {"rows_with_day_bias": int(np.isfinite(db[turf]).sum()), "turf_rows": int(turf.sum()), "types": {}}
     for nm, A in types.items():
@@ -76,7 +97,7 @@ def main() -> None:
             r["mkt" if market else "nomkt"] = {k: f[k] for k in ("sire", "bms", "mat5")} | {"c": f["c"], "bms_plus_mat5": f["bms_plus_mat5"]}
         res["types"][nm] = r
         print(nm, json.dumps(r, ensure_ascii=False), flush=True)
-    path = data.OUT / "turf_going.json"
+    path = data.OUT / ("turf_going_cushion.json" if "--cushion" in sys.argv else "turf_going.json")
     path.write_text(json.dumps(res, ensure_ascii=False, indent=1))
     data.finish_all(str(path))
 
