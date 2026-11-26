@@ -3,7 +3,7 @@
     KEIBA_SESSION=pedigree-lab python -m src.research.pedigree_lab.compare_null <版の parquet> <帰無の parquet ...> --col p_TB --out <名前>
 
 - 行は rulebased.score と同じ（開発の行・父が空でない行・2019〜24 年）。p_A は rulebased_wf の (A)。
-- 群: 全体・学習の期間に父の産駒が 1 走も無い行・それ以外。Bonferroni は 12 本（2 号: 6 版 × 主の 2 群）で z ≈ 2.87 の正規近似も出す。
+- 群: 全体・学習の期間に父の産駒が 1 走も無い行・それ以外。Bonferroni の本数は --ntests（既定 12。公開の手法の分からは 24）。
 """
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ def main() -> None:
     ap.add_argument("nulls", nargs="+")
     ap.add_argument("--col", default="p_TB")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--ntests", type=int, default=N_TESTS)   # 試した数（2 号: 公開の手法の分から 24）
     a = ap.parse_args()
     data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"compare_null_{a.out}", "版と帰無の比べ（尤度だけ・記述）"))
     X = pd.read_parquet(data.OUT / "feat_v4.parquet", columns=["race_id", "horse_id", "date", "sire", "win", "n_run", "split"])
@@ -50,7 +51,7 @@ def main() -> None:
     du, dinv = np.unique(day, return_inverse=True)
     rng = np.random.default_rng(3)
     Wb = np.stack([np.bincount(rng.integers(0, len(du), len(du)), minlength=len(du)) for _ in range(1000)]).astype(float)
-    zb = norm.ppf(1 - 0.025 / N_TESTS)
+    zb = norm.ppf(1 - 0.025 / a.ntests)
     res = {"version": a.version, "nulls": a.nulls, "z_bonf": round(float(zb), 3), "score": {}}
     for nm, mk in {"全体": np.ones(len(T), bool), "学習の期間に父の産駒が 1 走も無い": unseen, "それ以外": ~unseen}.items():
         n_d = np.bincount(dinv[mk], minlength=len(du)).astype(float)
@@ -60,6 +61,14 @@ def main() -> None:
             bs = (Wb @ d_d) / (Wb @ n_d)
             pt, se = float(d_d.sum() / n_d.sum()), float(bs.std())
             r[k] = [round(pt, 5), np.percentile(bs, [2.5, 97.5]).round(5).tolist(), [round(pt - zb * se, 5), round(pt + zb * se, 5)]]
+            if k == "V_minus_N" and len(a.nulls) >= 2:
+                # 当て直しの揺れを足した区間（2 号）: 帰無の種の間の分散を (1 + 1/種の数) 倍して足す
+                sd = float(np.std([(gV - (bll(w, u) - bll(w, T[f"p_N{i}"].to_numpy())))[mk].mean() for i in range(len(a.nulls))], ddof=1))
+                se2 = float(np.sqrt(se ** 2 + sd ** 2 * (1 + 1 / len(a.nulls))))
+                # 種の数が少ないので、自由度 m − 1 の t で幅を出す（critic）。V の当て直しの揺れも帰無と同じ大きさと置いた式
+                from scipy.stats import t as tdist
+                tb = float(tdist.ppf(1 - 0.025 / a.ntests, len(a.nulls) - 1))
+                r["V_minus_N_refit"] = [round(pt - tb * se2, 5), round(pt + tb * se2, 5), round(se2, 6), round(tb, 2)]
         # 帰無の種の間の揺れ（critic）: 種ごとの V − N_i の点を並べる
         r["V_minus_N_each_seed"] = [round(float((gV - (bll(w, u) - bll(w, T[f"p_N{i}"].to_numpy())))[mk].mean()), 5) for i in range(len(a.nulls))]
         res["score"][nm] = r
