@@ -169,7 +169,7 @@ svg text { fill:var(--text); font-size:13px; }
 <tr><td>普通の k 分割のターゲットエンコーディングを足す</td><td class="bad">上がって見えるが漏れ</td><td>変わらない</td></tr>
 <tr><td>お父さんの分を外して、系統だけで表す</td><td class="bad">落ちる</td><td class="bad">落ちる</td></tr>
 <tr><td>規則の値（系統の区分・祖先の血の濃さなど）を足す</td><td class="ok">少しだけ上がる</td><td class="warn">見分けられない</td></tr>
-<tr><td>学ぶときに一部のお父さんを「新しい」に見立てて隠す（dropout 型）</td><td colspan="2">作り方に誤りがあって読めない。作り直しは次の計画</td></tr>
+<tr><td>学ぶときに一部のお父さんを「新しい」に見立てて隠す（dropout 型）</td><td class="warn">変わらない</td><td class="warn">見分けられない（少しだけ上の版と下の版がある）</td></tr>
 </tbody></table></div>
 <ul>
 <li>普通の k 分割は、未来のレースの結果が過去の値に混ざるので、本番では使えない。上がった分は「漏れ」と読む。</li>
