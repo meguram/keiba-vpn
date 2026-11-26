@@ -71,6 +71,12 @@ class Part:
 C = Chapter
 
 
+def _track_bias_year_pages() -> list[str]:
+    """トラックバイアスの名札の年ごとのページ（src/research/track_bias/report.py が年の数だけ作る。棚と同じ関数）。"""
+    from src.scripts.docs.docs_shelves import track_bias_year_pages
+    return track_bias_year_pages()
+
+
 def _decision_chapters() -> list[Chapter]:
     """docs/decisions/*.html を、MASTER → AREA → DEC の順に章にする（説明は元のページの最初の段落から）。"""
     files = sorted(p.stem for p in (DOCS_DIR / "decisions").glob("*.html"))
@@ -318,6 +324,9 @@ PARTS: list[Part] = [
         C("track_bias_labels", "トラックバイアスの名札（前後・内外）の、2016〜最新の全部の開催日 × 場 × 芝・ダートの一覧。", "結果",
           src="html/operations/final/track_bias_labels.html",
           see=[("track_bias", "トラックバイアスの判定")]),
+        *[C(stem, f"トラックバイアスの名札の {stem[-4:]} 年の分。開催日 × 場 × 芝・ダートの名札と、レースごとの 1〜3 着（人気・通過順・序盤と 4 角の 番手/頭数）。", "結果",
+            src=f"html/operations/final/{stem}.html", see=[("track_bias_labels", "トラックバイアスの名札の一覧")])
+          for stem in _track_bias_year_pages()],
         C("running_map_course_axis", "走法マップの良馬場のコース別 寄与率（6 軸）と、コース形状との関係の検証。Hペース耐性が全コースで首位になる理由（実力の代理）、人気調整後・クラス別・タイム指数水準別、直線長・小回り・坂との回帰、67 コースの表。", "結果",
           src="html/operations/running_map_course_axis.html",
           see=[("model_versions", "モデルの版と採用状況"), ("retrain_order", "再学習の順番と依存関係")]),

@@ -253,7 +253,7 @@ def resid_within(r: pd.DataFrame, ycol: str, xcol: str) -> pd.Series:
 
 
 def horse_values(r: pd.DataFrame) -> pd.DataFrame:
-    """馬ごとに q・y・c（前らしさ）・g（内らしさ）・脚質の名札を足す。"""
+    """馬ごとに q・y・c（前らしさ）・g（内らしさ）を足す（位置は 番手/頭数 の数字だけ。言葉の脚質の名札は作らない）。"""
     r = r.copy()
     q = np.empty(len(r))
     lat = np.full(len(r), np.nan)
@@ -295,9 +295,6 @@ def horse_values(r: pd.DataFrame) -> pd.DataFrame:
     # 案 C: g_a から序盤の位置（c_early）の分を除いた残り（レースの中の最小二乗）。B の変種 B_r も同じ形で g_b から除く
     r["g_c"] = resid_within(r, "g_a", "c_early")
     r["g_b_r"] = resid_within(r, "g_b", "c_early")
-    # 脚質の名札（序盤の位置から）: 逃げ＝序盤の先頭、先行＝前 1/3、差し＝〜2/3、追込＝残り
-    r["run_style"] = np.select([g["pos_first"].transform("min") == r["pos_first"], r["f_early"] <= 1 / 3, r["f_early"] <= 2 / 3],
-                           ["逃げ", "先行", "差し"], "追込")
     return r
 
 

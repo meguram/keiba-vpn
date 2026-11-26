@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import json
 import math
+import re
 from pathlib import Path
 
 import numpy as np
@@ -85,7 +86,11 @@ def bullets(xs) -> str:
     return "<ul>" + "".join(f"<li>{x}</li>" for x in xs) + "</ul>"
 
 
+_SQ_ATTR = re.compile(r"\b(href|id|class)='([^'\"]*)'")
+
+
 def page(title: str, body: str, desc: str) -> str:
+    body = _SQ_ATTR.sub(r'\1="\2"', body)       # 本（build_docs_book.namespace）は二重引用符の id・href だけを張り替える
     return (f'<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
             f'<meta name="description" content="{esc(desc)}"><title>{esc(title)}</title><style>{CSS}</style></head><body><main>{body}</main></body></html>\n')
 
@@ -115,9 +120,26 @@ def pick_samples(days: pd.DataFrame, rm: pd.DataFrame) -> list[tuple[str, str, s
 
 # ---------------------------------------------------------------- 日の節
 
+def passing(r) -> str:
+    """通過順の文字列（無い・NaN は空）。"""
+    v = getattr(r, "passing_order", "")
+    return "" if v is None or (isinstance(v, float) and pd.isna(v)) or str(v).strip() in ("", "nan") else str(v).strip()
+
+
+def pos_text(r) -> str:
+    """通過順と、序盤・4 角の 番手/頭数（名札の判定に使う位置は序盤）。通過順が無ければ「通過なし」。"""
+    po = passing(r)
+    if not po or pd.isna(r.pos_first):
+        return "通過なし"
+    n = int(r.N)
+    return f"通過 {po}・序盤 {int(r.pos_first)}/{n}・4 角 {int(r.pos_last)}/{n}"
+
+
 def _top3_text(hh: pd.DataFrame) -> str:
-    t = hh[hh["fin"] <= 3].sort_values("fin")
-    return " / ".join(f"{int(r.fin)}着 {int(r.horse_number)}番 {int(r.popularity) if pd.notna(r.popularity) else '?'}人気 {r.run_style}" for r in t.itertuples())
+    """1〜3 着の馬（同着はそのまま並べる）。"""
+    t = hh[hh["fin"] <= 3].sort_values(["fin", "horse_number"])
+    return " / ".join(f"{int(r.fin)}着 {int(r.horse_number)}番 {int(r.popularity) if pd.notna(r.popularity) else '?'}人気（{pos_text(r)}）"
+                      for r in t.itertuples())
 
 
 def horse_table(hh: pd.DataFrame) -> str:
@@ -126,11 +148,13 @@ def horse_table(hh: pd.DataFrame) -> str:
         e = r.y - r.q
         rows.append([f'<td class="n">{int(r.fin)}</td>', f'<td class="n">{int(r.horse_number)}</td>', f'<td class="n">{int(r.bracket_number)}</td>',
                      f"<td>{esc(r.horse_name)}</td>", f'<td class="n">{int(r.popularity) if pd.notna(r.popularity) else "—"}</td>',
-                     f'<td class="n">{r.odds:.1f}</td>', f'<td class="n">{int(r.pos_first)}</td>', f'<td class="n">{int(r.pos_last)}</td>',
-                     f"<td>{r.run_style}</td>", f'<td class="n">{"—" if pd.isna(r.lat4) else f"{int(r.lat4) + 1}/{int(r.grp4)}"}</td>',
+                     f'<td class="n">{r.odds:.1f}</td>', f"<td>{esc(passing(r) or '通過なし')}</td>",
+                     *([f'<td class="n">{int(r.pos_first)}/{int(r.N)}</td>', f'<td class="n">{int(r.pos_last)}/{int(r.N)}</td>',
+                        f'<td class="n">{r.f_early:.2f}</td>', f'<td class="n">{r.f_4c:.2f}</td>'] if passing(r) else
+                       ['<td class="n">—</td>'] * 2 + [f'<td class="n">{r.f_early:.2f}（最後方とみなす）</td>', f'<td class="n">{r.f_4c:.2f}</td>']), f'<td class="n">{"—" if pd.isna(r.lat4) or not passing(r) else f"{int(r.lat4) + 1}/{int(r.grp4)}"}</td>',
                      f'<td class="n">{r.q:.2f}</td>', f'<td class="n {"pos" if e > 0 else ""}">{f(e)}</td>',
                      f'<td class="n">{f(r.c_early)}</td>', f'<td class="n">{f(r.g_b_g)}</td>', f'<td class="n">{f(r.g_a)}</td>'])
-    return table(["着順", "馬番", "枠", "馬名", "人気", "単勝", "序盤の位置", "4 角の位置", "脚質（序盤）", "4 角の群（内から何頭目/頭数）",
+    return table(["着順", "馬番", "枠", "馬名", "人気", "単勝", "通過順", "序盤 番手/頭数", "4 角 番手/頭数", "序盤の相対位置 f", "4 角の相対位置", "4 角の群（内から何頭目/頭数）",
                   "3 着内の見込み q", "y − q", "前らしさ c", "内らしさ（案 B'）", "内らしさ（馬番）"], rows, raw=True)
 
 
@@ -229,7 +253,7 @@ def day_section(date: str, venue: str, why: str, days, rm, hs, sg) -> str:
                          zcell(getattr(r, "SE_inner_a")), zcell(getattr(r, "SE_inner_c")), f"<td>{esc(_top3_text(hh))}</td>"])
         out.append("<p class='sub'>レースごとの効き（S − E。正は前・内の馬が見込みより来た。「日の z への寄与」の和から μ/s を引くと日の z になる。色は ±1 以上）</p>")
         out.append(table(["R", "距離", "クラス", "馬場", "頭数", "前後 S−E", "前後 日の z への寄与", "前後 4 角 S−E", "内外 S−E", "内外 日の z への寄与",
-                          "内外 A", "内外 C", "1〜3 着（人気・脚質）"], rows, raw=True))
+                          "内外 A", "内外 C", "1〜3 着（人気・通過順・序盤と 4 角の 番手/頭数）"], rows, raw=True))
         det = []
         for r in races.itertuples():
             hh = hs[hs["race_id"] == r.race_id]
@@ -315,7 +339,9 @@ def write(out_dir: Path) -> str:
     share_front = float((calp[f"lv_{Y.FRONT_MAIN}"] > 0).mean())
     share_back = float((calp[f"lv_{Y.FRONT_MAIN}"] < 0).mean())
     b = [f"<h1>トラックバイアスの判定（前後・内外）</h1><p class='sub'>作成 {made}（JST）。担当 track-bias。全部の開催日 × 場 × 芝・ダートに、1 行の名札を付けた。"
-         f"対象 {judged['date'].min()}〜{judged['date'].max()} の {len(judged):,} 日（判定なしを除く）。全部の名札は <a href='track_bias_labels.html'>名札の一覧</a>。</p>"]
+         f"対象 {judged['date'].min()}〜{judged['date'].max()} の {len(judged):,} 日（判定なしを除く）。全部の名札は <a href='track_bias_labels.html'>名札の一覧</a>。</p>"
+         "<p class='box'>位置の式: 序盤の相対位置 f = (序盤の番手の順位 − 1) ÷ (頭数 − 1)（同じ番手は平均の順位）、前らしさ c = 0.5 − f。"
+         "表の「序盤 x/n」の x は通過順の番手の数字そのもので、同じ番手の馬がいるときや番手が飛ぶときは、f は x から計算した値と少しずれる。前後の名札は、この数値と市場の見込みとの差だけで決まる（逃げ・差しなどの言葉の名札は使わない）。</p>"]
     b.append("<div class='box'><h2 style='margin-top:0;border:none;padding:0'>結論</h2>" + bullets([
         "その日・その場・芝ダのレースで、市場の見込み（確定単勝オッズからの 3 着内の確率）に比べて前の馬・内の馬がどれだけ来たかを測り、同じ条件のふだんの日と比べて 5 段に分けた。",
         f"名札は「内外 × 前後」の 1 文（例「内有利・前残り」「中立」）。2017〜24 の日の {share_front:.0%} が前残りの側（前残り・強い前残り）、{share_back:.0%} が差し有利の側だった。",
@@ -329,7 +355,9 @@ def write(out_dir: Path) -> str:
     b.append("<h2>判定の作り</h2>" + bullets([
         "対象: 平地の芝・ダート、発走した馬（取消・除外を除く。競走中止の馬は残して 3 着外とする）。3 着の同着は、残りの枠を同着の頭数で割る。頭数 5 未満・オッズか通過順の欠けがあるレース（直線の芝 1000m など）を除く。同じ馬が同じ日に 2 回出ている写しのレースは落とす。",
         "市場の見込み q: 確定単勝オッズの 1/オッズ を和 1 に直した勝率から、Harville の式で 3 着内の確率（レースで和 3）。y は 3 着内なら 1。",
-        "前らしさ c = 0.5 − 序盤の相対位置（通過順の最初の数字。角が 2 つのレースは 3 角）。逃げ +0.5、最後方 −0.5。4 角の位置は、好走する馬が前へ上がって来る分だけ着順の結果でもあるので、並べる版にした。脚質の名札（逃げ・先行・差し・追込）も序盤の位置から作る。",
+        "前らしさ c = 0.5 − f。f は序盤の相対位置 = (序盤の番手の順位 − 1) ÷ (頭数 − 1)（序盤は通過順の最初の数字。角が 2 つのレースは 3 角。同じ番手は平均の順位）。序盤の先頭は +0.5、最後方は −0.5。",
+        "逃げ・先行・差し・追込のような言葉の名札は使わない。表の位置は「番手/頭数」の数字だけで出し、前後の名札はこの数値（c）だけで決まる。",
+        f"4 角の相対位置で作った版も表に並べる（日の z の相関 {corr_4c:.2f}）。主にしないのは、勝つ馬が 4 角で前へ上がって来る分だけ、4 角の位置に着順の結果が入るため。",
         "1 レースの値 S = Σ (y − q) × c。逃げた人気馬が負け（y − q が負で c が正）、後方の穴馬が来る（y − q が正で c が負）と大きく負になる。人気に逆らって位置取りが結果を動かしたレースを、そのまま数える。",
         "基準線 E（一般的な傾向）: 場 × 芝ダ × 距離帯（〜1400・〜1800・〜2200・それ以上）× クラス群（新馬・未勝利／1 勝／2・3 勝／OP 以上）× 馬場（良／稍重／重・不良）× 頭数群（〜8・9〜13・14〜）の、その日より前のレースだけの平均。"
         "空の区分が多いので、芝ダ → 芝ダ × 距離帯 → （場のコースの癖）＋（場を問わない条件の癖）へ順に縮めた（経験ベイズ）。縮める強さ k は 2018〜24 の as-of の誤差で選んだ（前後 " + str(cal["k"]["front_early"]) + "）。",
@@ -396,26 +424,61 @@ def write(out_dir: Path) -> str:
     p1.write_text(page("トラックバイアスの判定", "".join(b), desc), encoding="utf-8")
     p2 = HTML_DIR / "track_bias_labels.html"
     p2.write_text(labels_page(days, made), encoding="utf-8")
-    return f"{p1}\n{p2}"
+    ps = [str(p1), str(p2)]
+    for y in sorted(days["date"].str[:4].unique()):
+        py = HTML_DIR / LABEL_YEARS_NAME.format(y=y)
+        py.write_text(year_page(y, days, rm, hs, made), encoding="utf-8")
+        ps.append(str(py))
+    return "\n".join(ps)
+
+
+LABEL_YEARS_NAME = "track_bias_labels_{y}.html"
 
 
 def labels_page(days: pd.DataFrame, made: str) -> str:
-    """日付 × 場 で 1 行（芝・ダートを横に並べる）。区間などの全部の列は data/local/research/track_bias/daily_labels_<年>.csv。"""
+    """日付 × 場 で 1 行（芝・ダートを横に並べる）。レースごとの 1〜3 着は年ごとのページ（year_page）。
+    区間などの全部の列は data/local/research/track_bias/daily_labels_<年>.csv。"""
+    years = sorted(days["date"].str[:4].unique(), reverse=True)
+    links = "・".join(f"<a href='{LABEL_YEARS_NAME.format(y=y)}'>{y}</a>" for y in years)
     b = [f"<h1>トラックバイアスの名札の一覧</h1><p class='sub'>作成 {made}（JST）。作りと読み方は <a href='track_bias.html'>トラックバイアスの判定</a>。"
          "z は 前後 / 内外 の順で、正が前残り・内有利。2016 年は基準線の溜め（それより前の履歴が短い）なので粗い。"
-         "区間などの全部の列は <code>data/local/research/track_bias/daily_labels_&lt;年&gt;.csv</code>。</p>"]
+         "区間などの全部の列は <code>data/local/research/track_bias/daily_labels_&lt;年&gt;.csv</code>。</p>"
+         f"<p>レースごとの 1〜3 着（人気・通過順・序盤と 4 角の 番手/頭数）は年ごとのページ: {links}</p>"]
 
     def cell(r) -> str:
         if r is None:
             return "<td class='mu'>—</td>"
         return (f"<td>{esc(r['label'])} <span class='mu'>{f(r[f'z_{Y.FRONT_MAIN}'], 1)} / {f(r[f'z_{Y.INNER_MAIN}'], 1)}・{int(r['n_races'])}R</span></td>")
 
-    last = max(days["date"].str[:4])
+    last = years[0]
     for y, g in sorted(days.groupby(days["date"].str[:4]), reverse=True):
         rows = []
         for (d, v), gg in sorted(g.groupby(["date", "venue"]), key=lambda kv: (kv[0][0], kv[0][1]), reverse=True):
             by = {r["surf"]: r for _, r in gg.iterrows()}
-            rows.append([esc(d), esc(v), cell(by.get("芝")), cell(by.get("ダ"))])
+            rows.append([f"<a href='{LABEL_YEARS_NAME.format(y=y)}#d{d}-{esc(v)}'>{esc(d)}</a>", esc(v), cell(by.get("芝")), cell(by.get("ダ"))])
         b.append(f"<details{' open' if y == last else ''}><summary>{y} 年（{len(rows):,} 開催日 × 場）</summary>"
                  + table(["日付", "場", "芝（名札・z・レース数）", "ダート（名札・z・レース数）"], rows, raw=True) + "</details>")
     return page("トラックバイアスの名札の一覧", "".join(b), "全部の開催日 × 場 × 芝・ダートのトラックバイアスの名札（前後・内外）の一覧。")
+
+
+def year_page(y: str, days: pd.DataFrame, rm: pd.DataFrame, hs: pd.DataFrame, made: str) -> str:
+    """その年の 日 × 場 × 芝ダ の名札と、レースごとの 1〜3 着（人気・通過順・序盤と 4 角の 番手/頭数）。"""
+    dy = days[days["date"].str[:4] == y]
+    ry = rm[rm["date"].str[:4] == y]
+    hy = hs[hs["race_id"].isin(ry["race_id"]) & (hs["fin"] <= 3)]
+    top = {rid: _top3_text(g) for rid, g in hy.groupby("race_id")}
+    b = [f"<h1>トラックバイアスの名札 {y} 年</h1><p class='sub'>作成 {made}（JST）。<a href='track_bias_labels.html'>名札の一覧</a>・"
+         "<a href='track_bias.html'>トラックバイアスの判定</a>。位置は 番手/頭数（序盤 = 通過順の最初の数字。前後の名札はこの序盤の位置で決まる）。"
+         "S − E は 前後 / 内外 で、正が前・内の馬が見込みより来た。</p>"]
+    for (d, v), gg in sorted(dy.groupby(["date", "venue"]), key=lambda kv: (kv[0][0], kv[0][1]), reverse=True):
+        b.append(f"<h3 id='d{d}-{esc(v)}'>{esc(d)} {esc(v)}</h3>")
+        for _, dd in gg.sort_values("surf", ascending=False).iterrows():
+            s = dd["surf"]
+            races = ry[(ry["date"] == d) & (ry["venue"] == v) & (ry["surf"] == s)].sort_values("round")
+            rows = [[f"{int(r.round)}R", f"{int(r.distance)}", esc(r.grade), esc(r.track_condition),
+                     f"{f(getattr(r, f'SE_{Y.FRONT_MAIN}'))} / {f(getattr(r, f'SE_{Y.INNER_MAIN}'))}", esc(top.get(r.race_id, ""))]
+                    for r in races.itertuples()]
+            b.append(f"<details><summary>{SURF[s]}: {esc(dd['label'])}（前後 z {f(dd[f'z_{Y.FRONT_MAIN}'], 1)}・内外 z {f(dd[f'z_{Y.INNER_MAIN}'], 1)}・"
+                     f"{int(dd['n_races'])} レース）</summary>"
+                     + table(["R", "距離", "クラス", "馬場", "S − E", "1〜3 着（人気・通過順・序盤と 4 角の 番手/頭数）"], rows) + "</details>")
+    return page(f"トラックバイアスの名札 {y} 年", "".join(b), f"{y} 年の開催日 × 場 × 芝・ダートのトラックバイアスの名札と、レースごとの 1〜3 着の位置。")
