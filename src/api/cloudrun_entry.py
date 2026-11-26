@@ -232,9 +232,12 @@ def preload_models(today: str | None = None) -> dict[str, float]:
 
         expected_megu.runs_for_horse("", today)          # その年と前 2 年の表を読んで、更新時刻のキャッシュに載せる
 
-    step("tracking_v2", _tv2)
-    step("pace_type", _pace)
-    step("expected_megu", _megu_years)
+    from src.api import pred_slim
+
+    if not pred_slim.enabled():          # 予測を軽くした版では、追走の v2・ペースの型・想定めぐ指数を計算しないので読まない（起動の CPU・メモリを使わない）
+        step("tracking_v2", _tv2)
+        step("pace_type", _pace)
+        step("expected_megu", _megu_years)
     return took
 
 

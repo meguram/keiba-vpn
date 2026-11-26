@@ -40,6 +40,15 @@ LOCKED_GROUPS = {
 }
 
 
+def locked_group_names() -> list[str]:
+    """予測の応答の access.member_only に出す会員限定の機能の名前。予測を軽くした版（src/api/pred_slim.py）では、予測の応答に無い機能を出さない。
+    レース詳細（出走馬カードの成長曲線などを含む）は今のまま sorted(LOCKED_GROUPS)。"""
+    from src.api import pred_slim
+
+    drop = set(pred_slim.DROPPED_GROUPS) if pred_slim.enabled() else set()
+    return sorted(k for k in LOCKED_GROUPS if k not in drop)
+
+
 def _public_mark(e: dict) -> dict[str, str]:
     """匿名・無料会員に出す印。印は 1 種類（全員に同じめぐAI印 mark_type。ユーザーの判断 2026-11-25）。
     無料の新しい印（public_mark_type）は影の記録だけで、画面・応答には出さない。"""
@@ -72,7 +81,7 @@ def _redact_predictions_public_mode(resp: dict[str, Any], role: str) -> dict[str
             row.update(_public_mark(e))
     if "predictions" in resp:
         out["predictions"] = _rank_by_win_prob(rows) if role != "anonymous" else sorted(rows, key=lambda r: int(r.get("horse_number") or 99))
-    out["access"] = {"tier": "public" if role == "anonymous" else "member", "public_mode": True, "member_only": sorted(LOCKED_GROUPS),
+    out["access"] = {"tier": "public" if role == "anonymous" else "member", "public_mode": True, "member_only": locked_group_names(),
                      "withheld": _withheld()}
     return out
 
@@ -165,7 +174,7 @@ def redact_predictions(resp: dict[str, Any]) -> dict[str, Any]:
             rows.append({**{k: e[k] for k in PUBLIC_ENTRY_FIELDS if k in e and k not in ("mark_type", "mark")}, **_public_mark(e)})
     if "predictions" in resp:
         out["predictions"] = sorted(rows, key=lambda r: int(r.get("horse_number") or 99))    # 予測の順位が分からないよう馬番順
-    out["access"] = {"tier": "public", "member_only": sorted(LOCKED_GROUPS)}
+    out["access"] = {"tier": "public", "member_only": locked_group_names()}
     return out
 
 

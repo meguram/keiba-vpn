@@ -9,8 +9,6 @@ import {
 } from "@/lib/entryCardUi";
 import { ViewportMode, useViewportMode } from "@/lib/useViewportMode";
 import { GrowthCurve, GROWTH_CSS } from "@/components/GrowthCurve";
-import { RecentMeguSection } from "@/components/ExpectedMegu";
-import type { ExpectedMegu, ExpectedMeguMeta } from "@/lib/expectedMegu";
 
 /* 出馬表の馬名・騎手・調教師をタップしたときのパネル。
    PC: 右のドロワー（要約タイル → 近5走の表 → 条件別ゲージ）。スマホ: 下から出るボトムシート（要約タイルを最上部・近5走はカード・詳細は折りたたみ）。
@@ -21,7 +19,6 @@ export type PanelHorse = {
   horse_id: string; horse_number?: number; horse_name?: string | null;
   bracket_number?: number | null; sex_age?: string | null; jockey_name?: string | null; jockey_weight?: number | null;
   trainer_name?: string | null; weight?: number | null; weight_change?: number | null;
-  expected_megu?: ExpectedMegu | null; expected_through?: string | null; expected_meta?: ExpectedMeguMeta | null;
 };
 
 const TABS: { id: CardTab; label: string }[] = [{ id: "horse", label: "馬" }, { id: "jockey", label: "騎手" }, { id: "trainer", label: "調教師" }];
@@ -356,7 +353,7 @@ function TrainingBlock({ h }: { h: HorseCard }) {
   );
 }
 
-function HorseView({ h, mode, cur, jockeyName, expected, expectedMeta, locked }: { h: HorseCard; mode: ViewportMode; cur?: Cur; jockeyName?: string | null; expected?: ExpectedMegu | null; expectedMeta?: ExpectedMeguMeta | null; locked: Set<string> }) {
+function HorseView({ h, mode, cur, jockeyName, locked }: { h: HorseCard; mode: ViewportMode; cur?: Cur; jockeyName?: string | null; locked: Set<string> }) {
   const mobile = mode === "mobile";
   const lockTrain = locked.has("training"), lockComment = locked.has("trainer_comment"), lockGrowth = locked.has("growth");
   const sc = h.same_conditions.filter((s) => (s.starts ?? 0) > 0);
@@ -400,12 +397,6 @@ function HorseView({ h, mode, cur, jockeyName, expected, expectedMeta, locked }:
           </>
         )}
       </Section>
-
-      {expected !== undefined && (
-        <Section title="直近のめぐ指数" hint="実測の過去走">
-          <RecentMeguSection e={expected} meta={expectedMeta} />
-        </Section>
-      )}
 
       <Section title="成長曲線" hint={h.growth && h.growth.status === "ok" ? `${h.growth.axis.name}の推移` : undefined}>
         {lockGrowth ? <MemberLock what="めぐ指数の成長曲線" /> : <GrowthCurve g={h.growth} />}
@@ -923,9 +914,9 @@ export function EntryCardPanel({ raceId, horses, horseId, tab, onTab, onHorse, o
       </div>
     );
     const locked = new Set(card.access?.locked ?? []);
-    if (tab === "horse") return <HorseView h={card.horse} mode={mode} cur={curRace} jockeyName={jockeyName} expected={cur?.expected_megu} expectedMeta={cur?.expected_meta} locked={locked} />;
+    if (tab === "horse") return <HorseView h={card.horse} mode={mode} cur={curRace} jockeyName={jockeyName} locked={locked} />;
     return <EntityView e={tab === "jockey" ? card.jockey : card.trainer} kind={tab} mode={mode} name={tab === "jockey" ? jockeyFull : trainerFull} horse={{ no, name: horseName, bracket, weight: jw }} locked={locked} />;
-  }, [loading, error, card, tab, mode, load, curRace?.surface, curRace?.distance, cur?.expected_megu, jockeyName, jockeyFull, trainerFull, no, horseName, bracket, jw]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loading, error, card, tab, mode, load, curRace?.surface, curRace?.distance, jockeyName, jockeyFull, trainerFull, no, horseName, bracket, jw]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   if (typeof document === "undefined") return null;
   return createPortal(

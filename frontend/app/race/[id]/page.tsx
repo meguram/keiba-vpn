@@ -19,13 +19,9 @@ import { RaceNav } from "@/components/RaceNav";
 import { bracketChipStyle, bracketOf as wakuOf } from "@/lib/bracket";
 import { useNarrow } from "@/components/RaceStrip";
 import { raceExists } from "@/lib/raceExists";
-import { PositionForecast } from "@/components/PositionForecast";
-import { ResultCheckPanel, Verdict } from "@/components/ResultCheck";
 import { LoadingNotice } from "@/components/LoadingNotice";
 import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
-import { firstCornerPos, positionVerdict, summarizePositions } from "@/lib/resultCheck";
-import type { ForecastHorse, GateBias, PaceForecast, PositionForecast as PosFc } from "@/lib/positionForecast";
-import { turnOf } from "@/lib/courseTurn";
+import { firstCornerPos } from "@/lib/resultCheck";
 import { MarkNote } from "@/components/MarkNote";
 
 const SHOW_MEGU = featureEnabled("megu-index");
@@ -135,7 +131,6 @@ const MARK_SYMBOL: Record<string, string> = { honmei: "◎", pair: "○", show_v
 const markOf = (p?: { mark?: string; mark_type?: string } | null) => (p?.mark || MARK_SYMBOL[p?.mark_type ?? ""] || "");
 
 type PredEntry = {
-  position_forecast?: PosFc | null;
   bracket_number?: number | string | null;
   horse_number?: number;
   horse_name?: string;
@@ -163,8 +158,6 @@ type PredEntry = {
 
 type PredData = {
   access?: { public_mode?: boolean; withheld?: string[] };
-  pace_forecast?: PaceForecast;
-  gate_bias?: GateBias;
   status?: string;
   has_prediction?: boolean;
   /** "bets" = 印をサンプル買い目（買い目）から決めている */
@@ -597,11 +590,6 @@ export default function RaceDetailPage() {
     </div>
   );
 
-  // 結果の答え合わせ（会員向け）: 展開予想（想定の番手）と最初のコーナーの順位の突き合わせ
-  const estByNo = new Map<number, { est: number | null; style: string }>();
-  (predData?.predictions ?? []).forEach((p) => { const f = p.position_forecast; if (p.horse_number != null && f) estByNo.set(Number(p.horse_number), { est: f.early_pos_est ?? null, style: f.style }); });
-  const checkRows = !lock && estByNo.size > 0 && resultEntries.length > 0;
-  const posSummary = summarizePositions(resultEntries.map((e) => ({ no: Number(e.horse_number), est: estByNo.get(Number(e.horse_number))?.est ?? null, actual: firstCornerPos(e.passing_order) })));
   const resultCols: { key: string; label: string; val: (e: RaceEntry) => number | string | null }[] = [
     { key: "pos", label: "着順", val: (e) => finishKey(e) >= 10_000 ? null : finishKey(e) },
     { key: "waku", label: "枠", val: (e) => wakuOf(Number(e.horse_number ?? e.number), resultEntries.length, Number(e.bracket_number) || null) ?? null },
@@ -610,18 +598,13 @@ export default function RaceDetailPage() {
     { key: "jockey", label: "騎手", val: (e) => (pick(e, "jockey_name", "jockey") || null) },
     { key: "time", label: "タイム", val: (e) => parseTimeSec((e.time ?? e.finish_time) as string | undefined) },
     { key: "passing", label: "通過順", val: (e) => firstCornerPos(e.passing_order) },
-    ...(checkRows ? [
-      { key: "est", label: "想定位置", val: (e: RaceEntry) => estByNo.get(Number(e.horse_number))?.est ?? null },
-      { key: "corner1", label: "1角", val: (e: RaceEntry) => firstCornerPos(e.passing_order) },
-      { key: "posdiff", label: "位置取り", val: (e: RaceEntry) => { const v = positionVerdict(estByNo.get(Number(e.horse_number))?.est, firstCornerPos(e.passing_order)); return v ? Math.abs(v.diff) : null; } },
-    ] : []),
     { key: "l3f", label: "上り3F", val: (e) => { const n = Number(e.last3f ?? e.last_3f); return Number.isFinite(n) && n > 0 ? n : null; } },
     ...(showFinalOdds ? [
       { key: "pop", label: "人気", val: (e: RaceEntry) => { const n = Number(e.popularity); return Number.isFinite(n) && n > 0 ? n : null; } },
       { key: "fodds", label: "単勝", val: (e: RaceEntry) => positive(e.odds) ?? null },
     ] : []),
   ];
-  const RES_HIDE = new Set(["waku", "jockey", "passing", "est", "corner1", "posdiff"]);   // 狭い画面では畳む列（騎手は馬名の下に出す）
+  const RES_HIDE = new Set(["waku", "jockey", "passing"]);   // 狭い画面では畳む列（騎手は馬名の下に出す）
   // 並べ替え: 値が取れない行（取消・データなし）は、昇順でも降順でも最後。同じ値は元の順（着順）のまま
   const sortCol = resSort ? resultCols.find((c) => c.key === resSort.key) : null;
   const sortedResult = sortCol && resSort ? [...resultEntries].sort((a, b) => {
@@ -636,7 +619,6 @@ export default function RaceDetailPage() {
     <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>🏆 レース結果データがありません</div>
   ) : (
     <div style={{ overflowX: "auto" }}>
-      {checkRows && <ResultCheckPanel paceLevel={predData?.pace_forecast?.level} paceLabel={predData?.pace_forecast?.label} first3f={rd?.race_result?.pace?.first_half_3f} second3f={rd?.race_result?.pace?.second_half_3f} pos={posSummary} />}
       <table data-no-sort style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
         <thead style={{ background: "var(--surface2)" }}>
           <tr>
@@ -669,18 +651,6 @@ export default function RaceDetailPage() {
                 <td className="m-hide" style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "jockey_name", "jockey") || "—"}</td>
                 <td style={TD}>{e.time ?? e.finish_time ?? "—"}</td>
                 <td className="m-hide" style={{ ...TD, fontSize: 11 }}>{e.passing_order ?? "—"}</td>
-                {checkRows && (() => {
-                  const est = estByNo.get(Number(e.horse_number));
-                  const act = firstCornerPos(e.passing_order);
-                  const v = positionVerdict(est?.est, act);
-                  return (
-                    <>
-                      <td className="m-hide" style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{est?.est != null ? `${est.style} ${est.est}番手` : "—"}</td>
-                      <td className="m-hide" style={{ ...TD, fontSize: 12 }}>{act != null ? `${act}番手` : "—"}</td>
-                      <td className="m-hide" style={TD}>{v ? <span title={`想定${est!.est}番手 → 実際${act}番手`} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Verdict v={v.verdict} /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>{v.diff === 0 ? "ぴったり" : v.diff > 0 ? `後ろへ${v.diff}` : `前へ${-v.diff}`}</span></span> : "—"}</td>
-                    </>
-                  );
-                })()}
                 <td style={TD}>{e.last3f ?? e.last_3f ?? "—"}</td>
                 {showFinalOdds && <td style={TD}>{positive(Number(e.popularity)) ?? "—"}</td>}
                 {showFinalOdds && <td style={TD}>{positive(e.odds) != null ? `${positive(e.odds)!.toFixed(1)}倍` : "—"}</td>}
@@ -731,10 +701,6 @@ export default function RaceDetailPage() {
 
   const bracketOf = new Map<number, number>();
   shutubaEntries.forEach((e) => { const n = Number(e.horse_number), b = Number(e.bracket_number); if (n && b) bracketOf.set(n, b); });
-  const forecastHorses: ForecastHorse[] = [...preds]
-    .filter((p) => p.horse_number != null)
-    .sort((a, b) => Number(a.horse_number) - Number(b.horse_number))
-    .map((p) => ({ no: Number(p.horse_number), name: p.horse_name ?? "", bracket: wakuOf(Number(p.horse_number), preds.length, bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null)), f: p.position_forecast ?? null }));
 
   const PRED_HIDE = new Set([0, 4, 7]);   // 枠・連対率・想定複勝は狭い画面で畳む
   const PredPanel = (
@@ -762,8 +728,6 @@ export default function RaceDetailPage() {
             : isAdmin ? "予測結果はまだ算出されていません。" : "予測結果はまだありません。"}
             </div>
           )}
-
-      {forecastHorses.length > 0 && !lock && <PositionForecast horses={forecastHorses} pace={predData?.pace_forecast} gate={predData?.gate_bias} direction={turnOf(rd?.direction, rd?.venue, rd?.surface, rd?.distance)} />}
 
       {sortedPreds.length > 0 ? (
         <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>

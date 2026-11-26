@@ -206,7 +206,7 @@ def build_payload(race_id: str, card: dict, odds_doc: dict | None, probs, source
 
 
 def load_primary_prediction_payload(race_id: str, storage: Any, alpha: float = 0.55, inf: Path | None = None, market: bool = True,
-                                    candidate: bool | None = None) -> dict | None:
+                                    candidate: bool | None = None, pre_race_odds: bool = False) -> dict | None:
     """v6e の予測がローカルにあるレースだけ、その応答を返す（GCS の古い予測より優先するために使う）。無ければ None。"""
     if primary_model() != "v6e":
         return None
@@ -216,12 +216,13 @@ def load_primary_prediction_payload(race_id: str, storage: Any, alpha: float = 0
             return None
     except Exception:  # noqa: BLE001
         return None
-    return load_local_prediction_payload(race_id, storage, alpha=alpha, inf=inf, market=market, candidate=candidate)
+    return load_local_prediction_payload(race_id, storage, alpha=alpha, inf=inf, market=market, candidate=candidate, pre_race_odds=pre_race_odds)
 
 
 def load_local_prediction_payload(race_id: str, storage: Any, alpha: float = 0.55, inf: Path | None = None, market: bool = True,
-                                  candidate: bool | None = None) -> dict | None:
-    """ローカルに予測があれば画面向けの応答にして返す。無い・読めないときは None（呼び出し側は従来の応答に進む）。"""
+                                  candidate: bool | None = None, pre_race_odds: bool = False) -> dict | None:
+    """ローカルに予測があれば画面向けの応答にして返す。無い・読めないときは None（呼び出し側は従来の応答に進む）。
+    pre_race_odds: 発走の後は、発走前の最後のオッズで確率・印を付ける（予測の画面用。odds_source.pre_race_snapshot）。"""
     try:
         card = storage.load("race_shutuba", race_id) or {}
         found = find_local_prediction(race_id, _day_of(card), inf, candidate=market if candidate is None else candidate)  # 実オッズを使わない推奨（target）は §77 と同じ v6e
@@ -244,6 +245,10 @@ def load_local_prediction_payload(race_id: str, storage: Any, alpha: float = 0.5
                 odds_doc = storage.load("race_odds", race_id)
             except Exception:
                 odds_doc = None
+            if pre_race_odds:
+                from src.pipeline.inference.odds_source import pre_race_snapshot, race_start_at
+
+                odds_doc = pre_race_snapshot(odds_doc, race_start_at(card))
         return build_payload(race_id, card, odds_doc, probs, source, label, alpha, market=market)
     except Exception:  # noqa: BLE001
         import logging

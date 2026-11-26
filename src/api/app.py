@@ -7345,6 +7345,10 @@ async def _race_predictions_compute(race_id: str, source: str = "request"):
         # 印は AI の勝率の順（◎○▲）と印のルール（★△消）だけで決める。買い目からの印（_with_bet_marks）は使わない（rules-council R0-10・依頼 2 の追記）
         with tm.stage("marks"):
             resp = _with_complete_marks(_with_calibrated_ev(resp))
+        from src.api import pred_slim
+
+        if pred_slim.enabled():       # AI の予測値・印だけ（付け足しは計算しない。src/api/pred_slim.py）
+            return resp
         # 過去走の通過順位から作る位置取り予想（実モデルの予測ではない）。失敗しても予測の応答は返す
         try:
             from src.pipeline.inference.position_forecast import attach_position_forecast
@@ -7409,7 +7413,7 @@ async def _race_predictions_compute(race_id: str, source: str = "request"):
         from src.api.local_predictions import load_primary_prediction_payload
 
         with tm.stage("primary"):
-            return load_primary_prediction_payload(race_id, _get_storage(), alpha=_load_composite_params().get("prob_weight", _DEFAULT_PROB_WEIGHT))
+            return load_primary_prediction_payload(race_id, _get_storage(), alpha=_load_composite_params().get("prob_weight", _DEFAULT_PROB_WEIGHT), pre_race_odds=True)
 
     primary = await asyncio.to_thread(_primary)
     if primary:
@@ -7430,7 +7434,7 @@ async def _race_predictions_compute(race_id: str, source: str = "request"):
         from src.api.local_predictions import load_local_prediction_payload
 
         with tm.stage("local"):
-            return load_local_prediction_payload(race_id, _get_storage(), alpha=_load_composite_params().get("prob_weight", _DEFAULT_PROB_WEIGHT))
+            return load_local_prediction_payload(race_id, _get_storage(), alpha=_load_composite_params().get("prob_weight", _DEFAULT_PROB_WEIGHT), pre_race_odds=True)
 
     local = await asyncio.to_thread(_local)
     if local:
