@@ -121,7 +121,12 @@ def main() -> None:
     late = datetime.now(JST) >= datetime(day.year, day.month, day.day, 7, 30, tzinfo=JST)
     if late != bool(a.backfill):
         raise SystemExit(f"--backfill の印が作った時刻と合わない（その日の 07:30 以降={late}）")
-    meta = {"made_at": datetime.now(JST).isoformat(timespec="seconds"), "model": "v4_pure_dd（freeze_v4_gate.sha256）",
+    # 入力の版（2 号の最後の問い詰め: 結果の表と 5 代血統の JSON が後で取り直されると、後から作る日の値が変わるため）
+    src_tab = build_base.TABLES / str(day.year) / "race_shutuba_flat.parquet"
+    inputs = {"runs_rows_before_day": int(len(runs)), "runs_last_date": str(runs["date"].max().date()),
+              "shutuba_mtime": datetime.fromtimestamp(src_tab.stat().st_mtime, JST).isoformat(timespec="seconds"),
+              "ped_rows": int(len(ped))}
+    meta = {"made_at": datetime.now(JST).isoformat(timespec="seconds"), "model": "v4_pure_dd（freeze_v4_gate.sha256）", "inputs": inputs,
             "races": int(out["race_id"].nunique()), "horses": len(out), "no_pedigree": int(out["no_pedigree"].sum()),
             "backfill": bool(a.backfill)}
     out.sort_values(["race_id", "rank"]).to_csv(path, index=False)
