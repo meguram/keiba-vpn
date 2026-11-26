@@ -5,86 +5,103 @@
   {
    "field_sign": 1,
    "lam": 1.0,
-   "inner_mad": 0.6343962819365387
+   "inner_mad": 0.6344884146032683
   },
   {
    "field_sign": 1,
    "lam": 5.0,
-   "inner_mad": 0.6523525404093107
+   "inner_mad": 0.6524502791709068
   },
   {
    "field_sign": 1,
    "lam": 20.0,
-   "inner_mad": 0.6851109076694257
+   "inner_mad": 0.6845422017959564
   },
   {
    "field_sign": 1,
    "lam": 100.0,
-   "inner_mad": 0.7632490853414282
+   "inner_mad": 0.7628102384778472
   },
   {
    "field_sign": 1,
    "lam": 500.0,
-   "inner_mad": 0.8319617031086537
+   "inner_mad": 0.8321800582636811
   },
   {
    "field_sign": -1,
    "lam": 1.0,
-   "inner_mad": 0.605054202499737
+   "inner_mad": 0.6049699384453007
   },
   {
    "field_sign": -1,
    "lam": 5.0,
-   "inner_mad": 0.6351639486438643
+   "inner_mad": 0.6353426355116412
   },
   {
    "field_sign": -1,
    "lam": 20.0,
-   "inner_mad": 0.6782456720939223
+   "inner_mad": 0.6786837668029406
   },
   {
    "field_sign": -1,
    "lam": 100.0,
-   "inner_mad": 0.7501671248942188
+   "inner_mad": 0.7497814350213545
   },
   {
    "field_sign": -1,
    "lam": 500.0,
-   "inner_mad": 0.8238781853720596
+   "inner_mad": 0.8234379788757735
   }
  ],
  "chosen": {
   "field_sign": -1,
   "lam": 1.0,
-  "inner_mad": 0.605054202499737
+  "inner_mad": 0.6049699384453007
  },
- "n_races_common": 6615,
+ "n_races_common": 5574,
  "metrics": {
   "new_v2": {
-   "loo_mad": 0.5031600748954901,
-   "n_loo": 6615,
-   "icc": 0.3323430941960885,
-   "next_day": 0.6091715164701718,
-   "n_pairs": 578
+   "loo_mad": 0.4879976177304357,
+   "n_loo": 5574,
+   "icc": 0.333627622262598,
+   "next_day": 0.6161898488476738,
+   "n_pairs": 488
   },
   "new_v2_2nd": {
-   "loo_mad": 0.5146713591690428,
-   "n_loo": 6615,
-   "icc": 0.3171194758455598,
-   "next_day": 0.5932289072932851,
-   "n_pairs": 578
+   "loo_mad": 0.49929804135195255,
+   "n_loo": 5574,
+   "icc": 0.3197105194774334,
+   "next_day": 0.6033521396859685,
+   "n_pairs": 488
   },
   "eng_nocond": {
-   "loo_mad": 0.5249999999999986,
-   "n_loo": 6615,
-   "icc": 0.46371516538510915,
-   "next_day": 0.5995839329714574,
-   "n_pairs": 578
+   "loo_mad": 0.5117499999999957,
+   "n_loo": 5574,
+   "icc": 0.4598924659619594,
+   "next_day": 0.6023534736635449,
+   "n_pairs": 488
   }
  },
  "new_wins": 2,
  "adopt_new": true,
  "status": "採用",
+ "reference_2025_not_for_decision": {
+  "new_v2": {
+   "loo_mad": 0.5035183912286207,
+   "icc": 0.315872748176951,
+   "next_day": 0.49247369346543296,
+   "n": 2870,
+   "n_pairs": 252
+  },
+  "eng_nocond": {
+   "loo_mad": 0.5410000000000004,
+   "icc": 0.41810322681951806,
+   "next_day": 0.5447870569800318,
+   "n": 2870,
+   "n_pairs": 252
+  }
+ },
+ "opponent_fix": "engine に内外の表・改修の表を読ませた（data/page_reference/knowledge）。先の比べ（2026-11-26 夕方）は読めておらず弱い基準だった",
  "monotone_violations_total": 0,
  "final_monotone_violations_total": 0
 }

@@ -77,12 +77,34 @@ def build() -> Path:
     tert = "".join(f"<tr><td>{html.escape(str(t['tert']))}</td><td>{int(t['n']):,}</td><td>{t['top3']*100:.1f}%</td><td>{t['pos_dev']:.3f}</td></tr>"
                    for t in lv.get("by_tertile", []))
     meta = m.meta
-    page = TEMPLATE.replace("%DATA%", json.dumps(data, ensure_ascii=False, separators=(",", ":"))).replace("%VERSION%", html.escape(str(meta.get("version")))) \
+    nv, en = mt.get("new_v2", {}), mt.get("eng_nocond", {})
+    r25 = c2.get("reference_2025_not_for_decision", {})
+    wins = []
+    if nv and en:
+        d1, d2, d3 = en["loo_mad"] - nv["loo_mad"], nv["next_day"] - en["next_day"], en["icc"] - nv["icc"]
+        wins.append(f"一つ抜きの MAD は{'第 2 版' if d1 >= 0 else '従来'}が {abs(d1):.3f} 秒小さい")
+        wins.append(f"土日の相関は{'第 2 版' if d2 >= 0 else '従来'}が {abs(d2):.3f} 高い")
+        wins.append(f"ICC は{'従来' if d3 >= 0 else '第 2 版'}が {abs(d3):.3f} 高い")
+    ref = ""
+    if r25.get("new_v2") and r25.get("eng_nocond"):
+        a, b = r25["new_v2"], r25["eng_nocond"]
+        ref = (f"参考（採否に使わない・誰も見ていなかった 2025 年・{a['n']:,} レース）: 一つ抜きの MAD {a['loo_mad']:.3f} 対 {b['loo_mad']:.3f}、"
+               f"ICC {a['icc']:.3f} 対 {b['icc']:.3f}、土日の相関 {a['next_day']:.3f} 対 {b['next_day']:.3f}（第 2 版 対 従来）。"
+               f"一つ抜きのばらつきの勝ちは 2025 年でも{'続く' if a['loo_mad'] < b['loo_mad'] else '続かない'}が、"
+               f"土日の相関の勝ちは{'続く' if a['next_day'] > b['next_day'] else '続かない'}。")
+    lvm = rep.get("levels_report.json", {})
+    margin = "・".join(wins) + "。" + ref + (f" 開催日レベルの縮みの強さ k: 生の推定 {lvm['shrink_k_raw']}、使った値 {lvm['shrink_k']}（{lvm.get('shrink_k_note', '')}）。"
+                                              if "shrink_k_raw" in lvm else "")
+    page = TEMPLATE.replace("%VERSION%", html.escape(str(meta.get("version")))) \
         .replace("%BUILT%", html.escape(str(meta.get("built")))).replace("%TRAIN%", html.escape(str(meta.get("train")))) \
         .replace("%STATUS%", html.escape(str(meta.get("status")))).replace("%LAM%", str(meta.get("lam"))).replace("%FSIGN%", "減（多いほど速い）" if meta.get("field_sign") == -1 else "増（多いほど遅い）") \
         .replace("%CMP%", row("new_v2", "第 2 版（採用）") + row("eng_nocond", "従来の馬場の速さ（同じ窓・馬場状態の群なし）") + row("new_v2_2nd", "第 2 版・2 着の時計にそろえた版（参考）")) \
         .replace("%NCOMMON%", f"{c2.get('n_races_common', 0):,}").replace("%VIOL%", str(viol_total)).replace("%TERT%", tert) \
-        .replace("%CORR%", f"{lv.get('corr_top5_win', float('nan')):.3f}")
+        .replace("%CORR%", f"{lv.get('corr_top5_win', float('nan')):.3f}").replace("%MARGIN%", html.escape(margin)) \
+        .replace("%FIX%", html.escape(str(c2.get("opponent_fix", ""))))
+    page = page.replace("%DATA%", json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/"))   # 最後に差し込む（中の文字を置き換えない）
+    if len(page.encode("utf-8")) > 5 * 1024 * 1024:
+        raise SystemExit(f"5MB を超えた: {len(page.encode('utf-8')):,} バイト（MAX_POINTS を下げる）")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(page, encoding="utf-8")
     return OUT
@@ -134,7 +156,7 @@ a{color:var(--accent)}tr.click{cursor:pointer}tr.click:hover{background:#1e293b}
 <div class="dim" id="bootnote"></div>
 
 <h2>コースの一覧</h2>
-<div class="dim">基準の時計は 1勝・古馬・14 頭・平均的な前半の条件。クラス 1 段あたり＝未勝利→G1 の差 ÷ 7。前半 1 秒あたり＝前半 600m が 1 秒遅いときの差。行を押すとそのコースへ。</div>
+<div class="dim">基準の時計は 1勝・古馬・14 頭（そのコースの頭数の範囲に切る）・平均的な前半の条件。クラス 1 段あたり＝未勝利→G1 の差 ÷ 7。前半 1 秒あたり＝前半 600m が 1 秒遅いときの差。行を押すとそのコースへ。</div>
 <div class="scroll"><table id="ctab"><thead><tr><th>コース</th><th>件数</th><th>基準の時計（秒）</th><th>クラス 1 段あたり（秒）</th><th>前半 1 秒あたり（秒）</th></tr></thead><tbody></tbody></table></div>
 
 <h2>確かめ</h2>
@@ -142,7 +164,8 @@ a{color:var(--accent)}tr.click{cursor:pointer}tr.click:hover{background:#1e293b}
 <b>採否の規則（数字を見る前に固定）</b>: 確かめの期間 2023〜24 で、従来の馬場の速さ（同じ窓 2016〜22 で作り直し・馬場状態の群なし）と、一つ抜きの残差の MAD（小さいほど良い）・同じ日 × 場 × 芝ダの中の一貫性 ICC（大きいほど良い）・土日の開催日レベルの相関（大きいほど良い）で比べ、2 つ以上で良ければ採用。
 物差しは途中で替えた: 最初は残差の MAD だったが、測りたい馬場の分と日の分が残る新しい関数に不利で、馬場状態で条件を付けた基準ほど有利になるため（統括役の判断）。第 1 版は 0/3 で不採用、ユーザーの判断で形を細かくした第 2 版を、比べの前に作りを固定して比べ直した。
 <table><thead><tr><th>作り（共通の %NCOMMON% レース）</th><th>一つ抜きの MAD（秒）</th><th>ICC</th><th>土日の相関</th></tr></thead><tbody>%CMP%</tbody></table>
-<p><b>勝ち方は小さい</b>: 実質の勝ちは一つ抜きの MAD の 0.02 秒だけで、土日の相関の差は偶然の範囲。同じ日の一貫性（ICC）は従来の方が高い。2 着の時計にそろえても ICC の差は縮まない。</p>
+<p><b>勝ち方は小さい</b>: %MARGIN%</p>
+<p class="dim">比べの相手の直し: %FIX%</p>
 <p>単調の破れ（全コース × クラス・ペース・頭数・年齢、各 200 点）: <b>%VIOL%</b> 件。</p>
 <p>メンバーレベル（レース − 自分を除いた開催日）の確かめ（2023〜24、次走が同じクラスの出走馬）:</p>
 <table><thead><tr><th>メンバーレベルの組</th><th>頭数</th><th>次走の 3 着内率</th><th>着順の偏差（着順÷頭数）</th></tr></thead><tbody>%TERT%</tbody></table>
@@ -150,8 +173,7 @@ a{color:var(--accent)}tr.click{cursor:pointer}tr.click:hover{background:#1e293b}
 </div>
 <script>
 const D=%DATA%;const M=D.model;const P=M.params;const T=M.terms;const K=M.degree+1;
-function bsplineRow(x,t,k){const n=t.length-k-1;const B=new Array(n).fill(0);
- for(let i=0;i<t.length-1;i++){} // Cox–de Boor
+function bsplineRow(x,t,k){const n=t.length-k-1;const B=new Array(n).fill(0); // Cox–de Boor
  let N=[];for(let i=0;i<t.length-1;i++)N.push((x>=t[i]&&x<t[i+1])?1:0);
  for(let d=1;d<=k;d++){const Nn=[];for(let i=0;i<t.length-1-d;i++){let a=0,b=0;const d1=t[i+d]-t[i],d2=t[i+d+1]-t[i+1];
   if(d1>0)a=(x-t[i])/d1*N[i];if(d2>0)b=(t[i+d+1]-x)/d2*N[i+1];Nn.push(a+b);}N=Nn;}
@@ -167,7 +189,7 @@ function predict(c,o){const ci=CI[c];const band=M.course_band[c];const bi=M.band
  const ag=(P.B_age&&ci!==undefined)?P.B_age[ci]:P.age;v-=(o.age>=1?ag[0]:0)+(o.age>=2?ag[1]:0);v+=o.newc?P.new[0]:0;
  v+=termEff(c,"cls",o.cls)+termEff(c,"fld",o.fld)+termEff(c,"pace",o.front-M.pace_ref[c]);return v;}
 function rq(c){const band=M.course_band[c];return M.resid_q[c]||M.resid_q[band]||M.resid_q._all;}
-const $=id=>document.getElementById(id);const fmt=s=>{const m=Math.floor(s/60);return (m?m+":":"")+(s-60*m).toFixed(1).padStart(m?4:0,"0");};
+const $=id=>document.getElementById(id);const fmt=s=>{const t=Math.round(s*10)/10;const m=Math.floor(t/60);return (m?m+":":"")+(t-60*m).toFixed(1).padStart(m?4:0,"0");};
 const courses=M.courses.slice();const parse=c=>{const [v,s,d]=c.split("|");return {v,s,d:+d};};
 function fill(sel,arr,val){sel.innerHTML=arr.map(a=>`<option value="${a[0]}">${a[1]}</option>`).join("");if(val!==undefined)sel.value=val;}
 const cnt={};D.courses.forEach(r=>cnt[r.course]=r.n);
@@ -185,8 +207,8 @@ function onCourse(){const c=cur();const pts=D.points[c]||[];const fr=pts.map(p=>
 function opts(){return {cls:+$("cls").value,age:+$("age").value,newc:$("newc").checked,fld:+$("fld").value,front:+$("front").value};}
 function axis(svg,x0,x1,w,h,pad,ticks){}
 function draw(){const c=cur(),o=opts();$("fldv").textContent=o.fld+" 頭";$("frontv").textContent=o.front.toFixed(1)+" 秒";
- const mu=predict(c,o),q=rq(c);const pts=(D.points[c]||[]).filter(p=>Math.abs(p[0]-o.cls)<0.5&&Math.abs(p[3]-o.fld)<=2&&Math.abs(p[4]-o.front)<=0.6&&p[1]===o.age&&(!$("cond").value||p[6]===$("cond").value));
- $("dist_txt").innerHTML=`基準の時計 <b>${fmt(mu)}</b>（${mu.toFixed(2)} 秒）・50% ${fmt(mu+q[2])}〜${fmt(mu+q[4])}・80% ${fmt(mu+q[1])}〜${fmt(mu+q[5])}・95% ${fmt(mu+q[0])}〜${fmt(mu+q[6])}・近い条件の実際のレース ${pts.length} 件（クラス同じ・頭数 ±2・前半 ±0.6 秒・年齢の条件同じ）`;
+ const mu=predict(c,o),q=rq(c);const pts=(D.points[c]||[]).filter(p=>Math.abs(p[0]-o.cls)<0.5&&Math.abs(p[3]-o.fld)<=2&&Math.abs(p[4]-o.front)<=0.6&&p[1]===o.age&&p[2]===(o.newc?1:0)&&(!$("cond").value||p[6]===$("cond").value));
+ $("dist_txt").innerHTML=`基準の時計 <b>${fmt(mu)}</b>（${mu.toFixed(2)} 秒）・50% ${fmt(mu+q[2])}〜${fmt(mu+q[4])}・80% ${fmt(mu+q[1])}〜${fmt(mu+q[5])}・95% ${fmt(mu+q[0])}〜${fmt(mu+q[6])}・近い条件の実際のレース ${pts.length} 件（クラス・新馬・年齢の条件が同じ・頭数 ±2・前半 ±0.6 秒）`;
  const lo=mu+q[0]-1.5,hi=mu+q[6]+1.5,W=900,H=220,L=40,R=20;const X=v=>L+(v-lo)/(hi-lo)*(W-L-R);
  let s="";[[0,6,"--band95"],[1,5,"--band80"],[2,4,"--band50"]].forEach(([a,b,col])=>{s+=`<rect x="${X(mu+q[a])}" y="40" width="${X(mu+q[b])-X(mu+q[a])}" height="110" fill="var(${col})"/>`;});
  s+=`<line x1="${X(mu)}" x2="${X(mu)}" y1="30" y2="160" stroke="var(--accent)" stroke-width="2"/>`;
