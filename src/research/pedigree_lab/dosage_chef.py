@@ -60,6 +60,7 @@ def main() -> None:
             continue
         anc = json.loads(f.read_text()).get("ancestors", [])
         pt = dict.fromkeys("BICSP", 0.0)
+        pm = dict.fromkeys("BICSP", 0.0)                    # 母の側（p ≥ 2^(g−1)）だけの点（1 号）
         for a in anc:
             g, p = int(a.get("generation", 0)), int(a.get("position", 0))
             if 1 <= g <= 4 and p % 2 == 0:
@@ -67,11 +68,19 @@ def main() -> None:
                 if c:
                     for k in c:
                         pt[k] += PTS[g] / len(c)
-        rows.append((h, *pt.values()))
-    D = pd.DataFrame(rows, columns=["horse_id", "dp_B", "dp_I", "dp_C", "dp_S", "dp_P"])
+                        if p >= 2 ** (g - 1):
+                            pm[k] += PTS[g] / len(c)
+        rows.append((h, *pt.values(), *pm.values()))
+    D = pd.DataFrame(rows, columns=["horse_id", "dp_B", "dp_I", "dp_C", "dp_S", "dp_P", "dm_B", "dm_I", "dm_C", "dm_S", "dm_P"])
+    tm = D[["dm_B", "dm_I", "dm_C", "dm_S", "dm_P"]].sum(axis=1)
+    denm = D["dm_C"] / 2 + D["dm_S"] + D["dm_P"]
+    D["dm_total"] = tm
+    # 分母が 0 で点がある（B・I だけ）ときは DI を上限 64 にする（点の無い馬の NaN と区別する。critic）
+    D["DI_m"] = np.where(denm > 0, (D["dm_B"] + D["dm_I"] + D["dm_C"] / 2) / denm.replace(0, np.nan), np.where(tm > 0, 64.0, np.nan))
+    D["CD_m"] = np.where(tm > 0, (2 * D["dm_B"] + D["dm_I"] - D["dm_S"] - 2 * D["dm_P"]) / tm.replace(0, np.nan), np.nan)
     D["dp_total"] = D[["dp_B", "dp_I", "dp_C", "dp_S", "dp_P"]].sum(axis=1)
     den = D["dp_C"] / 2 + D["dp_S"] + D["dp_P"]
-    D["DI"] = np.where(den > 0, (D["dp_B"] + D["dp_I"] + D["dp_C"] / 2) / den.replace(0, np.nan), np.nan)
+    D["DI"] = np.where(den > 0, (D["dp_B"] + D["dp_I"] + D["dp_C"] / 2) / den.replace(0, np.nan), np.where(D["dp_total"] > 0, 64.0, np.nan))
     D["CD"] = np.where(D["dp_total"] > 0, (2 * D["dp_B"] + D["dp_I"] - D["dp_S"] - 2 * D["dp_P"]) / D["dp_total"].replace(0, np.nan), np.nan)
     path = data.OUT / "dosage_chef.parquet"
     D.to_parquet(path, index=False)
