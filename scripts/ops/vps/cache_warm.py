@@ -52,8 +52,10 @@ RESULTS_PATHS = (
     "/api/prediction-results/days",
     "/api/prediction-results/news?limit=6",
 )
+# scrape-dates は画面が送るクエリと同じ形で温める（週の予想・分析は NEXT_PUBLIC_PICKER_PAST_DAYS=150 で 150&14）。
+# 以前の 14&14 はどの画面も送らず、週の予想の 150&14 は温まっていなかった（2026-11-26。同じ数の置き換えなので要求数は変わらない）
 GLOBAL_PATHS = (
-    "/api/scrape-dates?picker_past_days=14&picker_future_days=14",
+    "/api/scrape-dates?picker_past_days=150&picker_future_days=14",
     "/api/scrape-dates?picker_past_days=120",
     "/api/scrape-dates?filter=meeting",
 )

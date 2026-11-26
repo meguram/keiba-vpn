@@ -182,6 +182,7 @@ def append_history(old: dict, new: dict, picked: dict[str, dict], horse_of, sig_
                 hm = b.get("honmei")
                 x["B"] = {"honmei": get(hm["hn"]) if hm else None,
                           "kill": None if b.get("kill") is None else [h for h in (get(q["hn"]) for q in b["kill"]) if h is not None]}
+                # source の文言は画面（frontend/lib/gradedPicks.ts の PUBLISHED_SOURCE）が判定に使う。変えるときは両方を直す
                 x["version"] = {"id": ((pk.get("version") or {}).get("id")) or V0_ID, "source": "前日の計算"}
                 if scr:
                     x["scratched"] = sorted(scr)

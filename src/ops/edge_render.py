@@ -476,8 +476,16 @@ def tree_sha(base: Path) -> str:
         return "unknown"
 
 
+def ignorable_reasons(cfg: dict[str, Any], tier: str) -> set[str]:
+    """その区分の応答に効かないと分かっている「写しに無い」の印（config の anon_ignore_missing）。匿名（anon・pre）だけ。"""
+    if tier not in ("anon", PENDING_TIER):
+        return set()
+    return {f"写しに無い: {c}" for c in (cfg.get("anon_ignore_missing") or []) if not str(c).startswith("_")}
+
+
 async def render_all(app, targets: list[tuple[str, str]], cookies: dict[str, str], out_dir: Path, manifest: dict[str, str],
-                     fps: dict[str, str] | None = None, prev_fps: dict[str, str] | None = None) -> dict[str, Any]:
+                     fps: dict[str, str] | None = None, prev_fps: dict[str, str] | None = None,
+                     cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     import httpx
 
     from src.api.auth import COOKIE_NAME
@@ -504,8 +512,9 @@ async def render_all(app, targets: list[tuple[str, str]], cookies: dict[str, str
                 FLAGS.hit(f"例外: {type(e).__name__}")
                 status, body = 0, b""
             reason = None
-            if FLAGS.reasons:
-                reason = " / ".join(sorted(set(FLAGS.reasons)))
+            left = set(FLAGS.reasons) - ignorable_reasons(cfg or {}, tier)
+            if left:
+                reason = " / ".join(sorted(left))
             elif status != 200:
                 reason = f"status {status}"
             if reason:
@@ -538,14 +547,16 @@ def default_targets(cfg: dict[str, Any], base: Path, tiers: list[str], today: da
     settled_d = eligible_dates(cfg, today)
     pend_d = pending_dates(cfg, today) if int(cfg.get("upcoming_days", 0)) > 0 else []
     t = targets_for(cfg, base, [d for d in settled_d if d not in pend_d], [], tiers)
+    today_s = today.strftime("%Y%m%d")
     for d in pend_d:
         rids = races_of(base, d)
         ready = [r for r in rids if race_pending_in_mirror(base, r)]
         for r in ready:
-            tier = "anon" if race_settled_in_mirror(base, r) else PENDING_TIER
+            # 確定済みでも当日（以降）は pre。当日は着順・取消の訂正があり、nginx は Cloudflare に置かせない（no-store）
+            tier = "anon" if race_settled_in_mirror(base, r) and d < today_s else PENDING_TIER
             t += [(tier, p.format(rid=r)) for p in cfg["race_paths"].get("anon", [])] if "anon" in tiers else []
         if ready and len(ready) == len(rids) and "anon" in tiers:
-            tier = "anon" if all(race_settled_in_mirror(base, r) for r in rids) else PENDING_TIER
+            tier = "anon" if d < today_s and all(race_settled_in_mirror(base, r) for r in rids) else PENDING_TIER
             t += [(tier, p.format(date=d)) for p in cfg["date_paths"].get("anon", [])]
     race_date = {r: d for d in dict.fromkeys(settled_d + pend_d) for r in races_of(base, d)}
     return list(dict.fromkeys(t)), race_date
@@ -571,6 +582,18 @@ def targets_for(cfg: dict[str, Any], base: Path, dates: Iterable[str], races: It
     return out
 
 
+def pre_unless_past(targets: list[tuple[str, str]], base: Path, dates: Iterable[str], today: datetime) -> list[tuple[str, str]]:
+    """手で指定した回（--race・--date）の anon の対象のうち、当日以降・開催日が分からないものを pre にする（Cloudflare に置かせない）。"""
+    today_s = today.strftime("%Y%m%d")
+    race_day = {r: d for d in dates for r in races_of(base, d)}
+    out = []
+    for t, p in targets:
+        k = target_key(p)
+        d = k if len(k) == 8 else race_day.get(k, "")
+        out.append((PENDING_TIER if t == "anon" and not (d and d < today_s) else t, p))
+    return out
+
+
 def cmd_render(args: argparse.Namespace) -> int:
     import asyncio
 
@@ -587,7 +610,7 @@ def cmd_render(args: argparse.Namespace) -> int:
         dates = args.date or ([] if args.race else eligible_dates(cfg, now))
         targets = targets_for(cfg, base, dates, args.race or [], tiers, ready=race_pending_in_mirror)
     elif args.race or args.date:
-        targets = targets_for(cfg, base, args.date or [], args.race or [], tiers)
+        targets = pre_unless_past(targets_for(cfg, base, args.date or [], args.race or [], tiers), base, args.date or [], now)
     else:
         targets, race_date = default_targets(cfg, base, tiers, now)
     sha = tree_sha(ROOT)
@@ -639,7 +662,7 @@ def cmd_render(args: argparse.Namespace) -> int:
         cookies = install_member(auth)
         app = build_gateway()
         assert_storages_guarded()
-        stats = asyncio.run(render_all(app, todo, cookies, out_dir, manifest, fps, prev_fps))
+        stats = asyncio.run(render_all(app, todo, cookies, out_dir, manifest, fps, prev_fps, cfg))
         stats["unchanged_input"] = len(targets) - len(todo)
         # 捨てた対象があるレース・日は、同じ回のほかの対象（プロセスの中のキャッシュで欠けを持ち越しうる）と前の回のファイルも消す。
         # VPS からも push で消え、今の Cloud Run の経路に戻る（印が立ったら Cloud Run に流す）
@@ -811,7 +834,12 @@ def cmd_prune(args: argparse.Namespace) -> int:
     base = Path(args.base).resolve() if args.base else ROOT
     root = base / "data" / "local" / "mirror"
     cut = time.time() - args.mirror_days * 86400
-    race_cats = [c for c, t in HybridStorage.CATEGORY_MAP.items() if t == "race"]
+    # 写しの設定にあるレースのカテゴリだけ（ほかの処理が写しの置き場に直接書いたもの＝race_trifecta_odds などは消さない）
+    cats = mirrored_categories(base)
+    if not cats:
+        print("写しの設定が無い・無効なので、何も消さない")
+        return 0
+    race_cats = [c for c, t in HybridStorage.CATEGORY_MAP.items() if t == "race" and c in cats]
     n = 0
     files = [p for c in race_cats if (root / c).is_dir() for p in (root / c).rglob("*.json")]
     for p in files:

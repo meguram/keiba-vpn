@@ -31,7 +31,18 @@ def root(tmp_path: Path) -> Path:
     h.mkdir(parents=True)
     (h / "rules_council_summary.html").write_text("<p>summary</p>", encoding="utf-8")
     (h / "megu_cycles_50.html").write_text("<p>megu</p>", encoding="utf-8")
-    (h / "latest_strategy_tables.html").write_text("<p>not allowed</p>", encoding="utf-8")
+    (h / "pedigree_model.html").write_text("<title>血統 &amp; モデル</title><p>pedigree</p>", encoding="utf-8")
+    (h / "bad name.html").write_text("<p>bad</p>", encoding="utf-8")
+    (h / "sub").mkdir()
+    (h / "sub" / "inner.html").write_text("<p>inner</p>", encoding="utf-8")
+    (h / "escape.html").symlink_to(tmp_path / "outside.html")
+    (tmp_path / "outside.html").write_text("<p>outside</p>", encoding="utf-8")
+    (h.parent / "running_axis_curves.html").write_text("<title>走りの軸</title><p>axis</p>", encoding="utf-8")
+    (h / "alias.html").symlink_to(h / "megu_cycles_50.html")  # 中を指すリンクは元の名前で出す
+    (h / "xss.html").write_text("<title>&lt;script&gt;x <b>y</b></title>", encoding="utf-8")
+    (h.parent / "sub2").mkdir()
+    (h.parent / "sub2" / "deep.html").write_text("<p>deep</p>", encoding="utf-8")
+    (h.parent / "out_link.html").symlink_to(tmp_path / "outside.html")
     (tmp_path / "secret.md").write_text("# 秘密\n", encoding="utf-8")
     (tmp_path / "repo" / ".env").write_text("X=1\n", encoding="utf-8")
     return tmp_path / "repo"
@@ -61,12 +72,17 @@ def test_safe_resolve_rejects_symlink_out(root: Path, tmp_path: Path):
     assert cv.safe_resolve(base, "rc/dirlink/secret.md") is None
 
 
-def test_html_allowlist(root: Path):
+def test_html_files(root: Path):
     assert cv.html_file(root, "rules_council_summary.html") == b"<p>summary</p>"
     assert cv.html_file(root, "megu_cycles_50.html") == b"<p>megu</p>"
-    assert cv.html_file(root, "latest_strategy_tables.html") is None
-    assert cv.html_file(root, "../../../../.env") is None
-    assert cv.html_file(root, "rules_council_missing.html") is None
+    assert cv.html_file(root, "pedigree_model.html").endswith(b"<p>pedigree</p>")
+    assert cv.html_file(root, "running_axis_curves.html", cv.HTML_OPS_REL).endswith(b"<p>axis</p>")
+    for bad in ("../../../../.env", "rules_council_missing.html", "sub/inner.html", "bad name.html",
+                "escape.html", "/etc/passwd", "x.htm", ".html", "megu_cycles_50.html\n"):
+        assert cv.html_file(root, bad) is None, bad
+    assert cv.html_file(root, "final/pedigree_model.html", cv.HTML_OPS_REL) is None
+    assert cv.html_file(root, "sub2/deep.html", cv.HTML_OPS_REL) is None
+    assert cv.html_file(root, "out_link.html", cv.HTML_OPS_REL) is None
 
 
 # ── Markdown の変換 ──
@@ -110,7 +126,21 @@ def test_index_lists_everything(root: Path):
     assert "/council/rc/R0_10_late.md" in out
     assert "/html/operations/final/rules_council_summary.html" in out
     assert "/html/operations/final/megu_cycles_50.html" in out
-    assert "latest_strategy_tables.html" not in out
+
+
+def test_index_lists_output_html(root: Path):
+    out = cv.index_html(root)
+    sec = out[out.index("<h2>成果の HTML</h2>"):]
+    assert out.index("<h2>関係の HTML</h2>") < out.index("<h2>成果の HTML</h2>")
+    assert "/html/operations/final/pedigree_model.html" in sec and "血統 &amp; モデル" in sec
+    assert 'href="/html/operations/running_axis_curves.html"' in sec and "走りの軸" in sec
+    assert "pedigree_model.html" not in out[:out.index("<h2>成果の HTML</h2>")]  # 関係の HTML には出さない
+    for bad in ("inner.html", "bad name.html", "bad%20name.html", "escape.html", "deep.html", "out_link.html"):
+        assert bad not in out, bad
+    assert 'href="/html/operations/final/alias.html"' in sec
+    assert "&lt;script&gt;x y" in sec and "<script>" not in out
+    head = out[:out.index("<h2>成果の HTML</h2>")]
+    assert "running_axis_curves.html" not in head and "alias.html" not in head  # 関係の HTML は会議の分だけ
 
 
 def test_index_shows_easy_summary_body_on_top(root: Path):
@@ -160,6 +190,13 @@ def test_server_rejects_traversal(root: Path):
         assert get("/doc/rc/R0_01_order.md") == 200  # /doc/ は /council/ と同じ
         assert get("/doc/../../../../secret.md") == 404
         assert get("/html/operations/final/rules_council_summary.html") == 200
+        assert get("/html/operations/final/pedigree_model.html") == 200
+        assert get("/html/operations/running_axis_curves.html") == 200
+        c = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=5)
+        c.request("HEAD", "/html/operations/final/pedigree_model.html")
+        r = c.getresponse()
+        assert r.status == 200 and r.read() == b""
+        assert (r.getheader("Content-Security-Policy") or "").startswith("sandbox")
         c = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=5)
         c.request("GET", "/council/protocol.md")
         r = c.getresponse()
@@ -169,7 +206,12 @@ def test_server_rejects_traversal(root: Path):
         assert c.getresponse().status == 403  # DNS rebinding
         for bad in ("/council/../../../../secret.md", "/council/%2e%2e/%2e%2e/%2e%2e/%2e%2e/secret.md",
                     "/council//etc/passwd", "/html/operations/final/../../../../.env",
-                    "/html/operations/final/latest_strategy_tables.html", "/etc/passwd", "/.env"):
+                    "/html/operations/final/sub/inner.html", "/html/operations/final/escape.html",
+                    "/html/operations/final/bad%20name.html", "/html/operations/../../.env",
+                    "/html/operations/%2e%2e/%2e%2e/.env", "/html/operations/final/", "/html/operations/",
+                    "/html/operations/final", "/html/operations/sub2/deep.html", "/html/operations/out_link.html",
+                    "/html/operations/final/megu_cycles_50.html%0A",
+                    "/etc/passwd", "/.env"):
             assert get(bad) == 404, bad
     finally:
         srv.shutdown()

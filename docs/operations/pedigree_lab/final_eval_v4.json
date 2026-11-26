@@ -1,0 +1,140 @@
+{
+ "version": "v4",
+ "check": {
+  "rows_frozen": 417278,
+  "rows_rebuilt": 417278,
+  "unmatched": 0,
+  "bad_cols": {}
+ },
+ "rows": 87842,
+ "races": 6364,
+ "meetings": 69,
+ "M1": {
+  "gain_minus_null_over_ped": 0.94,
+  "gain": 0.07734,
+  "ci": [
+   0.06669,
+   0.08898
+  ],
+  "oof_gain": 0.08152,
+  "ratio": 0.949,
+  "pass": true
+ },
+ "M2": {
+  "slope": 1.038,
+  "mean_ratio": 0.9989,
+  "deciles": [
+   {
+    "dec": 0,
+    "pred": 0.0321,
+    "act": 0.0275
+   },
+   {
+    "dec": 1,
+    "pred": 0.0413,
+    "act": 0.0394
+   },
+   {
+    "dec": 2,
+    "pred": 0.048,
+    "act": 0.0487
+   },
+   {
+    "dec": 3,
+    "pred": 0.0544,
+    "act": 0.0627
+   },
+   {
+    "dec": 4,
+    "pred": 0.061,
+    "act": 0.0624
+   },
+   {
+    "dec": 5,
+    "pred": 0.0683,
+    "act": 0.0696
+   },
+   {
+    "dec": 6,
+    "pred": 0.0772,
+    "act": 0.078
+   },
+   {
+    "dec": 7,
+    "pred": 0.0885,
+    "act": 0.0857
+   },
+   {
+    "dec": 8,
+    "pred": 0.1051,
+    "act": 0.1019
+   },
+   {
+    "dec": 9,
+    "pred": 0.1487,
+    "act": 0.1493
+   }
+  ],
+  "pass": true
+ },
+ "M3": {
+  "beta": {
+   "H1": 0.3904,
+   "H2": 0.3337,
+   "H3": 0.0984,
+   "H4": 0.1106,
+   "H6'": 0.4086,
+   "H7": 0.0478,
+   "H9": 0.0357,
+   "H12": 0.0523,
+   "H14": -0.0336
+  },
+  "same_sign": 9,
+  "pass": true
+ },
+ "M4": {
+  "alpha_extra": 0.0813,
+  "rows": 3276,
+  "ci_meeting": [
+   -0.3652,
+   0.4967
+  ],
+  "ci_sire": [
+   -0.2691,
+   0.5437
+  ],
+  "pass": false,
+  "SD_desc": {
+   "alpha_extra": -0.1778,
+   "rows": 2147,
+   "ci_meeting": [
+    -0.7302,
+    0.3289
+   ]
+  }
+ },
+ "M5": {
+  "alpha_all": 0.0344,
+  "beta": 1.0181,
+  "ped_specific_desc": null,
+  "market_race_ll": 1.9259,
+  "model_race_ll": 2.5213,
+  "new_sire_share": 0.0768,
+  "学習に無い新しい父": {
+   "rows_win": 539,
+   "gain": 0.10259
+  },
+  "2歳戦": {
+   "rows_win": 1084,
+   "gain": 0.14637
+  },
+  "新馬戦": {
+   "rows_win": 570,
+   "gain": 0.17244
+  },
+  "初年度の産駒の父（as-of 300 走未満）": {
+   "rows_win": 1061,
+   "gain": 0.13064
+  }
+ }
+}

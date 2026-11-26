@@ -427,6 +427,8 @@ _GUARD_ENTRY = {
     "src/research/rules_council/benter_diag.py": {"cmd_volume", "cmd_sstar", "cmd_depend"},   # RC-6 の着順なしの診断（eval_only。研究の CLI）
     "src/research/rules_council/forward_union.py": {"cmd_build", "cmd_ledger"},   # RC-2 の和集合の前向きの台帳（eval_only・forward。研究の CLI）
     "src/research/rules_council/results_table.py": {"main"},   # R0-07 説明の結果の表（select。研究の CLI・1 回だけ）
+    "src/research/pedigree_lab/pl_ledger.py": {"open_token"},     # 血統だけのモデルの研究（select・confirm・eval_only。研究の CLI からだけ）
+    "src/research/track_bias/tb_ledger.py": {"open_token"},       # トラックバイアスの記述（calibrate は select・build-all は eval_only。研究の CLI からだけ）
     "src/research/megu_cycles/mc_final.py": {"cmd_final", "cmd_drift"},     # めぐサイクルの最後の 1 回の確かめ・再現の楽観の測り（eval_only）   # めぐサイクルの 2022〜24 の確かめ（confirm）・割引きと最後の確かめ（eval_only）
 }
 _PROD = ("src/pipeline/inference/stage2_bets.py", "src/pipeline/inference/candidate_runner.py", "src/api/stage2_live.py")
@@ -462,6 +464,7 @@ def test_guard_is_only_in_research_cli_entrypoints():
             t = p.read_text(encoding="utf-8", errors="ignore")
             assert "data_ledger" not in t, p
             assert not any(m in t for m in mods), (p, [m for m in mods if m in t])
+            assert "pedigree_lab" not in t, p      # pedigree_lab の台帳の入口は data._guard の中継なので、包みごと本番から外す
             if p.suffix == ".sh":
                 assert "bet_cycles" not in t, p
 
@@ -471,3 +474,121 @@ def test_importing_bet_cycles_does_not_load_ledger():
                         "src.pipeline.inference.candidate_runner, src.api.stage2_live; "
                         "print('src.ops.data_ledger' in sys.modules)"], cwd=ROOT, capture_output=True, text=True, timeout=300)
     assert r.returncode == 0 and r.stdout.strip() == "False", r.stderr[-500:]
+
+
+# ---------------------------------------------------------------- 共有の写しの場所・使えないとき（2026-11-25 の SUDO_USER=root）
+
+def test_shared_default_ignores_sudo_user_when_not_root():
+    home = L._own_home() / L.SHARED_REL
+    assert L._shared_default({"SUDO_USER": "root"}, euid=1000) == home          # 統括役のセッションに残った SUDO_USER=root
+    assert L._shared_default({"SUDO_USER": "someone"}, euid=1000) == home       # root でないなら sudo の印は使わない
+    assert L._shared_default({}, euid=1000) == home
+    assert L._shared_default({"SUDO_USER": "root"}, euid=0) == home             # root の sudo は元が root
+    assert L._shared_default({"SUDO_USER": "no-such-user-xyz"}, euid=0) == home  # 知らない利用者
+    if L.os.geteuid() != 0:
+        assert L.SHARED_DEFAULT == home
+
+
+def test_shared_default_uses_sudo_user_home_under_real_sudo():
+    import pwd
+    try:
+        me = pwd.getpwuid(L.os.getuid())
+    except KeyError:
+        pytest.skip("passwd に無い uid")
+    if me.pw_name == "root":
+        pytest.skip("root で動いている")
+    assert L._shared_default({"SUDO_USER": me.pw_name}, euid=0) == Path(me.pw_dir) / L.SHARED_REL
+
+
+def _seed_git_row(led):
+    """git の台帳にだけ、同じ期間を 1 回見た行を置く（共有の写しが読めなくても下限に数える）。"""
+    row = {"id": "seed-1", "kind": "record", "at": "2026-11-01T00:00:00+09:00", "session": "x", "tool": "t",
+           "target": {"family": "bet_cycles", "version": "old"}, "period": {"from": "2025-01-01", "to": "2025-12-31"},
+           "purpose": "eval_only", "decision": "recorded", "source": "manual"}
+    L._append(L.git_path(), row)
+
+
+def _start_rows():
+    return [r for r in L._read_jsonl(L.git_path()) if r.get("kind") == "start"]
+
+
+def test_unreadable_shared_records_unknown_not_zero(led, monkeypatch, capsys):
+    _seed_git_row(led)
+    real = L._read_jsonl
+
+    def fake(path):
+        if Path(path) == L.shared_path():
+            raise PermissionError(13, "Permission denied", str(path))
+        return real(path)
+
+    monkeypatch.setattr(L, "_read_jsonl", fake)
+    tok = _g(purpose="eval_only", reason="r")
+    assert tok.decision.decision == "warned"
+    assert any(v.startswith("shared_missing") for v in tok.decision.violations)
+    cb = _start_rows()[-1]["counts_before"]
+    assert cb["total"] is None and cb["family"] is None and cb["unknown"] is True
+    assert cb["at_least"] == {"total": 1, "family": 1}                      # git の台帳の分は残す
+    s = tok.summary()
+    assert s["seen_total"] is None and s["seen_unknown"] is True and s["seen_at_least"]["total"] == 1
+    assert s["use_for_decision"] is False
+    err = capsys.readouterr().err
+    assert "不明" in err and "全体で 0 回" not in err
+
+
+def test_shared_parent_is_file_records_unknown(led, monkeypatch, tmp_path):
+    (tmp_path / "notadir").write_text("x", encoding="utf-8")
+    monkeypatch.setenv("KEIBA_LEDGER_SHARED", str(tmp_path / "notadir" / "ledger.jsonl"))
+    _seed_git_row(led)
+    tok = _g(purpose="eval_only", reason="r")
+    assert tok.decision.decision == "warned"
+    cb = _start_rows()[-1]["counts_before"]                                    # 共有に書けなくても git には残る
+    assert cb["unknown"] is True and cb["total"] is None
+
+
+def test_missing_shared_dir_is_unknown_and_denied_in_enforce(led, monkeypatch, tmp_path):
+    monkeypatch.setenv("KEIBA_LEDGER_SHARED", str(tmp_path / "nowhere" / "ledger.jsonl"))
+    _enforce(monkeypatch)
+    with pytest.raises(L.LedgerDenied, match="shared_missing"):
+        _g(purpose="eval_only", reason="r")
+    assert _start_rows()[-1]["counts_before"]["unknown"] is True                # 拒否でも、git には「不明」で残る
+
+
+def test_usable_shared_records_counts(led):
+    _seed_git_row(led)
+    tok = _g(purpose="eval_only", reason="r")
+    cb = _start_rows()[-1]["counts_before"]
+    assert cb == {"total": 1, "family": 1}
+    assert tok.summary()["seen_total"] == 1 and tok.summary()["seen_unknown"] is False
+    assert not any(v.startswith("shared_missing") for v in tok.decision.violations)
+
+
+def test_own_home_ignores_home_env(monkeypatch):
+    real = L._own_home()
+    monkeypatch.setenv("HOME", "/root")                                       # SUDO_USER=root と一緒に残った HOME
+    assert L._own_home() == real
+    if L.os.geteuid() != 0:
+        assert L._shared_default({"SUDO_USER": "root"}, euid=L.os.geteuid()) != Path("/root") / L.SHARED_REL
+
+
+def test_missing_shared_dir_stays_unknown_and_is_not_created(led, monkeypatch, tmp_path):
+    sp = tmp_path / "nowhere" / "ledger.jsonl"
+    monkeypatch.setenv("KEIBA_LEDGER_SHARED", str(sp))
+    _g(purpose="eval_only", reason="r").finish()
+    tok = _g(version="v2", purpose="eval_only", reason="r")                   # 2 回目も「不明」（1 回目が置き場を作らない）
+    assert not sp.parent.exists()
+    assert tok.decision.counts.get("unknown") is True
+    assert _start_rows()[-1]["counts_before"]["at_least"]["total"] == 1
+
+
+def test_unreadable_shared_is_denied_in_enforce(led, monkeypatch):
+    real = L._read_jsonl
+
+    def fake(path):
+        if Path(path) == L.shared_path():
+            raise PermissionError(13, "Permission denied", str(path))
+        return real(path)
+
+    monkeypatch.setattr(L, "_read_jsonl", fake)
+    _enforce(monkeypatch)
+    with pytest.raises(L.LedgerDenied, match="shared_missing"):
+        _g(purpose="eval_only", reason="r")

@@ -302,8 +302,9 @@ SCOPE_FORBIDDEN_KEYS = frozenset({
     "closing_index", "remarks", "stable_comment", "race_result_on_time", "growth",
     "win_odds", "place_odds_min", "place_odds_max", "final_odds", "ev_win", "ev_place", "ev_top2", "expected_value",
     "win_prob", "top3_prob", "show_prob", "top2_prob", "place_prob", "pred_rank", "pred_score", "composite_score", "composite_rank",
-    "winner_logloss_model",
 })
+# レースごとの勝ち馬の logloss（exp(-値) で勝ち馬の予測の勝率になる）。期間全体の集計（kpi・summary）は逆算できないので出してよい
+_PER_RACE_LOGLOSS = frozenset({"winner_logloss", "winner_logloss_model"})
 # 文字列の中に出てはいけない言い回し（予測の勝率・確定前の単勝オッズ）
 SCOPE_FORBIDDEN_TEXT = re.compile(r"勝率\s*[0-9.]+\s*%|単勝\s*[0-9.]+\s*倍")
 # 確定の結果に限って出してよい（race_result の中だけ）
@@ -316,7 +317,7 @@ def find_scope_leaks(data: Any, *, confirmed: bool = False, path: str = "") -> l
     if isinstance(data, dict):
         for k, v in data.items():
             q = f"{path}.{k}"
-            if k in SCOPE_FORBIDDEN_KEYS or (k == "winner_logloss" and ".races[]" in q):
+            if k in SCOPE_FORBIDDEN_KEYS or (k in _PER_RACE_LOGLOSS and ".races[]" in q):
                 out.append(q)
             elif k in SCOPE_CONFIRMED_ONLY_KEYS and not (confirmed and q.startswith(".race_result.")):
                 out.append(q)

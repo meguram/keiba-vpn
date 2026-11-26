@@ -179,6 +179,50 @@ def blank_going(v: pd.Series) -> pd.Series:
     return t.isin(["", "None", "nan", "<NA>"])
 
 
+# 履歴の行（V4History._field_history）で、出馬表が空のときに結果表の値で埋める列。2026-10 以降の出馬表は、取得の後に馬場・天気・
+# 発走時刻・騎手が空のまま残る行がある（11/14〜23 の開催で馬場が全レース空）。結果表は値を持つ。
+# 学習表（2025 年まで）はこれらが埋まった出馬表の行なので、埋めると学習と同じ形に近づく（train_serve_skew_20261126.md）。
+# - 馬場は結果表が「稍重・不良」、出馬表と学習表が「稍・不」。埋めた値は出馬表の書き方に直す（FIELD_FILL_RECODE）。
+# - 天気は両方に値がある行の約 2% で違う（出馬表は発走前の値）。埋めた行だけ結果の値になるが、空のままより学習に近い。
+# - 騎手名は書き方が違う（出馬表は略名と減量の印、結果表は姓名）ので埋めない。jockey_id は同じ。
+# - grade は 2025 年の出馬表でも 2・3 勝が空で、学習表もその形なので埋めない。
+FIELD_FILL_FROM_RESULT = ("track_condition", "weather", "start_time", "jockey_id")
+FIELD_FILL_RECODE = {"track_condition": {"稍重": "稍", "不良": "不"}}
+# 切り替え（既定はオフ＝直す前と同じ）。"1" で埋める。本番に入れるのは統括役とユーザーの承認の後で、ホストの .env に "1" を足す
+# （コードが配備に乗っても、承認の前に入力は変わらない）。影の候補（forward_stop_r2、11/21〜）は満期まで直す前の版で数えるため、
+# config/candidate_runtime.json の env で "0" に固定する（rules-council の 1 号の決定、2026-11-26）
+FIELD_FILL_ENV = "KEIBA_FIELD_FILL_FROM_RESULT"
+FIELD_FILL_RULE = "skew_fill_v1"
+FIELD_FILL_NONE = "skew_fill_none"
+
+
+def field_fill_enabled() -> bool:
+    return os.environ.get(FIELD_FILL_ENV, "0").strip().lower() in ("1", "true", "yes", "on")
+
+
+def field_fill_rule_sha(enabled: bool | None = None) -> str:
+    """埋める規則の中身の sha256 の先頭 12 桁（前向きの記録の版の印 field_fill_rule_sha）。オフのときは直す前の版の印。"""
+    import hashlib
+
+    on = field_fill_enabled() if enabled is None else enabled
+    body = [FIELD_FILL_FROM_RESULT, FIELD_FILL_RECODE] if on else FIELD_FILL_NONE
+    return hashlib.sha256(json.dumps(body, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:12]
+
+
+def fill_blank_from_result(m: pd.DataFrame, cols) -> pd.DataFrame:
+    """出馬表 × 結果表の結合（結果の列は "<列>__r"）で、出馬表の値が空の行だけ結果の値に替え、"__r" の列を落とす。
+    埋めた値は FIELD_FILL_RECODE で出馬表の書き方に直す。結果も空なら空のまま。"""
+    for c in cols:
+        r = c + "__r"
+        if r in m.columns:
+            src = m[r]
+            if c in FIELD_FILL_RECODE:
+                src = src.replace(FIELD_FILL_RECODE[c])
+            m[c] = m[c].where(~blank_going(m[c]), src)
+            m = m.drop(columns=[r])
+    return m
+
+
 OWNER_GOING_PREFIX = ("o_go_", "ob_go_")    # 馬主の群の馬場の列（条件 c_go = 面 + 良なら g・それ以外は h）
 GOING_VAR_SEP = "__going_"                  # キャッシュに持つ、馬場ごとの値の列の名前の区切り（o_go_win__going_g など）
 
@@ -228,7 +272,8 @@ class V4History:
         self.graded = graded_race_names(self.tables, self.years)
         A, self.ped_H = fp.build_ped_tables([])
         self.ped_A = A[A["gen"] <= 2].reset_index(drop=True)          # 父・母・父父・父母・母父・母母だけ使う（PED_sire_cond）
-        info = {"conn_rows": len(self.conn_raw), "self_rows": len(self.self_runs), "field_rows": len(self.field_hist), "last_date": str(self.self_runs["date"].max().date()),
+        info = {"conn_rows": len(self.conn_raw), "self_rows": len(self.self_runs), "field_rows": len(self.field_hist),
+                "field_fill": getattr(self, "field_fill_info", None), "last_date": str(self.self_runs["date"].max().date()),
                 "warm_sec": round(time.perf_counter() - t0, 1)}
         logger.info("v4 の履歴: %s", info)
         return info
@@ -256,6 +301,8 @@ class V4History:
 
         parts = []
         last = None
+        # 結果表で埋めた行の数（年 → 列 → 行数）。版の印として warm の記録に出す
+        self.field_fill_info = {"rule": FIELD_FILL_RULE if field_fill_enabled() else FIELD_FILL_NONE, "rule_sha": field_fill_rule_sha()}
         if self.train_path is not None and self.train_path.exists():
             sch = pl.read_parquet_schema(self.train_path)
             t = pl.read_parquet(self.train_path, columns=[c for c in self.FIELD_COLS if c in sch]).to_pandas()
@@ -269,13 +316,18 @@ class V4History:
                 continue
             s_sch = pl.read_parquet_schema(sb)
             a = pl.read_parquet(sb, columns=[c for c in self.FIELD_COLS if c in s_sch and c not in ("finish_position", "a_style", "f3_r")]).to_pandas()
-            b = pl.read_parquet(rr, columns=["race_id", "horse_number", "finish_position"]).to_pandas()
+            r_sch = pl.read_parquet_schema(rr)
+            fill = [c for c in FIELD_FILL_FROM_RESULT if c in a.columns and c in r_sch] if field_fill_enabled() else []
+            b = pl.read_parquet(rr, columns=["race_id", "horse_number", "finish_position", *fill]).to_pandas()
             a["race_id"], b["race_id"] = a["race_id"].astype(str), b["race_id"].astype(str)
-            m = a.merge(b, on=["race_id", "horse_number"], how="inner")
-            m = m[(pd.to_numeric(m["finish_position"], errors="coerce") > 0) & pd.to_numeric(m["venue_code"], errors="coerce").between(1, 10)]
+            m = a.merge(b, on=["race_id", "horse_number"], how="inner", suffixes=("", "__r"))
+            m = m[(pd.to_numeric(m["finish_position"], errors="coerce") > 0) & pd.to_numeric(m["venue_code"], errors="coerce").between(1, 10)].copy()
             m["date"] = pd.to_datetime(m["date"])
             if last is not None:
-                m = m[m["date"] > last]
+                m = m[m["date"] > last].copy()
+            # 埋めた行の数は、履歴に残る行（着順あり・中央の場・学習表より後）だけで数える
+            self.field_fill_info[str(y)] = {c: int((blank_going(m[c]) & ~blank_going(m[c + "__r"])).sum()) for c in fill}
+            m = fill_blank_from_result(m, fill)
             m["horse_id"] = m["horse_id"].astype(str)
             parts.append(m)
         h = pd.concat(parts, ignore_index=True)

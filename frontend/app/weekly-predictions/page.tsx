@@ -1,6 +1,7 @@
 "use client";
 
 import { PRED_TTL_MS, fetchRaceList, getJson, hasFreshJson, prefetchJson, readStored } from "@/lib/httpCache";
+import { PredPrefetcher } from "@/lib/predPrefetch";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } from "@/lib/mock";
@@ -779,13 +780,29 @@ export default function WeeklyPredictionsPage() {
     }
   }, []);
 
+  /* 予測の先読みは全体で同時 1 本（lib/predPrefetch.ts）。選んだレースの取得が先 */
+  const prefetcher = useRef<PredPrefetcher | null>(null);
+  const pf = useCallback((): PredPrefetcher => {
+    if (!prefetcher.current) {
+      prefetcher.current = new PredPrefetcher(
+        (id) => getJson(`/api/race/${id}/predictions`, { ttlMs: PRED_TTL_MS, persist: true }),
+        (id) => hasFreshJson(`/api/race/${id}/predictions`, PRED_TTL_MS),
+      );
+    }
+    return prefetcher.current;
+  }, []);
+
   /* マウスが乗った／触れ始めたレースの予測を先読みする。連続で動かしたときは、止まった（150ms）レースだけ */
   const warmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {                  // 画面を離れたら、まだ出していない先読みは出さない
+    if (warmTimer.current) clearTimeout(warmTimer.current);
+    prefetcher.current?.stop();
+  }, []);
   const warmPred = useCallback((id: string) => {
     if (USE_MOCK) return;
     if (warmTimer.current) clearTimeout(warmTimer.current);
-    warmTimer.current = setTimeout(() => prefetchJson(`/api/race/${id}/predictions`, { ttlMs: PRED_TTL_MS, persist: true }), 150);
-  }, []);
+    warmTimer.current = setTimeout(() => pf().want([id], true), 150);
+  }, [pf]);
 
   /* 選んだレースの予測だけを取得する（素早く切り替えたときは最後に選んだものだけ。取得済みは即表示）。
      表示は activeRaceId の状態だけを見るので、遅れて届いた別レースの応答が画面を上書きすることはない */
@@ -803,20 +820,16 @@ export default function WeeklyPredictionsPage() {
      1 本ずつ・選んだレースの取得の後に。以前はその日の全レース（最大 40 件・2 本ずつ）を取っていて、1 回開くと API が約 37 件出ていた。
      それ以外のレースは、マウスが乗った・触れたときの先読み（warmPred）で温める */
   useEffect(() => {
-    if (USE_MOCK || !activeRaceId) return;
-    let cancelled = false;
-    const i = visibleRaces.findIndex((r) => r.race_id === activeRaceId);
-    if (i < 0) return;
+    if (USE_MOCK) return;
+    const q = pf();
+    const i = activeRaceId ? visibleRaces.findIndex((r) => r.race_id === activeRaceId) : -1;
+    if (i < 0) { q.release(); return; }    // 選んだレースが無い間は、マウスの先読みを止めたままにしない
     const ids = [visibleRaces[i + 1], visibleRaces[i + 2], visibleRaces[i - 1]].map((r) => r?.race_id).filter((id): id is string => !!id);
-    const worker = async () => {
-      await getJson(`/api/race/${activeRaceId}/predictions`, { ttlMs: PRED_TTL_MS, persist: true }).catch(() => undefined);   // 選んだレースの取得（loadPred と同じ 1 本）が済んでから
-      for (const id of ids) {
-        if (cancelled) return;
-        await getJson(`/api/race/${id}/predictions`, { ttlMs: PRED_TTL_MS, persist: true }).catch(() => undefined);
-      }
-    };
-    const t = setTimeout(() => { void worker(); }, 800);
-    return () => { cancelled = true; clearTimeout(t); };
+    q.focus(activeRaceId);                 // 選んだレースが変わったら、まだ出していない先読みを捨て、選んだレースが済むまで次を出さない
+    // 選んだレースの取得（loadPred と同じ 1 本に相乗り）が済んでから、前後を 1 本ずつ
+    const t1 = setTimeout(() => q.select(getJson(`/api/race/${activeRaceId}/predictions`, { ttlMs: PRED_TTL_MS, persist: true })), 60);
+    const t2 = setTimeout(() => q.want(ids), 800);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRaceId, visibleRaces]);
 

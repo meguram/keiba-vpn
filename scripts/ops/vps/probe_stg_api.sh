@@ -19,7 +19,7 @@ for r in "$R1" "$R2"; do
   probe "/api/race/$r"; probe "/api/race/$r/predictions"; probe "/api/race/$r/tracking-difficulty";
 done
 for d in $D1 $D2; do probe "/api/race-list/$d"; probe "/api/v1/betting/race-values?date=$d"; probe "/api/prediction-results/bets-summary?date=$d"; probe "/api/prediction-results?scope=day&date=$d"; done
-probe "/api/scrape-dates?picker_past_days=14&picker_future_days=14"; probe "/api/race-calendar?month=202610"
+probe "/api/scrape-dates?picker_past_days=150&picker_future_days=14"; probe "/api/race-calendar?month=202610"
 probe "/api/prediction-results/days"; probe "/api/prediction-results/mark-card"; probe "/api/prediction-results/news?limit=6"; probe "/api/prediction-results/bets-by-level"
 probe "/api/maintenance/status"; probe "/api/v1/auth/status"
 echo "確認 $n 件、200 以外 $bad 件"

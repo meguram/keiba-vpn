@@ -764,3 +764,23 @@ sudo rm /etc/nginx/snippets/keiba-edge-stg.conf && sudo nginx -t && sudo systemc
 | 5 | 本番: vps_14 --env prod・vps_10（cache-warm）・見張りの prod | 11/30 以降の平日。開催日の 07:30〜17:00 には入れない |
 
 - 費用の確かめ: 本番に入れた 1〜2 日後に、課金エクスポートで Cloud Run の CPU・要求と GCS の操作を、入れる前の 1 週と比べる（CLAUDE.md）。
+
+
+### 11.6 11/26 の直し（診断・Cloudflare・掃除）
+
+- **診断の結果（11/28 の出馬表、24 レース）:**
+  - 詳細 24 本は全部作れた。予測 24 本は全部「写しに無い: horse_result」で捨てられた。
+  - horse_result は成長度（`growth_attach.py:245`）にだけ使われ、growth・growth_meta は会員限定（`tier.py` の LOCKED_GROUPS）で、匿名からは落ちる。
+  - 同じ 2 レースを horse_result の有り無しで作り、匿名の本文が同じことを確かめた。
+  - そこで、匿名（anon・pre）では、この印で捨てない（`config/edge_render.json` の `anon_ignore_missing`）。
+  - テストが見張るのは「growth が会員限定」の前提だけ。horse_result の有り無しで匿名の本文を比べるテストは、実データ（GCS）が要るので CI に入れていない。匿名に残る値で horse_result を使うものを足すときは、この節の照合をやり直す。
+  - **E4（会員）で tiers に member を足すときの注意:** 無視した印が立ったレースの欠けは、同じプロセスのキャッシュ（`_race_detail_cache` 60 秒・prerender）に残る。member を作る前に、そのレースを dirty 扱いにするか、キャッシュを消す。
+- **Cloudflare（latency-pr3 からの申し送り）:**
+  - nginx のフォルダの応答に `Cloudflare-CDN-Cache-Control` を付けた。前日より前の確定済み（anon）は `public, max-age=300`（`config/http_cache.json` の `cdn_max_age`）。確定前・当日（pre）は `no-store`。アプリの `cdn_cache_control_value` と同じ考え方。
+  - 当日のレースは、確定済みでも pre に置く（当日の訂正のため。手で `--race`・`--date` を指定した回も同じ）。
+  - anon の見出しは `always` を付けない（429・403 などの誤りを Cloudflare に置かせない）。
+  - pre は内部の location `/__edge_pre/` で返す。無ければ名前付きの location で今の /api/ の経路へ回す。外から `/__edge_pre/` を直に叩くと 404。
+  - 配備の直後（旧コードが作った当日の anon のファイルが残りうる）は、`EDGE_RENDER_ARGS=--full` を 1 回流す。見送らない回なので、範囲外の削除まで進む。
+- **写しの掃除:**
+  - 写しの設定（`local_mirror_config.json`）にあるレースのカテゴリだけを消す。設定が無い・無効なら何もしない。
+  - 統括役の調べ役が `GCS_LOCAL_MIRROR_CATEGORIES=race_trifecta_odds` で写した 3 連単の補填（2016・2021 年。11/27 に tp48_trifecta が読む）は消さない。

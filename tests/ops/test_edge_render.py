@@ -262,7 +262,10 @@ def test_prune_mirror_only_old_race_categories(tmp_path):
     from argparse import Namespace
 
     old = _t.time() - 50 * 86400
-    for cat, key in (("race_shutuba", "202605050101"), ("horse_result", "2019100001")):
+    (tmp_path / "data/local/meta").mkdir(parents=True)
+    (tmp_path / "data/local/meta/local_mirror_config.json").write_text(json.dumps(
+        {"enabled": True, "categories": ["race_shutuba", "race_result", "horse_result"]}))
+    for cat, key in (("race_shutuba", "202605050101"), ("horse_result", "2019100001"), ("race_trifecta_odds", "201610021210")):
         _put(tmp_path, cat, key, {})
         os.utime(tmp_path / "data/local/mirror" / cat / key[:4] / f"{key}.json", (old, old))
     _put(tmp_path, "race_result", "202611280101", {})                  # 新しい
@@ -271,6 +274,7 @@ def test_prune_mirror_only_old_race_categories(tmp_path):
     assert not (m / "race_shutuba/2026/202605050101.json").exists()
     assert (m / "horse_result/2019/2019100001.json").exists()          # 馬のカテゴリは消さない
     assert (m / "race_result/2026/202611280101.json").exists()
+    assert (m / "race_trifecta_odds/2016/201610021210.json").exists()    # 写しの設定に無いカテゴリ（ほかの処理の置き場）は消さない
 
 
 # ---- E5（確定前）
@@ -371,3 +375,47 @@ def test_cmd_render_skips_remembered_failures_without_loading_api(tmp_path, monk
     (meta / "skipped.json").write_text("{}")
     monkeypatch.setattr(er.os, "getloadavg", lambda: (99.0, 0, 0))
     assert er.cmd_render(args) == er.DEFERRED                             # 混んでいる回は見送り
+
+
+def test_anon_ignore_missing_is_only_for_member_only_fields():
+    """匿名で捨てない「写しに無い」の印は、会員限定の値にだけ使うカテゴリに限る（horse_result → growth）。tier.py の前提が崩れたら落ちる。"""
+    from src.api import tier
+
+    cfg = er.load_config()
+    assert cfg["anon_ignore_missing"] == ["horse_result"]
+    locked = {f for fields in tier.LOCKED_GROUPS.values() for f in fields}
+    assert "growth" in locked and "growth_meta" in locked
+    assert "growth" not in tier.PUBLIC_ENTRY_FIELDS
+    assert er.ignorable_reasons(cfg, "anon") == {"写しに無い: horse_result"}
+    assert er.ignorable_reasons(cfg, "pre") == {"写しに無い: horse_result"}
+    assert er.ignorable_reasons(cfg, "member") == set()                 # 会員は growth を見るので捨てる
+
+
+def test_today_settled_races_go_to_pre(tmp_path, monkeypatch):
+    """当日のレースは確定済みでも pre（nginx は Cloudflare に置かせない）。前日より前の確定済みだけ anon。"""
+    monkeypatch.delenv("KEIBA_EDGE_MIRROR_DIR", raising=False)
+    base = _mirror(tmp_path, ["race_shutuba", "race_result"])
+    rl = base / "data/page_reference/race_lists"
+    rl.mkdir(parents=True)
+    monkeypatch.setenv("KEIBA_PAGE_REFERENCE_DIR", str(base / "data/page_reference"))
+    for d, rid in (("20261205", "202605050101"), ("20261206", "202605050201")):
+        rl.joinpath(f"{d}.json").write_text(json.dumps({"races": [{"race_id": rid}]}))
+        _put(base, "race_shutuba", rid, {})
+        _put(base, "race_result", rid, {})
+    cfg = {**er.load_config(), "mirror_since": "20261123", "entries_lead_days": 5, "upcoming_days": 7}
+    t, _ = er.default_targets(cfg, base, ["anon"], datetime(2026, 12, 6, 18, tzinfo=er.JST))
+    assert ("anon", "/api/race/202605050101") in t and ("anon", "/api/race-list/20261205") in t     # 前日
+    assert ("pre", "/api/race/202605050201") in t and ("pre", "/api/race-list/20261206") in t       # 当日
+
+
+def test_manual_targets_today_or_unknown_go_to_pre(tmp_path, monkeypatch):
+    rl = tmp_path / "race_lists"
+    rl.mkdir()
+    monkeypatch.setenv("KEIBA_PAGE_REFERENCE_DIR", str(tmp_path))
+    rl.joinpath("20261205.json").write_text(json.dumps({"races": [{"race_id": "202605050101"}]}))
+    rl.joinpath("20261206.json").write_text(json.dumps({"races": [{"race_id": "202605050201"}]}))
+    t = [("anon", "/api/race/202605050101"), ("anon", "/api/race/202605050201"), ("anon", "/api/race/202605059999"),
+         ("anon", "/api/race-list/20261205"), ("anon", "/api/race-list/20261206")]
+    out = er.pre_unless_past(t, tmp_path, ["20261205", "20261206"], datetime(2026, 12, 6, 12, tzinfo=er.JST))
+    assert out == [("anon", "/api/race/202605050101"), ("pre", "/api/race/202605050201"), ("pre", "/api/race/202605059999"),
+                   ("anon", "/api/race-list/20261205"), ("pre", "/api/race-list/20261206")]
