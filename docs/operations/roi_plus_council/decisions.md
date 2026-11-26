@@ -2637,3 +2637,12 @@ B の指示:
   - 効きが初ダートに寄っている
 - 合格しても、100% 超の根拠にはならない（控除に遠い・確定の q を基準にしている）。
 - 登録の commit の sha は、この追記と同じ commit（担当が log.md に書く）。
+
+### train-serve-skew の推論の直し（前日の馬場など）の本番への反映（2026-11-26、担当 train-serve-skew。1 号の決定 案 C の記録）
+- 何を: 推論の履歴の行の空の馬場・天気・発走時刻・jockey_id を結果表で埋める（`KEIBA_FIELD_FILL_FROM_RESULT=1`、規則 skew_fill_v1・rule_sha 62fea2c9e18a）。
+- いつから: ホストの `.env` に 11/26 15:00 JST ごろ足した。効くのは次の起動から。最初は 11/28 07:35 の日のキャッシュ（serving-state-precompute）と 08:00 の weight-runner。
+- 前向きの記録:
+  - forward_stop_r2（影の候補 v6c）は直す前の版（skew_fill_none・68c64c81400a）のまま満期まで数える（candidate_runtime.json で 0）。
+  - prereg_2026_r2 の reference の群（本番 v6e の p_win）は、11/28 の最初の予測を境に 2 つに分ける。
+  - forward_benter_rc6 の p_rich は serving_v4 を通らないので影響なし。
+- 集計は input_rev（skew_fill_none／skew_fill_v1_20261128）で分け、版をまたいで足さない。

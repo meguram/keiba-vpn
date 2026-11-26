@@ -71,7 +71,7 @@ OVERRIDE: dict[str, str] = {
     "DATA_HEALTH": "ops", "production_load": "ops",
     # データ品質
     "data_quality_issues": "res-data", "course_master_verification": "res-data", "drift_diagnosis": "res-data",
-    "feature_gap_audit": "res-data", "data_trend": "res-data",
+    "feature_gap_audit": "res-data", "data_trend": "res-data", "train_serve_skew": "res-data",
     # 重賞
     "graded_handicapper": "res-graded",
     # 血統
@@ -187,7 +187,7 @@ GROUPS: dict[str, list[Group]] = {
     ],
     "res-data": [
         Group("データと文書の食い違い", "データ品質の既知の問題と、文書どうし・文書とコードの食い違いの一覧。",
-              ["data_quality_issues", "feature_gap_audit", "drift_diagnosis", "course_master_verification"],
+              ["data_quality_issues", "feature_gap_audit", "drift_diagnosis", "train_serve_skew", "course_master_verification"],
               [E("docs/operations/docs_inconsistencies_20261118.md", "文書の食い違い・古い記述の一覧（2026-11-18）"),
                E("docs/operations/data_audit_20261116.md", "データの監査（2026-11-16）")]),
         Group("データの傾向の変化", "2016〜2025 年の傾向の変化（ドリフト）の大きさと、ルール・モデル・馬券への影響、問題点と改善案。",

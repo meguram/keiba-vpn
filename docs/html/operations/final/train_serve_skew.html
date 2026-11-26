@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>学習と推論の X のずれ</title>
+<meta name="description" content="本番で予測に使うモデルの入力の列について、学習で使った値と推論で見えた値のずれを列ごとに調べ、型（漏れ・経路・取り込み・時点・前処理）に分けて直す記録。">
+<style>
+:root { --bg:#f7f8fb; --panel:#ffffff; --panel2:#eef1f7; --border:#d5dbe7; --text:#1b2333; --muted:#5b6578;
+  --accent:#2f5fc4; --ok:#1d7f45; --warn:#9a6200; --bad:#b4232c; --code:#eef1f7; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60;
+  --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; } }
+:root[data-theme="dark"] { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60; --text:#e6ecff; --muted:#9aa7c7;
+  --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1180px; margin:0 auto; padding:28px 16px 80px; }
+a { color:var(--accent); }
+h1 { font-size:24px; margin:0 0 6px; line-height:1.4; }
+h2 { font-size:19px; margin:40px 0 6px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:22px 0 4px; }
+p, li { overflow-wrap:anywhere; }
+.sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+.scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:8px 0 14px; border:1px solid var(--border); border-radius:8px; }
+table { border-collapse:collapse; width:100%; min-width:760px; font-size:13.5px; background:var(--panel); }
+th, td { border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:var(--panel2); font-weight:600; }
+td.n { text-align:right; font-variant-numeric:tabular-nums; }
+code { background:var(--code); padding:1px 5px; border-radius:4px; font-size:13px; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin:10px 0; }
+.ok { color:var(--ok); font-weight:600; } .warn { color:var(--warn); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
+</style>
+</head>
+<body>
+<main>
+<h1>学習と推論の X のずれ</h1>
+<p class="sub">担当 train-serve-skew・2026-11-26 時点。費用 0 円（本番 v6e の再生の 1 回だけ GCS の読み出し 約 1 円、統括役の承認済み）。着順・払戻は使っていない。詳しい記録は <code>docs/operations/train_serve_skew_20261126.md</code>。</p>
+
+<div class="box">
+<p><b>結論</b></p>
+<ul>
+<li>学習と推論で、欠けの率が 5pt を超えてずれる列は、影の候補 v6c の 1,193 列のうち 48 列（4.0%）。本番 v6e・§77 も同じ列を同じ経路で作る。大きいのは 1・2 週前の追い切り（tl_w1/w2）・追い切りサイクル（wc_）・前日の馬場の 3 つ。</li>
+<li>前日の馬場は推論の取り込みの不具合（出馬表の馬場が空）だった。直しを入れた。ユーザーの承認を受けて 11/26 に本番の設定でオンにした（11/28 の朝の推論から効く）。</li>
+<li>追い切りのずれは、走ったことのある馬だけ。新馬は学習と推論がそろう。11/27 の写しで netkeiba の載せ方を確かめ、D-1 の計画で直す。</li>
+<li>本番 v6e は推論で見えた X を残していないので、当日の再現ができない（門 1 が通らない）。X を手元に残す仕組みを 12/1 以降に入れる。</li>
+</ul>
+</div>
+
+<h2>1. 対象のモデル</h2>
+<div class="scroll"><table>
+<thead><tr><th>モデル</th><th>推論の入口</th><th>X を作る所</th><th>推論で見えた X の記録</th></tr></thead>
+<tbody>
+<tr><td>本番 v6e（1,231 列）＋前段 S3B</td><td><code>weight_triggered_predict.py</code></td><td><code>V3Serving.features</code></td><td>p だけ（X は残らない）</td></tr>
+<tr><td>§77 の予測オッズ（1,119 列）</td><td>同上（X を共有）</td><td>同上</td><td>q̂ だけ</td></tr>
+<tr><td>影の候補 v6c（1,193 列）＋第 2 段</td><td><code>candidate_runner.py</code></td><td>同上（2016 年起点の付け替え）</td><td>X をそのまま保存（11/21〜23 の 30 R）</td></tr>
+<tr><td>めぐの AI（v5bag の p_rich）</td><td>本番の入口なし</td><td>研究の表（serving_v4 を通らない）</td><td>—</td></tr>
+<tr><td>穴馬モデル</td><td>本番の入口なし</td><td>—</td><td>—</td></tr>
+</tbody></table></div>
+
+<h2>2. ずれの見つかった列</h2>
+<p class="sub">推論で見えた X（候補 v6c、未勝利・新馬・障害）と、学習の X（2024〜25 年の 10〜12 月、同じ層）の欠けの率。型: (a) 発走後の情報が学習に入る、(b) 推論の経路が別のコード、(c) 推論の取り込みの欠け、(d) 時点の違い、(e) 版・前処理の違い。</p>
+<div class="scroll"><table>
+<thead><tr><th>群</th><th>列</th><th>学習の欠け</th><th>推論の欠け</th><th>型</th><th>直したか</th></tr></thead>
+<tbody>
+<tr><td>前日の馬場</td><td>fe_prev_day_going ほか 2 列（＋枠×馬場 6 列・血統×馬場 4 列の値）</td><td class="n">0%</td><td class="n">72%</td><td>(c)</td><td class="ok">直した（本番は 11/28 から）</td></tr>
+<tr><td>1 週前の追い切り</td><td>tl_w1_*（12 列）</td><td class="n">未勝利 30%</td><td class="n">未勝利 99.6%</td><td>(a)</td><td class="warn">D-1 で直す（11/27 の写しの後）</td></tr>
+<tr><td>2 週前の追い切り</td><td>tl_w2_*（12 列）</td><td class="n">未勝利 64%</td><td class="n">未勝利 100%</td><td>(a)</td><td class="warn">同上</td></tr>
+<tr><td>追い切りサイクル</td><td>wc_cc・c1・ca・ccH（13 列）</td><td class="n">未勝利 25%</td><td class="n">未勝利 100%</td><td>(a)</td><td class="warn">同上</td></tr>
+<tr><td>内回り・外回り</td><td>course_type（全メンバーの入力）</td><td class="n">67〜75%</td><td class="n">100%</td><td>(b)/(e)</td><td class="warn">段 1 で出どころを調べる</td></tr>
+<tr><td>当日の追い切りの評価</td><td>oikiri_eval ほか 3 列</td><td class="n">新馬 30%</td><td class="n">新馬 0%</td><td>(c) 学習の側</td><td class="warn">段 1</td></tr>
+<tr><td>障害の似たレース</td><td>f1_sw・f1_sim_res</td><td class="n">障害 2%</td><td class="n">障害 100%</td><td>未確認</td><td class="warn">段 1</td></tr>
+<tr><td>OOF の作りの違い</td><td>pxe・pxc・sr・fm・z・f5・mtl_（約 126 列の値）</td><td colspan="2">同じ行で値が 5% 超違う（2025 年の 6 日）。p の差 0.10</td><td>(b)/(e)</td><td class="warn">段 1 の B</td></tr>
+</tbody></table></div>
+
+<h3>追い切りの手がかり</h3>
+<ul>
+<li>発走前（前日 18 時台）に取った記録で、次のレースに付く追い切り: 新馬は 4〜8 本、走ったことのある馬はどの馬も 1 本（最終追い切りだけ）。</li>
+<li>取得の解析は表の行を全部読んでいる。こちらで落とす経路は見つからない。</li>
+</ul>
+
+<h2>3. 前日の馬場の直し</h2>
+<ul>
+<li>原因: 2026-10 以降の出馬表は、馬場・天気・発走時刻・jockey_id が空の行が多い（11/14〜23 は馬場が全レース空）。推論の履歴の行がその値を使っていた。</li>
+<li>直し: 出馬表が空の行だけ結果表の値で埋める（馬場は 稍・不 の書き方に直す。騎手名・grade は埋めない）。学習の行は触らない。</li>
+<li>切り替え <code>KEIBA_FIELD_FILL_FROM_RESULT</code>（既定オフ）。11/26 にホストの <code>.env</code> で 1 にした（戻すときはその行を消す）。影の候補は前向きの記録のため 0 に固定。</li>
+</ul>
+<div class="scroll"><table>
+<thead><tr><th>再生</th><th>レース</th><th>◎ の一致</th><th>mean|Δlog p|（95 分位）</th><th>max|Δp|</th><th>変わった列</th></tr></thead>
+<tbody>
+<tr><td>候補 v6c（第 1 段）</td><td class="n">31</td><td class="n">31/31</td><td class="n">0.0014</td><td class="n">0.0012</td><td>12 列だけ</td></tr>
+<tr><td>候補の第 2 段</td><td class="n">21</td><td class="n">21/21</td><td class="n">0.0039</td><td class="n">0.0014</td><td>買う／見送る 21/21 同じ</td></tr>
+<tr><td>本番 v6e</td><td class="n">72</td><td class="n">72/72</td><td class="n">0.0019</td><td class="n">0.0017</td><td>—</td></tr>
+</tbody></table></div>
+<p class="sub">合格の線（1 号、事前に固定）: ◎ の一致 ≥ 98%・95 分位 ≤ 0.01・max|Δp| ≤ 0.005。全部満たした。ただし再生は当日を再現しない（次の 4）。数字は「同じ入力のうえでの直しの効き」。</p>
+
+<h2>4. 再生できない理由（それ自体がずれ）</h2>
+<ul>
+<li>直す前の版の再生と、当日の本番 v6e の p: ◎ の一致 91.7%（72 R）、mean|Δlog p| の中央値 0.062、max|Δp| 0.079。</li>
+<li>当日の日のキャッシュを使っても変わらない。RB は「その日より前」だけを使い、漏れではない。</li>
+<li>残る原因は、当日より後に取り直された記録（調教など）と、馬体重・出馬表の写しの違い。推論で見えた X が残っていないので、ここで止まる。</li>
+<li>候補の再生（GCS なし）は、調教の記録が GCS からしか読めず、追い切りの列が全部空になる（当日の X と 156 列が違う）。</li>
+</ul>
+
+<h2>5. 前向きの記録の扱い（1 号の決定・案 C）</h2>
+<ul>
+<li>forward_stop_r2（11/21〜）: 主の線は直す前の版で満期まで。直した版は影の列。</li>
+<li>forward_benter_rc6（11/28〜）: p_rich は serving_v4 を通らないので影響なし。</li>
+<li>prereg_2026_r2 の reference の群: 本番に入れた日時で 2 つに分け、混ぜない。</li>
+</ul>
+
+<h2>6. 残り</h2>
+<div class="scroll"><table>
+<thead><tr><th>やること</th><th>時期</th><th>状態</th></tr></thead>
+<tbody>
+<tr><td>前日の馬場の直しを本番に入れる（.env を 1 にする）</td><td>11/26</td><td class="ok">済み（11/28 の朝のログで効きを確かめる）</td></tr>
+<tr><td>本番 v6e の推論で X を手元に保存する（x_served/、1 日 約 2MB、ミラーに入らない）</td><td>12/1 以降の平日</td><td class="warn">承認済み・未着手</td></tr>
+<tr><td>追い切り（tl_w1/w2・wc_）を発走前に見えた形にそろえる（D-1）</td><td>11/27 の写しの後</td><td class="warn">未着手</td></tr>
+<tr><td>再生の口を「取得の時刻が発走より前の記録だけ」にする</td><td>段 1</td><td class="warn">未着手</td></tr>
+<tr><td>course_type・障害の f1_・OOF の群の出どころ</td><td>段 1</td><td class="warn">未着手</td></tr>
+<tr><td>開催日の夜の比べ（1 日 1 通まで Slack）</td><td>段 2 の後</td><td class="warn">未着手</td></tr>
+</tbody></table></div>
+</main>
+</body>
+</html>
