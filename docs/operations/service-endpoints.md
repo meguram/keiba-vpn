@@ -17,7 +17,7 @@
 
 **会議の記録のビューア（共通 23950、`KEIBA_PORT_COUNCIL`）**: 「絶対回収率プラスにするマン」の `docs/operations/roi_plus_council/` の Markdown と関係の HTML を、要求のたびに読み直して返す読み取り専用のサーバ（`src/scripts/docs/council_viewer.py`）。
 認証が無いので **127.0.0.1 だけで待ち受ける**（Cursor の Remote-SSH の「ポート」で 23950 を転送、または `ssh -L`）。
-`/live` は担当 rules-council のセッションの記録（`~/.claude-jovyan/projects/…rules-council/*.jsonl` とサブエージェントの記録）の差分を 2.5 秒おきに読み、Server-Sent Events（`/live/stream`）で流す（ツールの出力は出さない・秘密を含みうる行は伏せる。`src/scripts/docs/council_live.py`）。
+`/live` は会議のライブ。直近の発言を吹き出しで出す（既定 30 件・件数は選べる）。最近 24 時間に更新されたこのリポジトリのセッションのうち、会議の顔ぶれ（roi-plus-man-1〜3・pedigree-1〜2）を呼んだもの、または名前が rules-council・pedigree-lab・bet-optimizer のものを自動で探し、画面で選べる。画面は `/live/api/sessions`・`/live/api/events` を 3 秒おきに取りに来る（SSE は Cursor の転送で届かないことがあったので替えた）。本文は Markdown として描く（生の HTML は文字のまま・javascript: のリンクは外す）。ツールの出力は出さない・秘密を含みうる行は伏せる（`src/scripts/docs/council_live.py`）。
 起動 `bash scripts/server/start_council_viewer.sh --bg`、停止 `--stop`、落ちていれば起動 `scripts/server/ensure_council_viewer.sh`（cron の `@reboot sleep 30`・`*/5`。登録は手で行う。行はスクリプトの先頭のコメント）。
 番号は 8090 ではなく 23950（8000 番台は他と衝突しやすいので避け、共通は 239xx という `config/ports.env` の方針）。`KEIBA_PORT_COUNCIL=8090` で替えられる。
 

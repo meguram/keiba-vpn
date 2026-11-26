@@ -230,3 +230,71 @@ def test_host_allowed(monkeypatch, host: str, ok: bool):
 def test_default_root_is_repo():
     assert (cv.DEFAULT_ROOT / "config" / "ports.env").is_file()
     assert (cv.DEFAULT_ROOT / cv.COUNCIL_REL).is_dir()
+
+
+# ── ライブの吹き出しの Markdown（会話の本文を安全に描く） ──
+
+def test_safe_md_renders_markdown_like_docs():
+    text = ("# 見出し\n**太字** と `a<b>&c`\n- 箇条 1\n  - 入れ子\n1. 番号\n2. 番号\n"
+            "| 項目 | 値 |\n|---|---|\n| 回収率 | 98% |\n"
+            "```python\nx = '<b>' & 1\n```\n> 引用\n\n[安全](https://example.com) [相対](docs/a.md)")
+    out = cv.safe_md_to_html(text)
+    assert "<h1>見出し</h1>" in out and "<strong>太字</strong>" in out
+    assert "<code>a&lt;b&gt;&amp;c</code>" in out
+    assert "<ul>" in out and "<li>入れ子</li>" in out and "<ol>" in out  # 段落の直後の箇条・2 字下げの入れ子も描く
+    assert '<div class="scroll"><table>' in out and "<td>98%</td>" in out
+    assert "x = &#x27;&lt;b&gt;&#x27; &amp; 1" in out or "x = '&lt;b&gt;' &amp; 1" in out
+    assert "<blockquote>" in out
+    assert 'href="https://example.com"' in out and 'href="docs/a.md"' in out and 'rel="noopener noreferrer"' in out
+
+
+@pytest.mark.parametrize("bad", [
+    "<script>alert(1)</script>",
+    '<img src=x onerror="alert(1)">',
+    '<div onclick="alert(1)">x</div>',
+    "<iframe src=//evil></iframe>",
+    "<svg/onload=alert(1)>",
+])
+def test_safe_md_escapes_raw_html(bad: str):
+    out = cv.safe_md_to_html(f"前\n\n{bad}\n\n後 {bad}")
+    assert "<script" not in out and "<img" not in out and "<div onclick" not in out and "<iframe" not in out and "<svg" not in out
+    assert "&lt;" in out
+
+
+@pytest.mark.parametrize("href", ["javascript:alert(1)", "JaVaScRiPt:alert(1)", "java&#115;cript:alert(1)",
+                                  "data:text/html,<script>1</script>", "vbscript:x", " javascript:alert(1)"])
+def test_safe_md_drops_dangerous_links(href: str):
+    out = cv.safe_md_to_html(f"[押す]({href})")
+    assert "href" not in out and "押す" in out
+
+
+def test_safe_md_image_becomes_text():
+    out = cv.safe_md_to_html('![図 <x>](http://evil/a.png "t")')
+    assert "<img" not in out and "［画像: 図 &lt;x&gt;］" in out
+
+
+def test_event_json_renders_text_once_and_keeps_tools_plain():
+    e = {"seq": 1, "ts": "t", "speaker": "1 号（リーダー）", "cls": "s1", "kind": "text", "text": "<b>x</b> **y**",
+         "stage": "R3", "topic": "R0-17", "decision": True}
+    j = cv.event_json(e)
+    assert j["html"] == "<p>&lt;b&gt;x&lt;/b&gt; <strong>y</strong></p>" and "text" not in j and j["decision"]
+    assert e["html"] == j["html"]  # 2 回目からは描いた結果を使う
+    t = cv.event_json({"seq": 2, "ts": "t", "speaker": "s", "cls": "sc", "kind": "tool", "text": "Bash: <x>",
+                       "stage": "", "topic": "", "decision": False})
+    assert t["text"] == "Bash: <x>" and "html" not in t
+
+
+def test_live_page_is_inline_only():
+    body = cv.live_page("abc")
+    assert '<script nonce="abc">' in body and "src=" not in body.split("<script", 1)[1]
+    assert "http://" not in body and "https://" not in body
+    assert "innerHTML = e.html" in body  # 本文はサーバで描いた安全な HTML だけを入れる
+    for n in cv.LIVE_LIMITS:
+        assert f'<option value="{n}">' in body
+
+
+@pytest.mark.parametrize("href", ["<javascript:alert(1)>", "java&#x09;script:alert(1)", "javascript&colon;alert(1)"])
+def test_safe_md_drops_wrapped_dangerous_links(href: str):
+    out = cv.safe_md_to_html(f"[押す]({href})\n\n[r]\n\n[r]: javascript:alert(2)")
+    assert "javascript" not in out.lower().replace("javascript&amp;colon;", "").split("href")[-1] or "href" not in out
+    assert 'href="javascript' not in out.lower() and "href=\"&lt;javascript" not in out.lower()
