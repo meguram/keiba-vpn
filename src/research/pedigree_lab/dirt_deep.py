@@ -166,10 +166,11 @@ def scene_masks(S: pd.DataFrame) -> dict[str, np.ndarray]:
     }
 
 
-def run_scenes(F, n_boot: int) -> dict:
+def run_scenes(F, n_boot: int, by_year: bool = False) -> dict:
     S = dirt_rows(F)
     res = {}
-    for nm, mk in scene_masks(S).items():
+    masks = {f"{y} 年": (S["date"].dt.year == y).to_numpy() for y in sorted(S["date"].dt.year.unique())} if by_year else scene_masks(S)
+    for nm, mk in masks.items():
         T = S[mk].reset_index(drop=True)
         if len(T) < 3000:
             res[nm] = {"rows": int(len(T))}
@@ -243,17 +244,17 @@ def run_gens(F, A, keys, L, n_boot: int) -> dict:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("what", choices=["anc", "v5bag", "scenes", "popsire", "gens", "basic"])
+    p.add_argument("what", choices=["anc", "v5bag", "scenes", "popsire", "gens", "basic", "years"])
     p.add_argument("--boot", type=int, default=200)
     p.add_argument("--calib", action="store_true", help="市場の確率の曲がり（lq の 2 乗・人気の帯・道悪）を基準に足す（統括役の (3)(4)）")
     p.add_argument("--null-seed", type=int, default=None, help="牝系の祖先の札の帰無（aptitude の作り）")
     p.add_argument("--aspect", default="dirt", choices=["rand", "early", "pace_h", "pace_s", "wet", "ext", "short", "steep", "straight", "yoshiba", "dirt", "long", "turf"], help="popsire だけ: 8 観点の型（early・ext・straight・wet など。統括役の (d)）")
     a = p.parse_args()
     CALIB["on"] = a.calib
-    if a.calib and a.what not in ("popsire", "scenes", "basic"):
-        raise SystemExit("--calib は popsire・scenes・basic だけ")
-    if a.aspect != "dirt" and a.what not in ("popsire", "gens", "basic"):
-        raise SystemExit("--aspect は popsire・gens・basic だけ")
+    if a.calib and a.what not in ("popsire", "scenes", "basic", "years"):
+        raise SystemExit("--calib は popsire・scenes・basic・years だけ")
+    if a.aspect != "dirt" and a.what not in ("popsire", "gens", "basic", "years"):
+        raise SystemExit("--aspect は popsire・gens・basic・years だけ")
     data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"dirt_deep_{a.what}" + ("" if a.aspect == "dirt" else f"_{a.aspect}") + ("_calib" if a.calib else "") + ("" if a.null_seed is None else f"_null{a.null_seed}"),
                                    f"ダートの牝系の候補の深掘り: {a.what} {a.aspect}（尤度だけ・記述）"))
     F, A, keys, L = setup(a.aspect, a.null_seed)
@@ -261,6 +262,8 @@ def main() -> None:
         res = run_gens(F, A, keys, L, a.boot)
     elif a.what == "basic":
         res = run_basic(F, a.boot)
+    elif a.what == "years":
+        res = run_scenes(F, a.boot, by_year=True)
     else:
         res = run_anc(F, A, keys, L) if a.what == "anc" else {"v5bag": run_v5bag, "scenes": run_scenes, "popsire": run_popsire}[a.what](F, a.boot)
     res["aspect"], res["calib"], res["null_seed"] = a.aspect, a.calib, a.null_seed
