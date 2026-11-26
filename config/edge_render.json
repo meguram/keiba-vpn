@@ -10,6 +10,8 @@
     "horse_training": "data/local/horse_training"
   },
   "window_days": 35,
+  "anon_ignore_missing": ["horse_result"],
+  "_anon_ignore_missing": "匿名（anon・pre）の応答では、写しに無くても捨てない馬のカテゴリ。horse_result は成長度（growth・growth_meta。src/pipeline/inference/growth_attach.py:245）にだけ使い、growth は会員限定（src/api/tier.py の LOCKED_GROUPS）で匿名からは落ちる。2026-11-26 に、同じ 2 レースを horse_result の有り無しで作り、匿名の本文が同じことを確かめた。tests/ops/test_edge_render.py が tier.py の前提を見張る",
   "upcoming_days": 7,
   "_upcoming_days": "E5: 確定前も作る日（前日〜この日数先）。0 で確定済みだけ（E3 の形）",
   "pending_bucket_sec": 600,
