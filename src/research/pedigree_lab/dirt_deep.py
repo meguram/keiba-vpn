@@ -1,0 +1,189 @@
+"""ダートの牝系 5 代の候補の深掘り（統括役の 11/26 13:40 の依頼。開発の行・探す側・未確認・買い方に使わない）。
+
+    KEIBA_SESSION=pedigree-lab OMP_NUM_THREADS=4 nice -n 19 python -m src.research.pedigree_lab.dirt_deep <anc|v5bag|scenes|popsire>
+
+- anc: 祖先ごとの寄与（ダートの行での「血量の割合 × その祖先の適性」の和）の上位・下位と、祖先の名前・最後の適性・子孫の走りの数。
+- v5bag: めぐ AI の v5bag（年ごとに前へ進めて学んだ予測。時間の順）と市場の両方に足して残るか。
+- scenes: 効く場面の地図（距離帯・レースの年齢・ダートの経験・季節・馬場）。場面ごとに別々に当てた市場ありの γ と t（記述・同時の区間なし）。
+  列は場面ごとに標準化し直すので、場面どうしで比べられるのは t だけ。ダートの経験の場面は 2014 年以降の生まれに限る（2016 年より前の走りが無いため）。
+- popsire: 父のダートの適性（2 期で持続 0.56）の、人気の帯ごとの市場ありの γ（人気薄で織り込みが弱いか）。
+"""
+from __future__ import annotations
+
+import argparse
+import glob
+import json
+
+import numpy as np
+import pandas as pd
+
+from src.research.pedigree_lab import aptitude as ap_
+from src.research.pedigree_lab import aptitude_checks as ck
+from src.research.pedigree_lab import data
+from src.research.pedigree_lab.explore2 import fit_boot
+from src.research.pedigree_lab.explore5 import sim_ci
+from src.research.pedigree_lab.aptitude_period import attach_part
+
+V5BAG = "/home/jovyan/work/megu_cycles_out/rich_pred_v5bag.parquet"
+PED_JSON = "/home/jovyan/work/keiba-vpn/data/local/horse_pedigree_5gen"
+
+
+def setup():
+    F = ap_.base_frame()
+    A, keys = ap_.group_a(F, "dirt")
+    L = ap_.maternal_long(F, drop_common=False)
+    F["z_sire"] = ap_.apt_by(F, A, ["sire"] + keys)
+    F["z_bms"] = ap_.apt_by(F, A, ["ds"] + keys)
+    F["z_mat5"], F["z_lv5"] = ck.mat_cols(F, A, keys, L)
+    F["_A"] = A
+    F["_nsurf"] = F.sort_values("date").groupby(["horse_id", "surf"]).cumcount().reindex(F.index).to_numpy()
+    return F, A, keys, L
+
+
+def names(ids: set[str]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for f in sorted(glob.glob(f"{PED_JSON}/*/*.json"), reverse=True):
+        if len(out) >= len(ids):
+            break
+        try:
+            d = json.load(open(f))
+        except Exception:
+            continue
+        for a in d.get("ancestors", []):
+            i = a.get("horse_id")
+            if i in ids and i not in out:
+                out[i] = a.get("name", "")
+    return out
+
+
+def run_anc(F, A, keys, L) -> dict:
+    row = L["row"].to_numpy()
+    mA0, mT0 = ap_.base_means(F, A, keys)
+    d = ap_.apt_by(L, A[row], ["anc"] + keys, base=(mA0[row], mT0[row]))
+    dev = F["split"].isin([0, 1]).to_numpy() & A
+    wsum = pd.Series(L["bw"].to_numpy()).groupby(row).transform("sum").to_numpy()
+    share = L["bw"].to_numpy() / wsum
+    T = pd.DataFrame({"anc": L["anc"], "c": share * d, "share": share, "d": d, "date": L["date"]})[dev[row]]
+    g = T.groupby("anc").agg(contrib=("c", "sum"), rows=("c", "size"), share=("share", "mean"))
+    last = T.sort_values("date").groupby("anc")["d"].last()
+    g["apt_last"] = last
+    g["abs"] = g["contrib"].abs()
+    top = g.sort_values("contrib", ascending=False).head(15)
+    bot = g.sort_values("contrib").head(10)
+    nm = names(set(top.index) | set(bot.index))
+    f = lambda t: [{"id": i, "name": nm.get(i, ""), "contrib": round(float(r.contrib), 2), "rows": int(r.rows),
+                    "share": round(float(r.share), 3), "apt_last": round(float(r.apt_last), 4)} for i, r in t.iterrows()]
+    return {"top": f(top), "bottom": f(bot), "n_anc": int(len(g))}
+
+
+def dirt_rows(F) -> pd.DataFrame:
+    X = attach_part(F, "dev")
+    return X[X["_A"].astype(bool)].reset_index(drop=True)
+
+
+def zs(S: pd.DataFrame) -> dict[str, np.ndarray]:
+    Z = {k: ap_.zA(S, S[f"z_{k}"].to_numpy()) for k in ("sire", "bms", "mat5", "lv5")}
+    Z["ctrl"] = ap_.zA(S, S["sire_all_fpct"].fillna(0).to_numpy())
+    return Z
+
+
+def run_v5bag(F, n_boot: int) -> dict:
+    S = dirt_rows(F)
+    V = pd.read_parquet(V5BAG)[["race_id", "horse_id", "pr_win"]].dropna()
+    n0 = S.groupby("race_id").size()
+    S = S.merge(V, on=["race_id", "horse_id"], how="inner")
+    n1 = S.groupby("race_id").size()
+    S = S[S["race_id"].map(n1 == n0.reindex(n1.index)).to_numpy()]          # v5bag の予測が全頭にあるレースだけ
+    S = S.sort_values(["race_id", "horse_number"]).reset_index(drop=True)
+    S["lv"] = np.log(np.clip(S["pr_win"] / S.groupby("race_id")["pr_win"].transform("sum"), 1e-5, 1))
+    Z = zs(S)
+    res = {"rows": int(len(S)), "races": int(S["race_id"].nunique())}
+    for tag, base in {"v5bag": [S["lv"]], "v5bag_market": [S["lv"], S["lq"]], "v5bag_market_lp": [S["lv"], S["lq"], S["lp"]]}.items():
+        M = np.c_[tuple(b.to_numpy() for b in base) + (Z["ctrl"], Z["lv5"], Z["sire"], Z["bms"], Z["mat5"])]
+        nb = len(base)
+        idx = {"sire": nb + 2, "bms": nb + 3, "mat5": nb + 4}
+        b, bs = fit_boot(S, M, n_boot)
+        c, r = sim_ci(b, bs, idx)
+        res[tag] = {"c": round(c, 3), **{k: {"gamma": v["gamma"], "sim_ci": v["sim_ci"]} for k, v in r.items()}}
+        print(tag, json.dumps(res[tag], ensure_ascii=False), flush=True)
+    return res
+
+
+def scene_masks(S: pd.DataFrame) -> dict[str, np.ndarray]:
+    d, m = S["distance"].to_numpy(), S["date"].dt.month.to_numpy()
+    young = (pd.to_numeric(S["horse_id"].str[:4]) >= 2014).to_numpy()
+    return {
+        "距離 〜1400": d <= 1400, "距離 1500〜1800": (d >= 1500) & (d <= 1800), "距離 1900〜": d >= 1900,
+        "2 歳戦": S["rage"].eq("A2").to_numpy(), "3 歳戦": S["rage"].eq("A3").to_numpy(), "古馬混合": S["rage"].isin(["A3U", "A4U"]).to_numpy(),
+        "初ダート": young & (S["_nsurf"] == 0).to_numpy(), "ダート 1〜4 走": young & ((S["_nsurf"] >= 1) & (S["_nsurf"] <= 4)).to_numpy(),
+        "ダート 5 走〜": young & (S["_nsurf"] >= 5).to_numpy(),
+        "冬（12〜2 月）": np.isin(m, [12, 1, 2]), "夏（6〜8 月）": np.isin(m, [6, 7, 8]),
+        "良": S["going"].eq("G").to_numpy(), "稍重〜不良": S["going"].isin(["S", "W"]).to_numpy(),
+    }
+
+
+def run_scenes(F, n_boot: int) -> dict:
+    S = dirt_rows(F)
+    res = {}
+    for nm, mk in scene_masks(S).items():
+        T = S[mk].reset_index(drop=True)
+        if len(T) < 3000:
+            res[nm] = {"rows": int(len(T))}
+            continue
+        Zt = zs(T)
+        M = np.c_[T["lp"], T["lq"], Zt["ctrl"], Zt["lv5"], Zt["sire"], Zt["bms"], Zt["mat5"]]
+        b, bs = fit_boot(T, M, n_boot)
+        res[nm] = {"rows": int(len(T)), "mat5": round(float(b[6]), 4), "ci": np.percentile(bs[:, 6], [2.5, 97.5]).round(4).tolist(),
+                   "se": round(float(bs[:, 6].std()), 4), "sire": round(float(b[4]), 4)}
+        print(nm, res[nm], flush=True)
+    ts = {k: v["mat5"] / v["se"] for k, v in res.items() if "se" in v}
+    res["note"] = "場面ごとの別々の当てはめ（記述）。場面どうしは重なる。13 場面を見たので、1 本ごとの区間は割り引いて読む"
+    res["t"] = {k: round(v, 2) for k, v in ts.items()}
+    return res
+
+
+def run_popsire(F, n_boot: int) -> dict:
+    S = dirt_rows(F)
+    Z = zs(S)
+    rk = S.groupby("race_id")["odds"].rank(method="first").to_numpy()
+    bands = {"1〜3 番人気": rk <= 3, "4〜6 番人気": (rk >= 4) & (rk <= 6), "7〜9 番人気": (rk >= 7) & (rk <= 9), "10 番人気〜": rk >= 10}
+    cols, names_ = [S["lp"].to_numpy(), S["lq"].to_numpy(), Z["ctrl"], Z["lv5"], Z["bms"], Z["mat5"]], []
+    rid = S["race_id"].to_numpy()
+
+    def inband(z, mk):
+        # 帯の中で中心化し直す（レースの中の帯の行の平均を引く。帯の間の比べを混ぜない。critic 3 回目の 4）
+        v = np.where(mk, z, np.nan)
+        mu = pd.Series(v).groupby(rid).transform("mean").to_numpy()
+        return np.where(mk, z - mu, 0.0)
+    for nm, mk in bands.items():
+        cols.append(inband(Z["sire"], mk))
+        names_.append(nm)
+    M = np.c_[tuple(cols)]
+    idx = {n: 6 + i for i, n in enumerate(names_)}
+    b, bs = fit_boot(S, M, n_boot)
+    c, r = sim_ci(b, bs, idx)
+    # 牝系も同じ帯で
+    cols2 = [S["lp"].to_numpy(), S["lq"].to_numpy(), Z["ctrl"], Z["lv5"], Z["sire"], Z["bms"]] + [inband(Z["mat5"], mk) for mk in bands.values()]
+    b2, bs2 = fit_boot(S, np.c_[tuple(cols2)], n_boot)
+    c2, r2 = sim_ci(b2, bs2, idx)
+    return {"sire_by_band": {"c": round(c, 3), **{k: {"gamma": v["gamma"], "sim_ci": v["sim_ci"]} for k, v in r.items()}},
+            "mat5_by_band": {"c": round(c2, 3), **{k: {"gamma": v["gamma"], "sim_ci": v["sim_ci"]} for k, v in r2.items()}},
+            "note": "人気の帯は確定オッズの順位（kf_v4 の予測がある行の中の順位・同じオッズは馬番の順）。列は帯の中で中心化（帯の中の効き）"}
+
+
+def main() -> None:
+    p = argparse.ArgumentParser()
+    p.add_argument("what", choices=["anc", "v5bag", "scenes", "popsire"])
+    p.add_argument("--boot", type=int, default=200)
+    a = p.parse_args()
+    data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"dirt_deep_{a.what}", f"ダートの牝系の候補の深掘り: {a.what}（尤度だけ・記述）"))
+    F, A, keys, L = setup()
+    res = run_anc(F, A, keys, L) if a.what == "anc" else {"v5bag": run_v5bag, "scenes": run_scenes, "popsire": run_popsire}[a.what](F, a.boot)
+    path = data.OUT / f"dirt_deep_{a.what}.json"
+    path.write_text(json.dumps(res, ensure_ascii=False, indent=1))
+    print(json.dumps(res, ensure_ascii=False)[:4000], flush=True)
+    data.finish_all(str(path))
+
+
+if __name__ == "__main__":
+    main()

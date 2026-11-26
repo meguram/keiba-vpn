@@ -40,6 +40,19 @@ def entries(day: pd.Timestamp) -> pd.DataFrame:
     return S.reindex(columns=[*build_base.COLS, "meeting", "sex", "age"])
 
 
+def dirt_aptitude(X: pd.DataFrame, ped: pd.DataFrame) -> dict[str, np.ndarray]:
+    """ダートの適性の 4 列（父・母父・牝系 5 代・牝系の家系の質）。aptitude・aptitude_checks の凍結の作りのまま（as-of・自分を引く）。
+    ダートでない行の値も出すが、記録の評価はダートの行だけで行う（log の事前の登録）。"""
+    from src.research.pedigree_lab import aptitude as ap_
+    from src.research.pedigree_lab import aptitude_checks as ck
+    F = X[["date", "horse_id", "surf", "fpct", "sire", "ds"]].reset_index(drop=True)
+    A, keys = ap_.group_a(F.assign(venue="", distance=0, going="", rage="", dchg=""), "dirt")
+    L = ap_.maternal_long(F, drop_common=False, ped=ped)
+    mat5, lv5 = ck.mat_cols(F, A, keys, L)
+    return {"dirt_sire": ap_.apt_by(F, A, ["sire"] + keys), "dirt_bms": ap_.apt_by(F, A, ["ds"] + keys),
+            "dirt_mat5": mat5, "dirt_lv5": lv5}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", required=True)
@@ -49,7 +62,7 @@ def main() -> None:
     # 2026-11-21〜前日は forward。凍結の模型は公開のリポジトリに置かないので、sha256 は理由の文に書く
     frozen = [ROOT / "src/research/pedigree_lab" / f for f in
               ("forward_record.py", "gates.py", "features4.py", "features2.py", "data.py", "final_eval.py", "scene_dist.py", "build_base.py",
-               "model.py", "hyp_tests.py", "bets.py", "pl_ledger.py")]
+               "model.py", "hyp_tests.py", "bets.py", "pl_ledger.py", "aptitude.py", "aptitude_checks.py")]
     # 凍結の模型を sha256 で照合する（違えば止める。critic 4 回目の 6）
     import hashlib
     fz = data.OUT / "freeze_v4_gate.sha256"
@@ -85,12 +98,18 @@ def main() -> None:
     F = gates.scenes(X[gates.FCOLS].copy())
     D = scene_dist.marks(X[list(dict.fromkeys(gates.FCOLS + ["dband", "going"]))].copy())
     X["FD"], X["DB0"] = F["FD"].to_numpy(), D["DB0"].to_numpy()
+    # ダートの牝系 5 代の適性の候補（11/26 に凍結。統括役の承認・記録だけ）。生の値を残し、標準化は評価の時に行う
+    dm = dirt_aptitude(X, ped)
     T = X[X["date"] == day].copy()
+    for k, v in dm.items():
+        T[k] = v[(X["date"] == day).to_numpy()]
     p = final_eval.predict(T, "v4")
     T["p_win"] = p
     T["rank"] = T.groupby("race_id")["p_win"].rank(ascending=False, method="first").astype(int)
-    out = T[["race_id", "date", "venue", "surface", "distance", "horse_number", "horse_id", "p_win", "rank", "FD", "DB0"]].copy()
+    out = T[["race_id", "date", "venue", "surface", "distance", "horse_number", "horse_id", "p_win", "rank", "FD", "DB0", *dm]].copy()
     out["p_win"] = out["p_win"].round(5)
+    for k in dm:
+        out[k] = out[k].round(6)
     out["date"] = out["date"].dt.date.astype(str)
     out["no_pedigree"] = (T["sire"].isna() | T["sire"].eq("")).to_numpy()      # 血統の JSON が無い馬（critic 6）
     OUTDIR.mkdir(parents=True, exist_ok=True)
