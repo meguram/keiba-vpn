@@ -3061,7 +3061,7 @@ async def _prewarm_race(race_id: str, max_age: float, only_if_stale: bool) -> in
     n = 0
     try:
         if prewarm.stale("predictions", race_id, max_age, only_if_stale):
-            await prerender.cached_response("predictions", race_id, lambda: _race_predictions_compute(race_id), refresh=True, max_age=max_age)
+            await prerender.cached_response("predictions", race_id, lambda: _race_predictions_compute(race_id, source="prewarm"), refresh=True, max_age=max_age)
             n += 1
         if prewarm.stale("race_detail", race_id, max_age, only_if_stale):
             with _race_detail_cache_lock:
@@ -7213,11 +7213,14 @@ def _prediction_freshness(data: dict) -> dict:
     }
 
 
+_PRED_SLOW_MS = 5000.0             # 予測の計算がこれより遅いと WARNING で段ごとの秒数を 1 行（計測用）
+
+
 @app.get("/api/race/{race_id}/predictions", response_class=JSONResponse)
 async def get_race_predictions(request: Request, race_id: str):
     # 段ごとの秒数（計測用）: cache=事前生成の読み・計算・同じレースを計算中の別の要求の待ちの合計、tier=会員・匿名の出し分け。
     # 計算したときだけ計算の段（_race_predictions_compute）が前に並ぶ（並ばなければ事前生成に当たったか、待って読んだ）。
-    # ログは要求ごとに 1 行だけ（合計 1 秒超）。事前生成（_prewarm_race）からの計算はログに出さない
+    # 入口のログは要求ごとに 1 行（合計 1 秒超、INFO。Cloud Run には INFO が出ない）。計算が 5 秒を超えたときの WARNING は _race_predictions_compute が出す
     from src.api.stage_timing import merge_server_timing
 
     t0 = _time.perf_counter()
@@ -7243,7 +7246,7 @@ async def _race_predictions_impl(race_id: str):
     return await prerender.cached_response("predictions", race_id, lambda: _race_predictions_compute(race_id), max_age=prerender.race_max_age)
 
 
-async def _race_predictions_compute(race_id: str):
+async def _race_predictions_compute(race_id: str, source: str = "request"):
     """キャッシュ済みの予測結果を返す。stg で GCS に無ければ、モックではなく出馬表の馬と最新オッズだけ（has_prediction=false）を返す。
 
     Flask v1 の GET /api/v1/races/<race_id>/predictions（PostgreSQL経由）とはデータソース・
@@ -7257,10 +7260,15 @@ async def _race_predictions_compute(race_id: str):
     from src.api.stage_timing import StageTimer
 
     tm = StageTimer()              # 段ごとの秒数（Server-Timing とログ。計測用で、中身は時間だけ）
+    t_start = _time.perf_counter()
 
     def _done(payload) -> JSONResponse:
         resp = JSONResponse(payload)
-        resp.headers["Server-Timing"] = tm.header()     # ログは入口（get_race_predictions）でまとめて 1 行
+        resp.headers["Server-Timing"] = tm.header()
+        wall = (_time.perf_counter() - t_start) * 1000
+        if wall > _PRED_SLOW_MS:       # 計算が 5 秒超（起動直後の 1 本目など）は WARNING で段ごとに（Cloud Run に INFO が出ないため）。untracked=段の外（import・スレッドの空き待ちなど）
+            logger.warning("[predictions slow] race_id=%s source=%s wall=%.0fms untracked=%.0fms %s",
+                           race_id, source, wall, wall - sum(ms for _, ms in tm.items()), tm.header())
         return resp
 
     def _with_entries_status(resp: dict) -> dict:
