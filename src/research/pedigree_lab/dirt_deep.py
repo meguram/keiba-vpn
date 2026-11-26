@@ -6,7 +6,7 @@
 - v5bag: めぐ AI の v5bag（年ごとに前へ進めて学んだ予測。時間の順）と市場の両方に足して残るか。
 - scenes: 効く場面の地図（距離帯・レースの年齢・ダートの経験・季節・馬場）。場面ごとに別々に当てた市場ありの γ と t（記述・同時の区間なし）。
   列は場面ごとに標準化し直すので、場面どうしで比べられるのは t だけ。ダートの経験の場面は 2014 年以降の生まれに限る（2016 年より前の走りが無いため）。
-- popsire: 父のダートの適性（2 期で持続 0.56）の、人気の帯ごとの市場ありの γ（人気薄で織り込みが弱いか）。
+- popsire: 父の適性（--aspect の観点。既定はダート）の、人気の帯ごとの市場ありの γ（人気薄で織り込みが弱いか）。
 """
 from __future__ import annotations
 
@@ -28,9 +28,9 @@ V5BAG = "/home/jovyan/work/megu_cycles_out/rich_pred_v5bag.parquet"
 PED_JSON = "/home/jovyan/work/keiba-vpn/data/local/horse_pedigree_5gen"
 
 
-def setup():
+def setup(aspect: str = "dirt"):
     F = ap_.base_frame()
-    A, keys = ap_.group_a(F, "dirt")
+    A, keys = ap_.group_a(F, aspect)
     L = ap_.maternal_long(F, drop_common=False)
     F["z_sire"] = ap_.apt_by(F, A, ["sire"] + keys)
     F["z_bms"] = ap_.apt_by(F, A, ["ds"] + keys)
@@ -77,6 +77,7 @@ def run_anc(F, A, keys, L) -> dict:
 
 
 def dirt_rows(F) -> pd.DataFrame:
+    """観点の群 A（_A）の開発の行（名前はダートの前提のままだが、--aspect の観点の行を返す）。"""
     X = attach_part(F, "dev")
     return X[X["_A"].astype(bool)].reset_index(drop=True)
 
@@ -175,11 +176,16 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("what", choices=["anc", "v5bag", "scenes", "popsire"])
     p.add_argument("--boot", type=int, default=200)
+    p.add_argument("--aspect", default="dirt", choices=["rand", "early", "pace_h", "pace_s", "wet", "ext", "short", "steep", "straight", "yoshiba", "dirt", "long"], help="popsire だけ: 8 観点の型（early・ext・straight・wet など。統括役の (d)）")
     a = p.parse_args()
-    data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"dirt_deep_{a.what}", f"ダートの牝系の候補の深掘り: {a.what}（尤度だけ・記述）"))
-    F, A, keys, L = setup()
+    if a.aspect != "dirt" and a.what != "popsire":
+        raise SystemExit("--aspect は popsire だけ")
+    data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"dirt_deep_{a.what}" if a.aspect == "dirt" else f"dirt_deep_{a.what}_{a.aspect}",
+                                   f"ダートの牝系の候補の深掘り: {a.what} {a.aspect}（尤度だけ・記述）"))
+    F, A, keys, L = setup(a.aspect)
     res = run_anc(F, A, keys, L) if a.what == "anc" else {"v5bag": run_v5bag, "scenes": run_scenes, "popsire": run_popsire}[a.what](F, a.boot)
-    path = data.OUT / f"dirt_deep_{a.what}.json"
+    res["aspect"] = a.aspect
+    path = data.OUT / (f"dirt_deep_{a.what}.json" if a.aspect == "dirt" else f"dirt_deep_{a.what}_{a.aspect}.json")
     path.write_text(json.dumps(res, ensure_ascii=False, indent=1))
     print(json.dumps(res, ensure_ascii=False)[:4000], flush=True)
     data.finish_all(str(path))

@@ -7215,7 +7215,26 @@ def _prediction_freshness(data: dict) -> dict:
 
 @app.get("/api/race/{race_id}/predictions", response_class=JSONResponse)
 async def get_race_predictions(request: Request, race_id: str):
-    return await _tiered_json_async(request, await _race_predictions_impl(race_id), redact_predictions)
+    # 段ごとの秒数（計測用）: cache=事前生成の読み・計算・同じレースを計算中の別の要求の待ちの合計、tier=会員・匿名の出し分け。
+    # 計算したときだけ計算の段（_race_predictions_compute）が前に並ぶ（並ばなければ事前生成に当たったか、待って読んだ）。
+    # ログは要求ごとに 1 行だけ（合計 1 秒超）。事前生成（_prewarm_race）からの計算はログに出さない
+    from src.api.stage_timing import merge_server_timing
+
+    t0 = _time.perf_counter()
+    inner = await _race_predictions_impl(race_id)
+    t1 = _time.perf_counter()
+    out = await _tiered_json_async(request, inner, redact_predictions)
+    t2 = _time.perf_counter()
+    timing = ""
+    try:
+        timing = merge_server_timing(
+            inner.headers.get("Server-Timing"), f"cache;dur={(t1 - t0) * 1000:.1f}", f"tier;dur={(t2 - t1) * 1000:.1f}")
+        out.headers["Server-Timing"] = timing
+    except Exception:  # noqa: BLE001
+        pass
+    if t2 - t0 > 1.0:
+        logger.info("[predictions timing] race_id=%s total=%.0fms %s", race_id, (t2 - t0) * 1000, timing)
+    return out
 
 
 async def _race_predictions_impl(race_id: str):
@@ -7235,13 +7254,23 @@ async def _race_predictions_compute(race_id: str):
     2026-10-01: 「表示されない/古い」事象の検知用に `freshness` フィールド
     （age_hours / is_stale 等）を付与。既存クライアントは未知キーを無視するため後方互換。
     """
+    from src.api.stage_timing import StageTimer
+
+    tm = StageTimer()              # 段ごとの秒数（Server-Timing とログ。計測用で、中身は時間だけ）
+
+    def _done(payload) -> JSONResponse:
+        resp = JSONResponse(payload)
+        resp.headers["Server-Timing"] = tm.header()     # ログは入口（get_race_predictions）でまとめて 1 行
+        return resp
+
     def _with_entries_status(resp: dict) -> dict:
         # 出馬表の公示の段階（特別登録／出走馬決定／出馬表確定／馬体重発表済み）と最終更新。収集側の状態ファイルを読むだけ
         from src.api.entries_status import attach_entries_status
         from src.api.pipeline_status import attach_pipeline_status
 
         # 予測パイプライン（出馬表→馬体重→AI予測→オッズ→推奨買い目）の進み具合。entries_status を読むので後に付ける
-        return attach_pipeline_status(attach_entries_status(resp, race_id, _get_storage()), race_id, _get_storage())
+        with tm.stage("entries_status"):
+            return attach_pipeline_status(attach_entries_status(resp, race_id, _get_storage()), race_id, _get_storage())
 
     def _with_kesi(resp: dict) -> dict:
         # 市場補正（KEIBA_PROB_CALIBRATION=1 のときだけ。実オッズが揃うレースで確率・EV・印を付け直す。保存済みの予測は書き換えない）
@@ -7306,25 +7335,30 @@ async def _race_predictions_compute(race_id: str):
 
     def _with_position(resp: dict) -> dict:
         # 印は AI の勝率の順（◎○▲）と印のルール（★△消）だけで決める。買い目からの印（_with_bet_marks）は使わない（rules-council R0-10・依頼 2 の追記）
-        resp = _with_complete_marks(_with_calibrated_ev(resp))
+        with tm.stage("marks"):
+            resp = _with_complete_marks(_with_calibrated_ev(resp))
         # 過去走の通過順位から作る位置取り予想（実モデルの予測ではない）。失敗しても予測の応答は返す
         try:
             from src.pipeline.inference.position_forecast import attach_position_forecast
 
             st = _get_storage()
-            card = st.load("race_shutuba", race_id) or {}
-            course = {k: card.get(k) for k in ("venue", "surface", "distance")}
-            past = st.load("race_shutuba_past", race_id)
-            resp = attach_position_forecast(resp, past, str(card.get("date") or ""), course)
+            with tm.stage("card_load"):
+                card = st.load("race_shutuba", race_id) or {}
+                course = {k: card.get(k) for k in ("venue", "surface", "distance")}
+                past = st.load("race_shutuba_past", race_id)
+            with tm.stage("position"):
+                resp = attach_position_forecast(resp, past, str(card.get("date") or ""), course)
             # 位置取り・ペース・想定上がりを結ぶ整合層（KEIBA_PACE_COHERENCE=1 のときだけ。既定は何もしない）
             from src.pipeline.inference.pace_coherence import attach_pace_coherence
 
-            resp = attach_pace_coherence(resp, past, str(card.get("date") or ""), {**course, "track_condition": card.get("track_condition")})
+            with tm.stage("coherence"):
+                resp = attach_pace_coherence(resp, past, str(card.get("date") or ""), {**course, "track_condition": card.get("track_condition")})
             # 追走難度 v2（想定位置取りを取るのに必要な通過ラップが、その馬にとって楽か大変か。KEIBA_TRACKING_V2=1 のときだけ。既定は何もしない）
             # 前夜に保存した v2 を優先し（取消で馬番の集合が変わったレースだけ計算し直し）、保存が無ければその場で計算する
             from src.pipeline.inference.tracking_v2_service import attach_tracking_v2_cached
 
-            resp = attach_tracking_v2_cached(resp, race_id, past, str(card.get("date") or ""), {**course, "track_condition": card.get("track_condition")}, card)
+            with tm.stage("tracking_v2"):
+                resp = attach_tracking_v2_cached(resp, race_id, past, str(card.get("date") or ""), {**course, "track_condition": card.get("track_condition")}, card)
         except Exception as exc:  # noqa: BLE001
             logger.warning("位置取り予想の付与に失敗 %s: %s", race_id, exc)
             past, card = None, {}
@@ -7332,28 +7366,32 @@ async def _race_predictions_compute(race_id: str):
         try:
             from src.pipeline.inference.lap_forecast_service import attach_lap_forecast
 
-            resp = attach_lap_forecast(resp, race_id, str(card.get("date") or ""))
+            with tm.stage("lap"):
+                resp = attach_lap_forecast(resp, race_id, str(card.get("date") or ""))
         except Exception as exc:  # noqa: BLE001
             logger.warning("ラップ予想の付与に失敗 %s: %s", race_id, exc)
         # 展開タイプ（ペース × 隊列の凝縮度）と、展開シナリオごとの各馬の確率（KEIBA_PACE_TYPE=1 のときだけ。表示・説明用で、既定は何もしない）
         try:
             from src.pipeline.inference.pace_type import attach_pace_type
 
-            resp = attach_pace_type(resp, past, str(card.get("date") or ""), {"track_condition": card.get("track_condition"), "grade": card.get("grade")})
+            with tm.stage("pace_type"):
+                resp = attach_pace_type(resp, past, str(card.get("date") or ""), {"track_condition": card.get("track_condition"), "grade": card.get("grade")})
         except Exception as exc:  # noqa: BLE001
             logger.warning("展開タイプの付与に失敗 %s: %s", race_id, exc)
         # 調教データの被覆（そのレース日の調教の行がある馬の割合）。低いと調教系の評価が欠けた予測になる（KEIBA_TRAINING_COVERAGE=1 のときだけ）
         try:
             from src.pipeline.inference.training_coverage import attach_training_coverage
 
-            resp = attach_training_coverage(resp, str(card.get("date") or ""), _get_storage())
+            with tm.stage("training"):
+                resp = attach_training_coverage(resp, str(card.get("date") or ""), _get_storage())
         except Exception as exc:  # noqa: BLE001
             logger.warning("調教の被覆の付与に失敗 %s: %s", race_id, exc)
         # 過去のめぐ指数からの想定めぐ指数（AI の予測ではない）。失敗しても予測の応答は返す
         try:
             from src.pipeline.inference.expected_megu import attach_expected_megu
 
-            return attach_expected_megu(resp, str(card.get("date") or ""), past_doc=past, card=card)
+            with tm.stage("megu"):
+                return attach_expected_megu(resp, str(card.get("date") or ""), past_doc=past, card=card)
         except Exception as exc:  # noqa: BLE001
             logger.warning("想定めぐ指数の付与に失敗 %s: %s", race_id, exc)
             return resp
@@ -7362,28 +7400,33 @@ async def _race_predictions_compute(race_id: str):
     def _primary():
         from src.api.local_predictions import load_primary_prediction_payload
 
-        return load_primary_prediction_payload(race_id, _get_storage(), alpha=_load_composite_params().get("prob_weight", _DEFAULT_PROB_WEIGHT))
+        with tm.stage("primary"):
+            return load_primary_prediction_payload(race_id, _get_storage(), alpha=_load_composite_params().get("prob_weight", _DEFAULT_PROB_WEIGHT))
 
     primary = await asyncio.to_thread(_primary)
     if primary:
-        return JSONResponse(await asyncio.to_thread(lambda: _with_entries_status(_with_position(primary))))
+        return _done(await asyncio.to_thread(lambda: _with_entries_status(_with_position(primary))))
 
-    data = await asyncio.to_thread(
-        lambda: _get_storage().load("race_predictions", race_id))
+    def _stored():
+        with tm.stage("stored"):
+            return _get_storage().load("race_predictions", race_id)
+
+    data = await asyncio.to_thread(_stored)
     if data:
         data = dict(data)
         data["freshness"] = _prediction_freshness(data)
-        return JSONResponse(await asyncio.to_thread(lambda: _with_entries_status(_with_position(data))))
+        return _done(await asyncio.to_thread(lambda: _with_entries_status(_with_position(data))))
 
     # GCS に予測が無くても、ホストのローカルに推論経路の出力（shadow / バックフィル）があれば、それを注記つきで返す（GCS > shadow > バックフィル）
     def _local():
         from src.api.local_predictions import load_local_prediction_payload
 
-        return load_local_prediction_payload(race_id, _get_storage(), alpha=_load_composite_params().get("prob_weight", _DEFAULT_PROB_WEIGHT))
+        with tm.stage("local"):
+            return load_local_prediction_payload(race_id, _get_storage(), alpha=_load_composite_params().get("prob_weight", _DEFAULT_PROB_WEIGHT))
 
     local = await asyncio.to_thread(_local)
     if local:
-        return JSONResponse(await asyncio.to_thread(lambda: _with_entries_status(_with_position(local))))
+        return _done(await asyncio.to_thread(lambda: _with_entries_status(_with_position(local))))
 
     # stg / prod（Cloud Run を含む）: 予測がまだ無いレース（出走表の公示後・馬体重の発表前など）は、予測を作り出さず『出馬表の馬 + 最新オッズ』だけを返す。
     # 画面の開発用にモックが要るときだけ（stg のみ）KEIBA_STG_MOCK_PREDICTIONS=1（応答は _mock: true）。dev は従来どおり。
@@ -7409,12 +7452,13 @@ async def _race_predictions_compute(race_id: str):
         from src.api.entries_only_predictions import entries_only_predictions
 
         def _entries_only():
-            resp = entries_only_predictions(race_id, _get_storage())
+            with tm.stage("entries_only"):
+                resp = entries_only_predictions(race_id, _get_storage())
             if resp.get("provisional_entries"):          # 馬番が無い段階（特別登録・出走馬決定）: 位置取り等は付けず、出馬表と段階だけを返す
                 return _with_entries_status(resp)
             return _with_entries_status(_with_position(resp))
 
-        return JSONResponse(await asyncio.to_thread(_entries_only))
+        return _done(await asyncio.to_thread(_entries_only))
 
     return JSONResponse({"status": "not_found"}, status_code=404)
 

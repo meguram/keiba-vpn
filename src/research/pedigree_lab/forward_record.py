@@ -56,6 +56,7 @@ def dirt_aptitude(X: pd.DataFrame, ped: pd.DataFrame) -> dict[str, np.ndarray]:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", required=True)
+    ap.add_argument("--backfill", action="store_true", help="発走前に commit できなかった日を後から作る（meta に backfill: true。prereg_dirt_mat5.md）")
     a = ap.parse_args()
     day = pd.Timestamp(a.date)
     # 台帳（統括役の答え・11/26）: 2016-01-01〜2026-11-20 は reproduce（凍結の第 4 版の再現。見た回数に数えない。凍結のファイルを渡す）、
@@ -114,8 +115,15 @@ def main() -> None:
     out["no_pedigree"] = (T["sire"].isna() | T["sire"].eq("")).to_numpy()      # 血統の JSON が無い馬（critic 6）
     OUTDIR.mkdir(parents=True, exist_ok=True)
     path = OUTDIR / f"{a.date}.csv"
+    if path.exists():
+        raise SystemExit(f"{path.name} は既にある（記録は後から変えない。prereg_dirt_mat5.md）")
+    # 発走前かどうかは道具が決める: 作った時刻がその日の 07:30 JST 以降なら後から作った日（自己申告と食い違えば止める。critic）
+    late = datetime.now(JST) >= datetime(day.year, day.month, day.day, 7, 30, tzinfo=JST)
+    if late != bool(a.backfill):
+        raise SystemExit(f"--backfill の印が作った時刻と合わない（その日の 07:30 以降={late}）")
     meta = {"made_at": datetime.now(JST).isoformat(timespec="seconds"), "model": "v4_pure_dd（freeze_v4_gate.sha256）",
-            "races": int(out["race_id"].nunique()), "horses": len(out), "no_pedigree": int(out["no_pedigree"].sum())}
+            "races": int(out["race_id"].nunique()), "horses": len(out), "no_pedigree": int(out["no_pedigree"].sum()),
+            "backfill": bool(a.backfill)}
     out.sort_values(["race_id", "rank"]).to_csv(path, index=False)
     (OUTDIR / f"{a.date}.meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1))
     print(json.dumps(meta, ensure_ascii=False))

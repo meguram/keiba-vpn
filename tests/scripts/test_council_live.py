@@ -1,10 +1,12 @@
-"""会議のライブ（src/scripts/docs/council_live.py）: JSONL の解析・ラベル付け・伏せ字・差分の読み、と SSE。"""
+"""会議のライブ（src/scripts/docs/council_live.py）: JSONL の解析・ラベル付け・伏せ字・差分の読み・会議のセッションの探し方と、/live/api。"""
 
 from __future__ import annotations
 
 import http.client
 import json
+import os
 import threading
+import time
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
@@ -137,6 +139,8 @@ def _session(tmp_path: Path):
         _u("2026-11-25T01:00:01Z", [{"type": "tool_result", "tool_use_id": "tu1", "content": "ok"}], {"agentId": "a2222222222"}),
     ]
     main.write_text("".join(json.dumps(o, ensure_ascii=False) + "\n" for o in lines), encoding="utf-8")
+    (sub / "agent-a2222222222.meta.json").write_text(json.dumps({"agentType": "roi-plus-man-2", "description": "RC-7 R1 2号"}),
+                                                     encoding="utf-8")
     subf = sub / "agent-a2222222222.jsonl"
     subf.write_text(json.dumps(_a("2026-11-25T01:00:02Z", {"type": "text", "text": "控除率から見る"}), ensure_ascii=False) + "\n", encoding="utf-8")
     tmpb = tmp_path / "tmp"
@@ -147,9 +151,13 @@ def _session(tmp_path: Path):
     return proj, tmpb, main, subf
 
 
-def test_feed_dedupes_symlinks_and_streams_deltas(tmp_path: Path):
+def _hub(proj: Path, tmpb: Path | None = None, hours: float = 24.0) -> cl.CouncilHub:
+    return cl.CouncilHub(lambda: [proj], tmpb, hours)
+
+
+def test_feed_dedupes_symlinks_and_reads_deltas(tmp_path: Path):
     proj, tmpb, main, subf = _session(tmp_path)
-    feed = cl.LiveFeed(proj, tmpb)
+    feed = cl.SessionFeed(main, tmpb)
     assert feed.poll_once() == 2
     assert len(feed.tails) == 2
     evs = feed.since(0)
@@ -162,58 +170,161 @@ def test_feed_dedupes_symlinks_and_streams_deltas(tmp_path: Path):
     assert len(new) == 1 and new[0]["text"] == "R2 で反対"
 
 
-def test_feed_follows_new_session_file(tmp_path: Path):
-    proj, tmpb, main, _ = _session(tmp_path)
-    feed = cl.LiveFeed(proj, tmpb)
+def test_since_limits_to_last_n_talks_and_keeps_tools_between(tmp_path: Path):
+    f = tmp_path / "s.jsonl"
+    lines = []
+    for i in range(10):
+        lines.append(_a(f"2026-11-25T01:{i:02d}:00Z", {"type": "text", "text": f"発言 {i}"}))
+        lines.append(_a(f"2026-11-25T01:{i:02d}:30Z", {"type": "tool_use", "name": "Bash", "input": {"description": f"道具 {i}"}}))
+    f.write_text("".join(json.dumps(o, ensure_ascii=False) + "\n" for o in lines), encoding="utf-8")
+    feed = cl.SessionFeed(f, None, "担当 x")
     feed.poll_once()
-    new_main = proj / "99999999-0000-0000-0000-000000000000.jsonl"
-    new_main.write_text(json.dumps(_a("2026-11-25T02:00:00Z", {"type": "text", "text": "立て直し後"}), ensure_ascii=False) + "\n", encoding="utf-8")
-    assert feed.poll_once() == 1
-    assert feed.since(0)[-1]["text"] == "立て直し後"
+    got = feed.since(0, 3)
+    assert [e["text"] for e in got if e["kind"] == "text"] == ["発言 7", "発言 8", "発言 9"]
+    assert [e["text"] for e in got if e["kind"] == "tool"] == ["Bash: 道具 7", "Bash: 道具 8", "Bash: 道具 9"]
+    assert got[0]["speaker"] == "担当 x"
+    assert len(feed.since(10_000, 3)) == len(got)  # 先の番号（起動し直し）は初回と同じ扱い
 
 
-def test_default_project_dir_name(monkeypatch, tmp_path: Path):
+def test_project_prefix_and_dirs(tmp_path: Path):
+    assert cl.project_prefix(Path("/home/jovyan/work/keiba-vpn")) == "-home-jovyan-work-keiba-vpn"
+    assert cl.project_prefix(Path("/home/jovyan/work/keiba-vpn/.claude/worktrees/live-bubbles")) == "-home-jovyan-work-keiba-vpn"
+    root = tmp_path / "projects"
+    for name in ("-home-jovyan-work-keiba-vpn", "-home-jovyan-work-keiba-vpn--claude-worktrees-rules-council",
+                 "-home-jovyan-work-keiba-vpn-history", "-home-jovyan-other"):
+        (root / name).mkdir(parents=True)
+    got = [d.name for d in cl.project_dirs(tmp_path, "-home-jovyan-work-keiba-vpn")]
+    assert got == ["-home-jovyan-work-keiba-vpn", "-home-jovyan-work-keiba-vpn--claude-worktrees-rules-council"]
+
+
+def test_claude_base_env(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
-    d = cl.default_project_dir(Path("/home/jovyan/work/keiba-vpn"))
-    assert d == tmp_path / "projects" / "-home-jovyan-work-keiba-vpn--claude-worktrees-rules-council"
+    assert cl.claude_base() == tmp_path
 
 
-# ── SSE ──
+def test_scan_name_takes_last_and_decodes_escapes():
+    data = (b'{"type":"agent-name","agentName":"old","sessionId":"s"}\n'
+            b'{"type":"custom-title","customTitle":"\\u8840\\u7d71-lab","sessionId":"s"}\n'
+            b'{"type": "agent-name", "agentName": "rules-council"}\n')
+    assert cl.scan_name(data) == "rules-council"
+    assert cl.scan_name(data[:-40]) == "血統-lab"
+    assert cl.scan_name(b'{"type":"user","message":"agentName"}') == ""
 
-def test_sse_stream_sends_backlog_and_new_events(tmp_path: Path):
+
+def _write(path: Path, objs: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(o, ensure_ascii=False) + "\n" for o in objs), encoding="utf-8")
+
+
+def test_hub_lists_only_recent_council_sessions(tmp_path: Path):
+    proj = tmp_path / "p"
+    talk = _a("2026-11-26T01:00:00Z", {"type": "text", "text": "こんにちは"})
+    # 名前で会議（号をまだ呼んでいない）
+    _write(proj / "aaaaaaaa-0000-0000-0000-000000000001.jsonl", [{"type": "agent-name", "agentName": "rules-council"}, talk])
+    # 顔ぶれで会議（名前は別）
+    _write(proj / "aaaaaaaa-0000-0000-0000-000000000002.jsonl", [{"type": "agent-name", "agentName": "train-serve-skew"}, talk])
+    _write(proj / "aaaaaaaa-0000-0000-0000-000000000002" / "subagents" / "agent-a1.meta.json", [{"agentType": "pedigree-1"}])
+    # 会議でない（統括役など）
+    _write(proj / "aaaaaaaa-0000-0000-0000-000000000003.jsonl", [{"type": "agent-name", "agentName": "claude-orchestrator"}, talk])
+    _write(proj / "aaaaaaaa-0000-0000-0000-000000000003" / "subagents" / "agent-a2.meta.json", [{"agentType": "critic"}])
+    # 古い会議
+    old = proj / "aaaaaaaa-0000-0000-0000-000000000004.jsonl"
+    _write(old, [{"type": "agent-name", "agentName": "pedigree-lab"}, talk])
+    t = time.time() - 3 * 86400
+    os.utime(old, (t, t))
+    hub = _hub(proj)
+    rows = hub.sessions()
+    assert {r["name"] for r in rows} == {"rules-council", "train-serve-skew"}
+    assert set(rows[0]) == {"id", "name", "mtime", "members"}  # cwd・最後の指示などは渡さない
+    assert next(r for r in rows if r["name"] == "train-serve-skew")["members"] == ["pedigree-1"]
+    assert hub.feed("aaaaaaaa-0000-0000-0000-000000000003") is None  # 会議でないセッションは読まない
+    assert hub.feed("aaaaaaaa-0000-0000-0000-000000000004") is None
+    f = hub.feed("aaaaaaaa-0000-0000-0000-000000000001")
+    assert f is not None and f.since(0)[-1]["speaker"] == "担当 rules-council"
+
+
+def test_hub_follows_new_session_file(tmp_path: Path):
+    proj, tmpb, main, _ = _session(tmp_path)
+    hub = _hub(proj, tmpb)
+    assert [r["id"] for r in hub.sessions()] == [main.stem]
+    new_main = proj / "99999999-0000-0000-0000-000000000000.jsonl"
+    _write(new_main, [{"type": "agent-name", "agentName": "rules-council"},
+                      _a("2026-11-25T02:00:00Z", {"type": "text", "text": "立て直し後"})])
+    hub.discover(force=True)
+    rows = hub.sessions()
+    assert rows[0]["id"] == new_main.stem  # 新しい順
+    assert hub.feed(new_main.stem).since(0)[-1]["text"] == "立て直し後"
+
+
+def test_hub_name_rescans_only_appended_bytes(tmp_path: Path):
+    f = tmp_path / "p" / "aaaaaaaa-0000-0000-0000-000000000009.jsonl"
+    _write(f, [_a("t", {"type": "text", "text": "x"})])
+    info = cl.SessionInfo(f)
+    st = f.stat()
+    info.refresh(st.st_mtime, st.st_size)
+    assert info.name == "" and not info.council
+    with f.open("a", encoding="utf-8") as h:
+        h.write(json.dumps({"type": "agent-name", "agentName": "pedigree-lab"}) + "\n")
+    st = f.stat()
+    info.refresh(st.st_mtime, st.st_size)
+    assert info.name == "pedigree-lab" and info.council and info.scanned == st.st_size
+
+
+# ── /live/api（数秒おきに取りに来る） ──
+
+def test_live_api_sessions_and_events(tmp_path: Path):
     pytest.importorskip("markdown")
     from src.scripts.docs import council_viewer as cv
 
     proj, tmpb, main, subf = _session(tmp_path)
-    feed = cl.LiveFeed(proj, tmpb, poll_sec=0.1)
-    srv = ThreadingHTTPServer(("127.0.0.1", 0), cv.make_handler(tmp_path, feed))
+    hub = _hub(proj, tmpb)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), cv.make_handler(tmp_path, hub))
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    try:
-        c = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=10)
-        c.request("GET", "/live")
+    port = srv.server_address[1]
+
+    def get(path: str):
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        c.request("GET", path)
         r = c.getresponse()
         body = r.read().decode("utf-8")
-        assert r.status == 200 and "EventSource('/live/stream')" in body
-        assert "connect-src 'self'" in r.getheader("Content-Security-Policy")
-        assert "http://" not in body and "https://" not in body
-
-        c = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=10)
-        c.request("GET", "/live/stream")
-        r = c.getresponse()
-        assert r.getheader("Content-Type").startswith("text/event-stream")
-        got = []
-        while len(got) < 2:
-            line = r.fp.readline().decode("utf-8")
-            if line.startswith("data: "):
-                got.append(json.loads(line[6:]))
-        with subf.open("a", encoding="utf-8") as h:
-            h.write(json.dumps(_a("2026-11-25T01:00:09Z", {"type": "text", "text": "追記"}), ensure_ascii=False) + "\n")
-        while len(got) < 3:
-            line = r.fp.readline().decode("utf-8")
-            if line.startswith("data: "):
-                got.append(json.loads(line[6:]))
-        assert got[-1]["text"] == "追記" and got[-1]["seq"] == 3
         c.close()
+        return r, body
+
+    try:
+        r, body = get("/live")
+        assert r.status == 200 and "/live/api/events" in body and "EventSource" not in body
+        assert "connect-src 'self'" in r.getheader("Content-Security-Policy")
+        assert "http://" not in body and "https://" not in body  # 外部の CDN は使わない
+
+        r, body = get("/live/api/sessions")
+        d = json.loads(body)
+        assert r.status == 200 and r.getheader("Content-Type").startswith("application/json")
+        assert [s["id"] for s in d["sessions"]] == [main.stem]
+
+        r, body = get(f"/live/api/events?session={main.stem}&since=0&limit=30")
+        d = json.loads(body)
+        assert [e["kind"] for e in d["events"]] == ["call", "text"]
+        assert d["events"][1]["html"] == "<p>控除率から見る</p>" and "text" not in d["events"][1]
+        assert d["events"][0]["text"].startswith("呼び出し → 2 号")
+        epoch, seq = d["epoch"], d["seq"]
+
+        with subf.open("a", encoding="utf-8") as h:
+            h.write(json.dumps(_a("2026-11-25T01:00:09Z", {"type": "text", "text": "**追記**"}), ensure_ascii=False) + "\n")
+        time.sleep(cl.POLL_MIN_SEC + 0.1)
+        r, body = get(f"/live/api/events?session={main.stem}&since={seq}&limit=30")
+        d = json.loads(body)
+        assert d["epoch"] == epoch and [e["html"] for e in d["events"]] == ["<p><strong>追記</strong></p>"]
+        assert d["events"][0]["seq"] == seq + 1
+
+        assert get("/live/api/events?session=../../etc&since=0")[0].status == 404
+        assert get("/live/api/events?session=ffffffff-0000-0000-0000-000000000000")[0].status == 404
+        assert get("/live/stream")[0].status == 404  # SSE はやめた
+        assert get(f"/live/api/events?session={main.stem}&since=%C2%B2&limit=%C2%B2")[0].status == 200  # ² で 500 にしない
+        r, body = get("/live")
+        csp = r.getheader("Content-Security-Policy")
+        assert "'unsafe-inline'" not in csp.split("script-src", 1)[1].split(";")[0]
+        nonce = csp.split("'nonce-", 1)[1].split("'", 1)[0]
+        assert f'<script nonce="{nonce}">' in body and get("/live")[1] != body  # 応答ごとに替わる
     finally:
         srv.shutdown()
         srv.server_close()
@@ -240,17 +351,9 @@ def test_bad_line_does_not_drop_the_batch(tmp_path: Path):
     with main.open("a", encoding="utf-8") as h:
         h.write(json.dumps({"type": "assistant", "timestamp": "z", "message": {"content": ["文字だけ", 3]}}) + "\n")
         h.write(json.dumps(_a("2026-11-25T01:00:05Z", {"type": "text", "text": "残る"}), ensure_ascii=False) + "\n")
-    feed = cl.LiveFeed(proj, tmpb)
+    feed = cl.SessionFeed(main, tmpb)
     feed.poll_once()
     assert "残る" in [e["text"] for e in feed.since(0)]
-
-
-def test_stale_last_event_id_after_restart(tmp_path: Path):
-    proj, tmpb, _, _ = _session(tmp_path)
-    feed = cl.LiveFeed(proj, tmpb)
-    feed.poll_once()
-    assert len(feed.since(2500)) == 2  # 前の起動の番号でも、直近の分から流し直す
-    assert feed.wait(2500, 0.01) == []  # 待ちで回り続けない
 
 
 def test_tail_detects_replaced_file(tmp_path: Path):
@@ -262,3 +365,96 @@ def test_tail_detects_replaced_file(tmp_path: Path):
     g.write_bytes(b'{"b":1}\n{"b":2}\n')
     g.replace(f)
     assert t.read_new_lines() == [b'{"b":1}', b'{"b":2}']
+
+
+# ── 11/26 の形（号の報告・統括役の連絡が isMeta で来る、続きの依頼、議題の番号） ──
+
+def test_stage_ignores_agenda_number_and_topic():
+    assert cl.stage_of("R0-17 の R1（3 号）") == "R1"
+    assert cl.stage_of("R0-17 複勝の期待値") == ""
+    assert cl.topic_of("R0-17 の R1（3 号）") == "R0-17"
+    assert cl.topic_of("", "RC-6 の決定") == "RC-6"
+    assert cl.is_decision("s1", "R0-17 の R3", "x", "R3")
+    assert not cl.is_decision("s2", "R0-17 の R3", "x", "R3")
+
+
+def test_meta_agent_message_and_cross_session_are_shown():
+    ag = cl.AgentDirectory()
+    cl.parse_main_line(_a("t0", {"type": "tool_use", "id": "tu1", "name": "Agent",
+                                 "input": {"subagent_type": "roi-plus-man-1", "description": "R0-17 の R1（1 号）"}}), ag, "担当 rules-council")
+    cl.parse_main_line(_u("t1", [{"type": "tool_result", "tool_use_id": "tu1", "content": "agentId: a1234567890abcdef"}]), ag)
+    ev = cl.parse_main_line(_a("t2", {"type": "tool_use", "id": "tu2", "name": "SendMessage",
+                                      "input": {"to": "a1234567890abcdef", "summary": "R0-17 の R3（まとめ）", "message": "長い本文"}}), ag)
+    assert ev[0]["kind"] == "call" and "続きを頼む → 1 号（リーダー）: R0-17 の R3" in ev[0]["text"] and "長い本文" not in ev[0]["text"]
+    rep = _u("t3", _handback("a1234567890abcdef", "採る。"))
+    rep["isMeta"] = True
+    ev = cl.parse_main_line(rep, ag)
+    assert len(ev) == 1 and ev[0]["speaker"] == "1 号（リーダー）" and ev[0]["stage"] == "R3" and ev[0]["decision"]
+    assert ev[0]["topic"] == "R0-17"
+    x = _u("t4", 'Another Claude session sent a message:\n<cross-session-message from="uds:/tmp/x.sock" '
+                 'from-name="claude-orchestrator-handover" from-mode="prompting">\n次へ進めてよい\n</cross-session-message>')
+    x["isMeta"] = True
+    ev = cl.parse_main_line(x, ag)
+    assert [(e["speaker"], e["text"]) for e in ev] == [("統括役", "次へ進めてよい")]
+    skill = _u("t5", "skill の本文")
+    skill["isMeta"] = True
+    assert cl.parse_main_line(skill, ag) == []
+
+
+def test_pedigree_speakers_and_notice_unescape():
+    assert cl.speaker_for_agent("pedigree-1", "") == ("血統 1 号", "p1")
+    assert cl.speaker_for_agent("pedigree-2", "") == ("血統 2 号", "p2")
+    ev = cl.parse_main_line(_u("t", "<task-notification>\n<summary>Background command \"a &gt; b\" completed</summary>\n</task-notification>"),
+                            cl.AgentDirectory())
+    assert ev[0]["text"] == 'Background command "a > b" completed'
+
+
+def test_meta_with_tag_text_but_no_match_is_dropped():
+    o = _u("t", "規約: <agent-message の書き方 と <cross-session-message の書き方")
+    o["isMeta"] = True
+    assert cl.parse_main_line(o, cl.AgentDirectory()) == []
+
+
+def test_names_are_masked():
+    assert cl.safe_label("deploy-token-abc") == cl.MASKED
+    x = _u("t", '<cross-session-message from="uds:/x" from-name="my-secret-runner">やあ</cross-session-message>')
+    assert cl.parse_main_line(x, cl.AgentDirectory())[0]["speaker"] == cl.MASKED
+    assert cl.speaker_for_agent("api-key-helper", "") == (cl.MASKED, "sx")
+    assert cl.council_name("bet-optimizer-1124") and not cl.council_name("bet-optimizerx")
+
+
+def test_name_in_middle_of_large_file_and_split_line(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(cl, "NAME_SCAN_HEAD", 100)
+    monkeypatch.setattr(cl, "NAME_SCAN_TAIL", 200)
+    f = tmp_path / "aaaaaaaa-0000-0000-0000-00000000000a.jsonl"
+    pad = json.dumps({"type": "api-request", "x": "z" * 300}) + "\n"
+    f.write_text(pad * 3 + json.dumps({"type": "agent-name", "agentName": "pedigree-lab"}) + "\n" + pad * 3, encoding="utf-8")
+    info = cl.SessionInfo(f)
+    st = f.stat()
+    info.refresh(st.st_mtime, st.st_size)
+    assert info.name == "pedigree-lab"
+    with f.open("a", encoding="utf-8") as h:  # 名前の行の書きかけ
+        h.write('{"type":"agent-name","agentName":"rules-')
+    st = f.stat()
+    info.refresh(st.st_mtime, st.st_size)
+    assert info.name == "pedigree-lab" and info.scanned < st.st_size
+    with f.open("a", encoding="utf-8") as h:
+        h.write('council"}\n')
+    st = f.stat()
+    info.refresh(st.st_mtime, st.st_size)
+    assert info.name == "rules-council" and info.scanned == st.st_size
+
+
+def test_feed_rebuilt_after_eviction_changes_epoch(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(cl, "MAX_FEEDS", 1)
+    proj = tmp_path / "p"
+    ids = [f"aaaaaaaa-0000-0000-0000-00000000000{i}" for i in (1, 2)]
+    for sid in ids:
+        _write(proj / f"{sid}.jsonl", [{"type": "agent-name", "agentName": "rules-council"},
+                                       _a("2026-11-26T01:00:00Z", {"type": "text", "text": "x"})])
+    hub = _hub(proj)
+    first = hub.feed(ids[0])
+    time.sleep(0.01)
+    hub.feed(ids[1])  # 1 本目を捨てる
+    again = hub.feed(ids[0])
+    assert again is not first and again.created != first.created

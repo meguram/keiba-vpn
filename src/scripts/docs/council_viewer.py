@@ -7,6 +7,8 @@
 - 加えて ``docs/html/operations/final/`` と ``docs/html/operations/`` の直下の HTML（名前は英数字・``_``・``-`` だけ）をそのまま返す。
 - 読むのは上の 3 か所だけ。サブフォルダの HTML は出さない。``..``・絶対パス・シンボリックリンクで外に出る要求は 404。書き込みはしない。
 - 認証が無いので、既定は 127.0.0.1 で待ち受ける（Cursor の Remote-SSH・ssh -L で手元へ転送して見る）。
+- ``/live`` は会議のライブ（吹き出し）。画面は ``/live/api/sessions``・``/live/api/events`` を 3 秒おきに取りに来る
+  （SSE は Cursor のポート転送でためられて届かないことがあったので、2026-11-26 に取りに行く形へ替えた）。中身は council_live.py。
 - GCS・外部の網は読まない（費用 0 円）。
 """
 from __future__ import annotations
@@ -17,6 +19,7 @@ import os
 import posixpath
 import re
 import sys
+import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -150,6 +153,19 @@ def rewrite_links(body: str, base_dir: str) -> str:
     return HREF_RE.sub(fix, body)
 
 
+MD_EXTENSIONS = ["tables", "fenced_code"]  # 文書（/council）とライブで同じ描き方にする
+A_TAG_RE = re.compile(r'<a href="([^"]*)"')
+IMG_TAG_RE = re.compile(r"<img\b[^>]*>")
+ALT_RE = re.compile(r'\balt="([^"]*)"')
+SAFE_SCHEMES = ("http", "https", "mailto")
+_safe_md_lock = threading.Lock()
+_safe_md = None
+
+
+def _wrap_tables(body: str) -> str:
+    return body.replace("<table>", '<div class="scroll"><table>').replace("</table>", "</table></div>")
+
+
 def md_to_html(text: str, base_dir: str | None = None) -> str:
     """``base_dir`` は council の根からの、その Markdown のあるフォルダ（根は ""）。None なら相対リンクを直さない。"""
     import markdown
@@ -157,12 +173,83 @@ def md_to_html(text: str, base_dir: str | None = None) -> str:
 
     body = markdown.markdown(
         text,
-        extensions=["tables", "fenced_code", "toc"],
+        extensions=MD_EXTENSIONS + ["toc"],
         extension_configs={"toc": {"slugify": slugify_unicode}},
     )
     if base_dir is not None:
         body = rewrite_links(body, base_dir)
-    return body.replace("<table>", '<div class="scroll"><table>').replace("</table>", "</table></div>")
+    return _wrap_tables(body)
+
+
+def safe_href(href: str) -> bool:
+    """リンク先が http(s)・mailto・相対・ページ内なら True（javascript: などは通さない。実体参照・空白で隠しても見抜く）。"""
+    raw = "".join(ch for ch in html.unescape(href) if ch > " " and ch != "\x7f")
+    m = re.match(r"^([A-Za-z][A-Za-z0-9+.\-]*):", raw)
+    return m is None or m.group(1).lower() in SAFE_SCHEMES
+
+
+LIST_LINE_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+\S")
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def _ordered(line: str) -> bool:
+    return line.lstrip()[:1].isdigit()
+
+
+def loosen_blocks(text: str) -> str:
+    """会話の文は段落の直後に箇条書き・表・囲みのコードを続けて書くことが多い。Markdown が段落の続きと
+    みなさないよう、その手前に空の行を入れる（囲みのコードの中は触らない）。"""
+    out: list[str] = []
+    fence, prev = False, ""
+    lines = text.split("\n")
+    # 2 字下げで入れ子を書いた文（字下げが 4 の倍数でない箇条がある）は、箇条の字下げを倍にする
+    two = any(LIST_LINE_RE.match(l) and (len(l) - len(l.lstrip())) % 4 == 2 for l in lines)
+    for line in lines:
+        st = line.lstrip()
+        opening = st.startswith(("```", "~~~"))
+        if not fence and LIST_LINE_RE.match(line):
+            ind = len(line) - len(st)
+            if two and ind:
+                line = " " * (ind * 2) + st
+        if not fence and prev.strip() and line.strip():
+            p_list, p_table = bool(LIST_LINE_RE.match(prev)), prev.lstrip().startswith("|")
+            c_list, c_table = bool(LIST_LINE_RE.match(line)), st.startswith("|")
+            if opening or (c_list and not p_list and not prev.startswith((" ", "\t"))) \
+                    or (c_table and not p_table) or (p_table and not c_table) \
+                    or (p_list and not c_list and not line.startswith((" ", "\t"))) \
+                    or (p_list and c_list and _ordered(prev) != _ordered(line) and _indent(line) <= _indent(prev)):
+                out.append("")
+        if opening:
+            fence = not fence
+        out.append(line)
+        prev = line
+    return "\n".join(out)
+
+
+def safe_md_to_html(text: str) -> str:
+    """会話の本文（外から来うる文）を Markdown として描く。生の HTML は描かずに文字として出す（エスケープ）。
+
+    - Markdown の生の HTML（ブロック・インライン）の処理を外す → ``<script>``・``onerror=`` は ``&lt;`` の文字になる。
+    - リンクは http(s)・mailto・相対だけ残し、ほかは href を外す。画像は読み込まずに代わりの文字にする。
+    - 改行はそのまま改行にする（会話は 1 行ずつ書くことが多い）。
+    """
+    global _safe_md
+    import markdown
+
+    with _safe_md_lock:  # Markdown の実体は複数のスレッドで同時に使えない
+        if _safe_md is None:
+            md = markdown.Markdown(extensions=MD_EXTENSIONS + ["nl2br", "sane_lists"])
+            md.preprocessors.deregister("html_block")
+            md.inlinePatterns.deregister("html")
+            _safe_md = md
+        body = _safe_md.reset().convert(loosen_blocks(text))
+    body = A_TAG_RE.sub(lambda m: m.group(0) if safe_href(m.group(1)) else "<a", body)
+    body = IMG_TAG_RE.sub(lambda m: "［画像: " + ((ALT_RE.search(m.group(0)) or [None, ""])[1]) + "］", body)
+    body = body.replace("<a href=", '<a rel="noopener noreferrer" target="_blank" href=')
+    return _wrap_tables(body)
 
 
 def page(title: str, body: str) -> str:
@@ -340,7 +427,7 @@ def html_file(root: Path, name: str, rel: Path = HTML_REL) -> bytes | None:
 
 # ── サーバ ──
 
-# 成果の HTML は自前の生成物だが <script> を含むものがある。sandbox で origin を分け、/council/・/live/stream を読ませない
+# 成果の HTML は自前の生成物だが <script> を含むものがある。sandbox で origin を分け、/council/・/live/api を読ませない
 HTML_CSP = "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox"
 CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'"
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "[::1]"})
@@ -355,124 +442,247 @@ def host_allowed(host_header: str) -> bool:
         name = host.split(":", 1)[0]
     return name in LOCAL_HOSTS or (os.environ.get("KEIBA_COUNCIL_ALLOW_ANY_HOST") == "1")
 
-LIVE_CSP = ("default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; "
+# スクリプトは応答ごとの nonce の付いた自前の 1 本だけ動かす（本文に onerror= などが紛れても動かない）
+LIVE_CSP = ("default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-{nonce}'; connect-src 'self'; "
             "base-uri 'none'; form-action 'none'")
+LIVE_POLL_MS = 3000  # 画面が取りに行く間隔（手元の 127.0.0.1 だけ。費用 0 円）
+LIVE_LIMITS = (20, 30, 50, 100)
+LIVE_MAX_LIMIT = 200
 LIVE_CSS = """
-:root { --s1:#b4232c; --s2:#1d6fb8; --s3:#1d7f45; --sc:#6b4bc4; --so:#9a6200; --sx:#5b6578; --sn:#5b6578; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --s1:#f87171; --s2:#7aa9ff; --s3:#4ade80; --sc:#c4a7ff; --so:#fbbf24; --sx:#9aa7c7; --sn:#9aa7c7; } }
-:root[data-theme="dark"] { --s1:#f87171; --s2:#7aa9ff; --s3:#4ade80; --sc:#c4a7ff; --so:#fbbf24; --sx:#9aa7c7; --sn:#9aa7c7; }
-.bar { position:sticky; top:0; background:var(--bg); padding:8px 0; border-bottom:1px solid var(--border); z-index:2; font-size:13.5px; }
-.ev { background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--c, var(--border)); border-radius:8px; padding:8px 12px; margin:8px 0; }
-.ev .h { font-size:12.5px; color:var(--muted); display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-.ev .who { color:var(--c); font-weight:700; }
-.ev .t { white-space:pre-wrap; overflow-wrap:anywhere; margin-top:4px; }
-.ev.tool, .ev.notice, .ev.call { padding:3px 12px; font-size:12.5px; color:var(--muted); }
-.ev.tool .t, .ev.notice .t, .ev.call .t { margin:0; display:inline; white-space:normal; }
-.ev.call { color:var(--text); }
-.tag { font-size:11px; padding:0 7px; border-radius:9px; border:1px solid currentColor; }
-.dec { color:var(--bad); font-weight:700; }
-body.hide-tools .ev.tool { display:none; }
-#jump { position:fixed; right:16px; bottom:16px; padding:6px 12px; border-radius:16px; border:1px solid var(--border); background:var(--panel); color:var(--accent); cursor:pointer; }
-.s1 { --c:var(--s1); } .s2 { --c:var(--s2); } .s3 { --c:var(--s3); } .sc { --c:var(--sc); } .so { --c:var(--so); } .sx { --c:var(--sx); } .sn { --c:var(--sn); }
+:root { --s1:#c0262d; --s2:#1d6fb8; --s3:#1d7f45; --p1:#a04a00; --p2:#8a3fa0; --sc:#5a46b8; --so:#8a6100; --sx:#5b6578; --sn:#5b6578; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --s1:#ff7b7b; --s2:#7aa9ff; --s3:#4ade80; --p1:#fdba74; --p2:#e2a6f5; --sc:#b9a6ff; --so:#fbbf24; --sx:#9aa7c7; --sn:#9aa7c7; } }
+:root[data-theme="dark"] { --s1:#ff7b7b; --s2:#7aa9ff; --s3:#4ade80; --p1:#fdba74; --p2:#e2a6f5; --sc:#b9a6ff; --so:#fbbf24; --sx:#9aa7c7; --sn:#9aa7c7; }
+main { max-width:980px; padding-top:0; }
+.bar { position:sticky; top:0; background:var(--bg); padding:10px 0 8px; border-bottom:1px solid var(--border); z-index:3;
+  font-size:13.5px; display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; }
+.bar strong { font-size:15px; }
+.bar select { font:inherit; color:var(--text); background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:3px 6px; max-width:100%; }
+.bar label { white-space:nowrap; }
+#sess { min-width:0; max-width:min(420px, 100%); }
+#log { padding:10px 0 72px; }
+.row { display:flex; margin:10px 0; }
+.row.l { justify-content:flex-start; } .row.r { justify-content:flex-end; } .row.c { justify-content:center; }
+.bub { max-width:min(78%, 760px); min-width:0; background:color-mix(in srgb, var(--c) 9%, var(--panel)); border:1px solid color-mix(in srgb, var(--c) 35%, var(--border));
+  border-radius:14px; padding:8px 12px 9px; position:relative; }
+.row.l .bub { border-top-left-radius:4px; } .row.r .bub { border-top-right-radius:4px; }
+.bub.s1 { border-width:2px; }
+.bub.dec { border:2px solid var(--s1); box-shadow:0 0 0 3px color-mix(in srgb, var(--s1) 18%, transparent); }
+.hd { font-size:12px; color:var(--muted); display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:2px; }
+.who { color:var(--c); font-weight:700; font-size:13px; }
+.tag { font-size:11px; line-height:1.6; padding:0 7px; border-radius:9px; border:1px solid currentColor; white-space:nowrap; }
+.tag.dec { background:var(--s1); color:#fff; border-color:var(--s1); font-weight:700; }
+.md { overflow-wrap:anywhere; font-size:14.5px; line-height:1.65; }
+.md > :first-child { margin-top:0; } .md > :last-child { margin-bottom:0; }
+.md p { margin:.35em 0; } .md ul, .md ol { margin:.35em 0; padding-left:1.4em; }
+.md h1, .md h2, .md h3, .md h4 { font-size:15px; margin:.7em 0 .3em; padding:0; border:0; }
+.md blockquote { margin:.4em 0; padding:.1em .8em; border-left:3px solid var(--border); color:var(--muted); }
+.md pre { font-size:12px; margin:.4em 0; } .md .scroll { margin:.4em 0; display:inline-block; max-width:100%; vertical-align:top; } .md table { min-width:0; width:auto; font-size:12.5px; }
+.md th, .md td { padding:3px 8px; }
+.clip { max-height:15em; overflow:hidden; -webkit-mask-image:linear-gradient(#000 70%, transparent); mask-image:linear-gradient(#000 70%, transparent); }
+.more { margin-top:4px; font:inherit; font-size:12.5px; color:var(--accent); background:none; border:0; padding:0; cursor:pointer; }
+.mini { font-size:12px; color:var(--muted); max-width:min(78%, 760px); padding:2px 10px; border-radius:10px; overflow-wrap:anywhere; }
+.mini.call { color:var(--c); border:1px dashed color-mix(in srgb, var(--c) 45%, var(--border)); }
+.mini.notice { text-align:center; }
+.tools { font-size:11.5px; color:var(--muted); background:none; border:1px solid var(--border); border-radius:10px; padding:1px 9px; cursor:pointer; font-family:inherit; }
+.tlist { font-size:11.5px; color:var(--muted); margin:2px 0 0; padding-left:1.2em; max-width:min(78%, 760px); }
+.grp { display:flex; flex-direction:column; }
+.row.l .grp { align-items:flex-start; } .row.r .grp { align-items:flex-end; }
+#news { position:fixed; left:50%; transform:translateX(-50%); bottom:18px; padding:7px 16px; border-radius:18px; border:1px solid var(--accent);
+  background:var(--panel); color:var(--accent); cursor:pointer; font:inherit; font-size:13.5px; box-shadow:0 2px 10px rgba(0,0,0,.18); z-index:4; }
+.empty { color:var(--muted); text-align:center; padding:40px 0; }
+.s1 { --c:var(--s1); } .s2 { --c:var(--s2); } .s3 { --c:var(--s3); } .p1 { --c:var(--p1); } .p2 { --c:var(--p2); }
+.sc { --c:var(--sc); } .so { --c:var(--so); } .sx { --c:var(--sx); } .sn { --c:var(--sn); }
+@media (max-width:600px) { .bub, .mini, .tlist { max-width:94%; } .bar { font-size:13px; } main { padding-left:10px; padding-right:10px; } }
 """
-LIVE_JS = """
+LIVE_JS = r"""
 (function () {
-  var log = document.getElementById('log'), st = document.getElementById('st'), jump = document.getElementById('jump');
-  var follow = true, n = 0;
-  function atBottom() { return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 60; }
-  window.addEventListener('scroll', function () { follow = atBottom(); jump.hidden = follow; });
-  jump.addEventListener('click', function () { follow = true; jump.hidden = true; window.scrollTo(0, document.documentElement.scrollHeight); });
-  document.getElementById('tools').addEventListener('change', function (e) { document.body.classList.toggle('hide-tools', !e.target.checked); });
-  function el(tag, cls, text) { var x = document.createElement(tag); if (cls) x.className = cls; if (text) x.textContent = text; return x; }
-  function hhmm(ts) { var d = new Date(ts); return isNaN(d) ? '' : d.toLocaleString('ja-JP', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit'}); }
-  function add(ev) {
-    var box = el('div', 'ev ' + ev.kind + ' ' + ev.cls), h = el('div', 'h');
-    h.appendChild(el('span', '', hhmm(ev.ts)));
-    h.appendChild(el('span', 'who', ev.speaker));
-    if (ev.stage) h.appendChild(el('span', 'tag', ev.stage));
-    if (ev.decision) h.appendChild(el('span', 'tag dec', '決定'));
-    if (ev.kind === 'tool') h.appendChild(el('span', 'tag', 'ツール'));
-    if (ev.kind === 'text') { box.appendChild(h); box.appendChild(el('div', 't', ev.text)); }
-    else { h.appendChild(el('span', 't', ev.text)); box.appendChild(h); }
-    log.appendChild(box); n += 1;
+  var POLL = %POLL%, LEFT = {s1:1, s2:1, s3:1, p1:1, p2:1, sx:1};
+  var $ = function (id) { return document.getElementById(id); };
+  var log = $('log'), st = $('st'), news = $('news'), selS = $('sess'), selN = $('lim'), chkT = $('tools');
+  var sid = '', seq = 0, epoch = '', unread = 0, timer = 0, busy = false, lastTool = null, gen = 0, lastSig = null;
+  function load(k, d) { try { return localStorage.getItem('live.' + k) || d; } catch (e) { return d; } }
+  function save(k, v) { try { localStorage.setItem('live.' + k, v); } catch (e) {} }
+  selN.value = load('lim', '30'); if (!selN.value) selN.value = '30';
+  chkT.checked = load('tools', '0') === '1';
+  function atBottom() { return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 80; }
+  function toBottom() { window.scrollTo(0, document.documentElement.scrollHeight); }
+  function el(tag, cls, text) { var x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; }
+  function hhmm(ts) { var d = new Date(ts); return isNaN(d) ? '' : d.toLocaleString('ja-JP', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}); }
+  function side(e) { return e.kind === 'notice' ? 'c' : (LEFT[e.cls] ? 'l' : 'r'); }
+  function showNews() { news.hidden = unread === 0; news.textContent = '新しい発言 ' + unread + ' 件 ↓'; }
+  window.addEventListener('scroll', function () { if (atBottom()) { if (unread) trim(); unread = 0; showNews(); } }, {passive: true});
+  news.addEventListener('click', function () { unread = 0; showNews(); toBottom(); });
+  function bubble(e) {
+    var row = el('div', 'row ' + side(e));
+    if (e.kind === 'notice' || e.kind === 'call') {
+      row.appendChild(el('div', 'mini ' + e.kind + ' ' + e.cls, hhmm(e.ts) + ' ' + (e.kind === 'call' ? e.speaker + ' ' : '') + e.text));
+      return row;
+    }
+    var b = el('div', 'bub ' + e.cls + (e.decision ? ' dec' : '')), h = el('div', 'hd');
+    h.appendChild(el('span', 'who', e.speaker));
+    h.appendChild(el('span', '', hhmm(e.ts)));
+    if (e.topic) h.appendChild(el('span', 'tag', e.topic));
+    if (e.stage) h.appendChild(el('span', 'tag', e.stage));
+    if (e.decision) h.appendChild(el('span', 'tag dec', '決定'));
+    b.appendChild(h);
+    var body = el('div', 'md'); body.innerHTML = e.html || '';  /* サーバで生の HTML を外して描いたもの */
+    b.appendChild(body); row.appendChild(b);
+    return row;
   }
-  var es = new EventSource('/live/stream');
-  es.onopen = function () { st.textContent = '接続中（' + n + ' 件）'; };
-  es.onmessage = function (m) {
-    add(JSON.parse(m.data)); st.textContent = '接続中（' + n + ' 件）';
-    if (follow) window.scrollTo(0, document.documentElement.scrollHeight);
-  };
-  es.onerror = function () { st.textContent = '切れました。再接続を待っています（' + n + ' 件）'; };
+  function clampIfLong(row) {
+    var body = row.querySelector('.md'); if (!body || body.scrollHeight < 300) return;
+    body.classList.add('clip');
+    var btn = el('button', 'more', '続きを開く');
+    btn.addEventListener('click', function () { var open = body.classList.toggle('clip'); btn.textContent = open ? '続きを開く' : 'たたむ'; });
+    body.parentNode.appendChild(btn);
+  }
+  function toolGroup(e) {
+    var row = el('div', 'row ' + side(e)), g = el('div', 'grp'), btn = el('button', 'tools'), ul = el('ul', 'tlist');
+    ul.hidden = true; g.appendChild(btn); g.appendChild(ul); row.appendChild(g);
+    row._n = 0; row._names = {}; row._who = e.speaker;
+    btn.addEventListener('click', function () { ul.hidden = !ul.hidden; });
+    row._add = function (x) {
+      row._n += 1; var name = x.text.split(':')[0]; row._names[name] = (row._names[name] || 0) + 1;
+      var parts = []; for (var k in row._names) parts.push(k + ' ' + row._names[k]);
+      btn.textContent = row._who + ' のツール ' + row._n + ' 件（' + parts.join('・') + '）';
+      ul.appendChild(el('li', '', hhmm(x.ts) + ' ' + x.text));
+    };
+    return row;
+  }
+  function append(e) {
+    if (e.kind === 'tool') {
+      if (!chkT.checked) return;
+      if (!lastTool || lastTool._who !== e.speaker || lastTool !== log.lastChild) { lastTool = toolGroup(e); log.appendChild(lastTool); }
+      lastTool._add(e); return;
+    }
+    var row = bubble(e); log.appendChild(row); clampIfLong(row);
+  }
+  function trim() {
+    var lim = Math.max(1, +selN.value || 30), rows = log.querySelectorAll('.row'), talk = 0;
+    for (var i = rows.length - 1; i >= 0; i--) {
+      if (rows[i]._add) continue;  /* ツールのまとめは数えない */
+      talk += 1;
+      if (talk > lim) { while (log.firstChild && log.firstChild !== rows[i].nextSibling) log.removeChild(log.firstChild); break; }
+    }
+  }
+  function status(t) { st.textContent = t; }
+  function get(url, ok, ng) {
+    var x = new XMLHttpRequest(); x.open('GET', url); x.timeout = 15000;
+    x.onload = function () { if (x.status === 200) { try { ok(JSON.parse(x.responseText)); } catch (err) { ng(); } } else ng(); };
+    x.onerror = x.ontimeout = ng; x.send();
+  }
+  function schedule(ms) { clearTimeout(timer); timer = setTimeout(poll, ms); }
+  function reset() { gen += 1; seq = 0; epoch = ''; unread = 0; showNews(); lastTool = null; log.textContent = ''; }
+  function poll() {
+    if (!sid || busy) { schedule(POLL); return; }
+    busy = true;
+    var g = gen, url = '/live/api/events?session=' + encodeURIComponent(sid) + '&since=' + seq + '&limit=' + selN.value;
+    get(url, function (d) {
+      busy = false;
+      if (g !== gen) { schedule(0); return; }  /* 待つ間に会議・件数を替えた */
+      if (d.epoch !== epoch) {  /* サーバを起動し直した・読み直した。番号が替わるので初めから取り直す */
+        var had = epoch; epoch = d.epoch;
+        if (had) { reset(); schedule(0); return; }
+      }
+      var follow = atBottom() || seq === 0, talk = 0, first = seq === 0;
+      (d.events || []).forEach(function (e) { append(e); if (e.kind !== 'tool') talk += 1; seq = Math.max(seq, e.seq); });
+      if (first && !log.firstChild) log.appendChild(el('div', 'empty', 'まだ発言がありません。'));
+      else if (talk && log.querySelector('.empty')) log.removeChild(log.querySelector('.empty'));
+      if (follow) { trim(); toBottom(); } else if (talk) { unread += talk; showNews(); }
+      status('更新 ' + new Date().toLocaleTimeString('ja-JP') + '（' + POLL / 1000 + ' 秒おき）');
+      schedule(document.hidden ? POLL * 5 : POLL);
+    }, function () { busy = false; status('つながりません。再試行しています…'); schedule(g !== gen ? 0 : POLL * 2); });
+  }
+  function label(s) {
+    var mem = (s.members || []).map(function (m) { return m.replace('roi-plus-man-', '').replace('pedigree-', '血統'); }).join('・');
+    return s.name + '（' + hhmm(s.mtime * 1000) + (mem ? '・' + mem : '') + '）';
+  }
+  function sessions(first) {
+    get('/live/api/sessions', function (d) {
+      var q = (location.search.match(/[?&]s=([0-9a-f-]+)/) || [])[1];
+      var list = d.sessions || [], keep = sid || q || load('sid', ''), found = false;
+      var sig = list.map(function (s) { return s.id + label(s); }).join('|');
+      list.forEach(function (s) { if (s.id === keep) found = true; });
+      if (sig !== lastSig) {  /* 変わったときだけ作り直す（開いている選択肢を閉じない） */
+        lastSig = sig; selS.textContent = '';
+        list.forEach(function (s) { var o = el('option', '', label(s)); o.value = s.id; selS.appendChild(o); });
+        if (!list.length) { var o = el('option', '', '会議のセッションが見つかりません'); o.value = ''; selS.appendChild(o); }
+      }
+      var want = found ? keep : (list[0] ? list[0].id : '');
+      selS.value = want;
+      if (want !== sid) { sid = want; reset(); schedule(0); }
+      if (!list.length) { log.textContent = ''; log.appendChild(el('div', 'empty', '最近の会議のセッションがありません（' + d.hours + ' 時間以内）。')); }
+    }, function () { status('セッションの一覧を取れません。再試行しています…'); });
+  }
+  selS.addEventListener('change', function () { sid = selS.value; save('sid', sid); reset(); schedule(0); });
+  selN.addEventListener('change', function () { save('lim', selN.value); reset(); schedule(0); });
+  chkT.addEventListener('change', function () { save('tools', chkT.checked ? '1' : '0'); reset(); schedule(0); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) schedule(0); });
+  sessions(true); setInterval(sessions, 30000);
 })();
 """
 
 
-def live_page() -> str:
+def live_page(nonce: str = "") -> str:
+    opts = "".join(f'<option value="{n}">{n} 件</option>' for n in LIVE_LIMITS)
     body = (
-        '<div class="bar"><strong>会議のライブ</strong>（担当 rules-council と各号。数秒おきに記録の差分を流す） · '
-        '<a href="/">目次へ</a> · <label><input type="checkbox" id="tools"> ツールの行を出す</label> · '
-        '<span id="st" class="mu">接続しています…</span></div>'
-        '<div id="log"></div><button id="jump" hidden>最新へ ↓</button>'
-        f"<style>{LIVE_CSS}</style><script>{LIVE_JS}</script>"
+        '<div class="bar"><strong>会議のライブ</strong>'
+        '<select id="sess" aria-label="どの担当の会議か"><option>読み込み中…</option></select>'
+        f'<label>直近 <select id="lim" aria-label="表示する件数">{opts}</select></label>'
+        '<label><input type="checkbox" id="tools"> ツールの行</label>'
+        '<a href="/">目次へ</a><span id="st" class="mu">読み込み中…</span></div>'
+        '<div id="log"></div><button id="news" hidden></button>'
+        f"<style>{LIVE_CSS}</style><script nonce=\"{html.escape(nonce)}\">{LIVE_JS.replace('%POLL%', str(LIVE_POLL_MS))}</script>"
     )
-    return page("会議のライブ", body).replace("<body>", '<body class="hide-tools">', 1)
+    return page("会議のライブ", body)
 
 
-def make_handler(root: Path, feed=None):
-    if feed is None:
-        from src.scripts.docs.council_live import LiveFeed, default_project_dir, default_tmp_base
+EVENT_FIELDS = ("seq", "ts", "speaker", "cls", "kind", "stage", "topic", "decision")
 
-        live_dir = os.environ.get("KEIBA_COUNCIL_LIVE_DIR")
-        feed = LiveFeed(Path(live_dir) if live_dir else default_project_dir(root), default_tmp_base())
+
+def event_json(e: dict) -> dict:
+    """画面に渡す形。本文（text）は Markdown を安全に描いた html にして渡す（描いた結果は出来事に覚えておく）。"""
+    out = {k: e.get(k) for k in EVENT_FIELDS}
+    if e.get("kind") == "text":
+        h = e.get("html")
+        if h is None:
+            h = e["html"] = safe_md_to_html(e.get("text", ""))
+        out["html"] = h
+    else:
+        out["text"] = e.get("text", "")
+    return out
+
+
+def make_handler(root: Path, hub=None):
+    if hub is None:
+        from src.scripts.docs.council_live import default_hub
+
+        hub = default_hub(root)
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "council-viewer"
 
-        def _stream(self) -> None:
-            """Server-Sent Events。読むのは feed の 1 本のスレッドだけで、ここは貯まった出来事を渡すだけ。"""
+        def _json(self, obj: dict) -> None:
             import json as _json
 
+            self._send(200, _json.dumps(obj, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+
+        def _live_api(self, path: str) -> None:
+            """画面が数秒おきに取りに来る（SSE は Cursor の転送でためられて届かないことがあるので、取りに行く形にした）。"""
             q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
-            last = self.headers.get("Last-Event-ID") or (q.get("since") or ["0"])[0]
-            seq = int(last) if str(last).isdigit() else 0
-            self.send_response(200)
-            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Accel-Buffering", "no")
-            self.send_header("Connection", "close")
-            self.end_headers()
-            self.close_connection = True
-            if self.command == "HEAD":
-                return
-            self.connection.settimeout(30)  # 応答しない相手で書き込みが止まり続けないように
-            feed.attach()
-            try:
-                if feed.seq == 0:
-                    feed.poll_once()
-                if seq > feed.seq:  # 起動し直して番号が戻った。直近の分から流し直す
-                    seq = 0
-                pending = feed.since(seq)
-                idle = 0.0
-                while True:
-                    for e in pending:
-                        self.wfile.write(f"id: {e['seq']}\ndata: {_json.dumps(e, ensure_ascii=False)}\n\n".encode("utf-8"))
-                        seq = e["seq"]
-                    if pending:
-                        self.wfile.flush()
-                        idle = 0.0
-                    pending = feed.wait(seq, 5.0)
-                    if not pending:
-                        idle += 5.0
-                        if idle >= 15.0:  # 切れたことに気づくための空の行
-                            self.wfile.write(b": ping\n\n")
-                            self.wfile.flush()
-                            idle = 0.0
-            except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError):
-                pass
-            except Exception as e:  # noqa: BLE001  ヘッダを送った後なので 500 は書かずに閉じる
-                self.log_error("stream error: %r", e)
-            finally:
-                feed.detach()
+            if path == "/live/api/sessions":
+                return self._json({"epoch": hub.epoch, "hours": round(hub.window_sec / 3600, 1), "sessions": hub.sessions()})
+            sid = (q.get("session") or [""])[0]
+            since = (q.get("since") or ["0"])[0]
+            limit = (q.get("limit") or ["30"])[0]
+            seq = int(since) if re.fullmatch(r"[0-9]{1,12}", since) else 0  # isdigit は ² なども通すので使わない
+            lim = min(LIVE_MAX_LIMIT, max(1, int(limit))) if re.fullmatch(r"[0-9]{1,4}", limit) else 30
+            feed = hub.feed(sid) if re.fullmatch(r"[0-9a-f\-]{8,64}", sid or "") else None
+            if feed is None:
+                return self._send(404, b'{"error":"no such council session"}', "application/json; charset=utf-8")
+            evs = feed.since(seq, lim)
+            return self._json({"epoch": f"{hub.epoch}-{feed.created:.3f}", "session": sid, "seq": feed.seq,
+                               "events": [event_json(e) for e in evs]})
 
         def _send(self, code: int, body: bytes, ctype: str = "text/html; charset=utf-8", csp: bool | str = False) -> None:
             self.send_response(code)
@@ -498,9 +708,12 @@ def make_handler(root: Path, feed=None):
                 if path in ("/", "/index.html"):
                     return self._send(200, index_html(root).encode("utf-8"), csp=True)
                 if path == "/live":
-                    return self._send(200, live_page().encode("utf-8"), csp=LIVE_CSP)
-                if path == "/live/stream":
-                    return self._stream()
+                    import secrets
+
+                    nonce = secrets.token_urlsafe(18)
+                    return self._send(200, live_page(nonce).encode("utf-8"), csp=LIVE_CSP.format(nonce=nonce))
+                if path in ("/live/api/sessions", "/live/api/events"):
+                    return self._live_api(path)
                 if path == "/healthz":
                     import markdown  # noqa: F401  markdown が無い python で動いていたら 500 にして ensure に起動し直させる
                     return self._send(200, b"ok", "text/plain; charset=utf-8")
