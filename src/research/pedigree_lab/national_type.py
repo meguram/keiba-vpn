@@ -92,7 +92,7 @@ def add_cols(X: pd.DataFrame, T: pd.DataFrame) -> list[str]:
 
 
 def main() -> None:
-    mode = "table" if "--table" in sys.argv else ("ae" if "--ae" in sys.argv else "fit")
+    mode = "table" if "--table" in sys.argv else ("ae" if "--ae" in sys.argv else ("pair" if "--pair" in sys.argv else "fit"))
     data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"national_type_{mode}", "国別の型（SmartRC の分類）の比べと記述"))
     T = stallion_table()
     X = pd.read_parquet(data.OUT / "feat_v4.parquet")
@@ -106,32 +106,36 @@ def main() -> None:
         print("付く割合（年ごと）", {int(y): {k: round(float(X.loc[yr == y, f"_cty_{k}"].notna().mean()), 3) for k in SLOTS} for y in sorted(yr.unique())}, flush=True)
         data.finish_all(str(data.OUT / "national_type_table.parquet"))
         return
-    if mode == "ae":
+    if mode in ("ae", "pair"):
         P = pd.read_parquet(data.OUT / "rulebased_wf.parquet")[["race_id", "horse_id", "p_A"]]
         D = X[X["split"].isin([0, 1])].merge(P, on=["race_id", "horse_id"])
         od = pd.to_numeric(D["odds"], errors="coerce").where(lambda v: v > 0)
         D["q"] = (1 / od) / (1 / od).groupby(D["race_id"]).transform("sum")
         D = D[D["_cty_s"].notna() & D["q"].notna()]
         D["wet"] = np.where(D["going"].eq("G"), "良", "道悪")                 # 道悪は良以外のすべて（稍重・重・不良）
-        tot_a = D["win"].sum() / D["p_A"].sum()
-        tot_q = D["win"].sum() / D["q"].sum()
         rng = np.random.default_rng(3)
         res = {}
-        for key, d in D.groupby(["_cty_s", "surf", "wet"]):
+        keys = ["_cty_s", "_cty_b", "surf"] if mode == "pair" else ["_cty_s", "surf", "wet"]   # --pair: 父の札 × 母父の札 × 芝ダ（調べ I）
+        if mode == "pair":
+            D = D[D["_cty_b"].notna()]
+        tot_a = D["win"].sum() / D["p_A"].sum()                           # 全体は、箱に入る行だけで作る（critic）
+        tot_q = D["win"].sum() / D["q"].sum()
+        nbox = D.groupby(keys).ngroups                                      # 多重性の箱の数は実際の箱の数（critic）
+        for key, d in D.groupby(keys):
             sires = d["sire"].to_numpy(); su, cnt = np.unique(sires, return_counts=True)
             idx = {s_: np.flatnonzero(sires == s_) for s_ in su}
             w, e, q = d["win"].to_numpy(float), d["p_A"].to_numpy(), d["q"].to_numpy()
             ba, bq = [], []
-            for _ in range(1000):
+            for _ in range(10000):                                          # 99.6〜99.7% の分位なので 1 万回（critic）
                 ii = np.concatenate([idx[s_] for s_ in rng.choice(su, len(su))])
                 ba.append(w[ii].sum() / e[ii].sum() / tot_a); bq.append(w[ii].sum() / q[ii].sum() / tot_q)
-            lo, hi = 100 * 0.05 / 24, 100 * (1 - 0.05 / 24)                  # 12 の箱 × 両側（99.6%）
+            lo, hi = 100 * 0.05 / (2 * nbox), 100 * (1 - 0.05 / (2 * nbox))   # 箱の数 × 両側（12 箱で 99.6%・18 箱で 99.7%）
             res[" ".join(map(str, key))] = {
                 "走り": int(len(d)), "勝ち": int(w.sum()), "種牡馬": int(len(su)), "最大の種牡馬の割合": round(float(cnt.max() / cnt.sum()), 3),
                 "A/E（(A) に対して・全体で割る）": [round(float(w.sum() / e.sum() / tot_a), 3), np.percentile(ba, [lo, hi]).round(3).tolist()],
                 "A/E（同じ人気 q に対して・全体で割る）": [round(float(w.sum() / q.sum() / tot_q), 3), np.percentile(bq, [lo, hi]).round(3).tolist()]}
             print(key, res[" ".join(map(str, key))], flush=True)
-        path = data.OUT / "national_type_ae.json"
+        path = data.OUT / ("national_type_pair.json" if mode == "pair" else "national_type_ae.json")
         path.write_text(json.dumps(res, ensure_ascii=False, indent=1))
         data.finish_all(str(path))
         return
