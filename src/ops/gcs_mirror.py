@@ -740,10 +740,22 @@ initial_bundle_ok = threading.Event()          # 束と、その後の追いつ�
                                                # cloudrun_entry がウォームアップを待たずに要求を通すかの判定に使う（initial_recent_pulled より先に立てる）
 
 
+def _stage(label: str, t0: float, **extra: object) -> float:
+    """起動の取り込みの段ごとの秒数を Cloud Run のログに出す（このモジュールの logger.info は捨てられるので print。1 起動に数行）。次の段の起点を返す。"""
+    now = time.monotonic()
+    more = "".join(f" {k}={v}" for k, v in extra.items())
+    print(f"起動の段(取り込み): {label} {now - t0:.1f} 秒{more}", flush=True)
+    return now
+
+
 def _initial_from_bundle(be: Backend, root: Path, recent_days: float) -> dict | None:
     """束から起動時の取り込みを済ませる（読み出し 1 回＋目録）。束に無い木（会員名簿など）は一覧で取る。使えなければ None。"""
+    t = time.monotonic()
     try:
-        got = extract_bundle(be.download(BUNDLE_KEY), root)
+        data = be.download(BUNDLE_KEY)
+        t = _stage("束の読み出し", t, bytes=len(data))
+        got = extract_bundle(data, root)
+        t = _stage("束の展開", t, files=(got or {}).get("files"))
     except Exception:  # noqa: BLE001  束が無い・読めない
         return None
     if got is None:
@@ -752,8 +764,10 @@ def _initial_from_bundle(be: Backend, root: Path, recent_days: float) -> dict | 
         after = pull_via_index(be, root, recent_days=recent_days, window=window_days())
         if after is None:                 # ホストの目録が使えない → 直近分は一覧で
             after = pull(be, root, recent_days=recent_days, window=window_days())
-        missing = tuple(t for t in TREES if t not in set(got["trees"]))
+        t = _stage("目録の追いつき", t)
+        missing = tuple(x for x in TREES if x not in set(got["trees"]))
         rest = pull(be, root, missing, window=window_days()) if missing else {"downloaded": 0}
+        _stage("束に無い木", t, trees=len(missing))
     except Exception:  # noqa: BLE001  束の後の追いつきに失敗 → 呼び出し側が従来の一覧で取り直す
         logger.warning("束の後の取り込みに失敗。一覧で取り直します", exc_info=True)
         return None
@@ -762,6 +776,7 @@ def _initial_from_bundle(be: Backend, root: Path, recent_days: float) -> dict | 
 
 def _initial_pull(be: Backend, root: Path, recent_days: float) -> None:
     """起動直後は会員名簿 → 束（あれば）、無ければ直近分を先に（表示に要る分を数秒で）続けて全体。失敗しても API は止めない。"""
+    t0 = time.monotonic()
     try:
         if not os.environ.get("KEIBA_MEMBERS_FILE"):          # 名簿の置き場を変えた環境（取り直しのフックを付けない）では読まない
             refresh_members(root, be, min_interval=0.0)       # 名簿 1 件だけを先に（読み出し 1 回。起動中のログインがこれだけを待つ）
@@ -769,6 +784,7 @@ def _initial_pull(be: Backend, root: Path, recent_days: float) -> None:
         logger.warning("起動時の会員名簿の取り込みに失敗: %s", exc)
     finally:
         initial_members_pulled.set()
+        _stage("名簿", t0)
     try:
         b = _initial_from_bundle(be, root, recent_days)
         if b is not None:
@@ -776,11 +792,14 @@ def _initial_pull(be: Backend, root: Path, recent_days: float) -> None:
             initial_recent_pulled.set()
             logger.info("gcs_mirror pull(束): %s", b)
             return
+        t = time.monotonic()
         try:
             logger.info("gcs_mirror pull(直近): %s", pull(be, root, recent_days=recent_days, window=window_days()))
         finally:
             initial_recent_pulled.set()
+            t = _stage("束なしの直近（一覧）", t)
         logger.info("gcs_mirror pull(全体): %s", pull(be, root, window=window_days()))
+        _stage("束なしの全体（一覧）", t)
     finally:
         initial_full_pulled.set()
 

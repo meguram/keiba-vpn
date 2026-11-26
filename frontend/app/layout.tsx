@@ -21,11 +21,11 @@ export const metadata: Metadata = {
   description: "競馬予測・データ分析",
   // iOS が race_id・オッズ等の数字列を電話番号リンクにしない
   formatDetection: { telephone: false, address: false, email: false },
-  // ロゴはホストの data/local/image/icon.jpg（FastAPI の /data/image/ を next.config.js の rewrites で配信）
+  // ロゴは public/megu-icon.png（Next が配る）。以前の /data/image/icon.jpg は Cloud Run に無く、本番・stg とも 404 で、冷えた起動のときは 14 秒待っていた（2026-11-26）
   icons: {
-    icon: [{ url: "/data/image/icon.jpg", type: "image/jpeg" }],
-    shortcut: "/data/image/icon.jpg",
-    apple: "/data/image/icon.jpg",
+    icon: [{ url: "/megu-icon.png", type: "image/png" }],
+    shortcut: "/megu-icon.png",
+    apple: "/megu-icon.png",
   },
   // AdSense のサイトの所有の確認（meta タグ）。全区分で同じ HTML にするため、スクリプトとは別に置く（第三者のコードは読まない）
   other: { "google-adsense-account": ADSENSE_CLIENT },
