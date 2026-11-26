@@ -745,3 +745,64 @@ def test_index_recovery_row_is_written_even_without_race_files(tmp_path, monkeyp
     rows = [json.loads(x) for p in (tmp_path / gm.RACE_PUSH_LOG).glob("*.jsonl") for x in p.read_text(encoding="utf-8").splitlines()]
     idx = [r["index_ok"] for r in rows if r["tree"] == "_index"]
     assert idx == [False, True]
+
+
+def _bundle_and_index(tmp_path, monkeypatch):
+    """ホストが束と目録を置き、その後に 1 件だけ書き替えて目録だけ上げた状態（束と目録で中身が違うファイルがある）。"""
+    g = GenFake()
+    host = tmp_path / "host"
+    man = tmp_path / "manifest.json"
+    monkeypatch.setattr(gm, "TREES", TREES)
+    _w(host, "data/local/meta/entries_state/R1.json", b"s")
+    _w(host, "data/local/meta/entries_state/R2.json", b"same")
+    gm.push(g, host, TREES, manifest=man, index_writer="host")             # 束（R1=s・R2=same）＋目録
+    _w(host, "data/local/meta/entries_state/R1.json", b"s-new")
+    gm.push(g, host, TREES, manifest=man, index_writer="host")             # 目録だけ R1=s-new（束は 1 日 1 回なので古いまま）
+    return g
+
+
+def test_catch_up_uses_md5_from_the_bundle_without_rereading_and_same_gcs_ops(tmp_path, monkeypatch):
+    """起動の短縮: 展開のときの MD5 を渡すと、追いつきは手元のファイルを読み直さない。GCS の読み出し・一覧の回数と中身は同じ。"""
+    g = _bundle_and_index(tmp_path, monkeypatch)
+    res = {}
+    for label, use_known in (("old", False), ("new", True)):
+        api = tmp_path / label
+        d0, l0 = g.downloads, g.lists
+        written: dict = {}
+        assert gm.extract_bundle(g.objs[gm.BUNDLE_KEY][0], api, TREES, written=written if use_known else None)["files"] == 2
+        r = gm.pull_via_index(g, api, TREES, recent_days=2.0, known=written if use_known else None)
+        res[label] = (r["downloaded"], r["hashed"], g.downloads - d0, g.lists - l0)
+        assert (api / "data/local/meta/entries_state/R1.json").read_bytes() == b"s-new"     # 束と目録で違う → 目録の方を取る
+        assert (api / "data/local/meta/entries_state/R2.json").read_bytes() == b"same"
+    assert res["old"][0] == res["new"][0] == 1                                 # 取り込むのは R1 だけ（どちらも同じ）
+    assert res["old"][2:] == res["new"][2:] and res["new"][3] == 0             # GCS の読み出し・一覧の回数は変わらない
+    assert res["old"][1] == 2 and res["new"][1] == 0                           # 読み直して MD5 を取るのが 2 件 → 0 件
+
+
+def test_catch_up_rehashes_files_changed_after_extraction(tmp_path, monkeypatch):
+    """展開の後に書き替わったファイル（大きさか mtime が違う）は、覚えた MD5 を使わず読み直す（古い中身を正と見なさない）。"""
+    g = _bundle_and_index(tmp_path, monkeypatch)
+    api = tmp_path / "api"
+    written: dict = {}
+    gm.extract_bundle(g.objs[gm.BUNDLE_KEY][0], api, TREES, written=written)
+    r2 = api / "data/local/meta/entries_state/R2.json"
+    r2.write_bytes(b"XXXX")                                                    # 同じ大きさで中身だけ違う
+    st = r2.stat()
+    os.utime(r2, ns=(st.st_atime_ns, written["data/local/meta/entries_state/R2.json"][2] + 1000))
+    (api / "data/local/meta/entries_state/R1.json").unlink()                  # 消えたファイル
+    r = gm.pull_via_index(g, api, TREES, recent_days=2.0, known=written)
+    assert r["hashed"] == 1 and r["downloaded"] == 2
+    assert r2.read_bytes() == b"same" and (api / "data/local/meta/entries_state/R1.json").read_bytes() == b"s-new"
+
+
+def test_extract_replaces_existing_files_and_records_md5_by_normalized_path(tmp_path, monkeypatch):
+    g = _bundle_and_index(tmp_path, monkeypatch)
+    api = tmp_path / "api"
+    data = g.objs[gm.BUNDLE_KEY][0]
+    assert gm.extract_bundle(data, api, TREES)["files"] == 2
+    _w(api, "data/local/meta/entries_state/R2.json", b"local-edit")
+    written: dict = {}
+    assert gm.extract_bundle(data, api, TREES, written=written)["files"] == 2  # あるファイルは置き換え
+    assert (api / "data/local/meta/entries_state/R2.json").read_bytes() == b"same"
+    assert not list(api.rglob("*.tmp"))
+    assert written["data/local/meta/entries_state/R2.json"][0] == gm._md5(b"same")

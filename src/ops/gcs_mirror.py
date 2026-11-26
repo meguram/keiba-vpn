@@ -239,8 +239,12 @@ def build_bundle(root: Path = REPO_ROOT, trees: tuple[str, ...] = BUNDLE_TREES, 
     return buf.getvalue()
 
 
-def extract_bundle(data: bytes, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREES, *, now: float | None = None) -> dict | None:
-    """束を root に展開する。木の外のパス・絶対パス・.. を含むものは捨てる。古い・壊れている束は None（何も書かない）。"""
+def extract_bundle(data: bytes, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREES, *, now: float | None = None,
+                   written: dict[str, tuple[str, int, int]] | None = None) -> dict | None:
+    """束を root に展開する。木の外のパス・絶対パス・.. を含むものは捨てる。古い・壊れている束は None（何も書かない）。
+
+    ``written`` を渡すと、書いたファイルごとに ``rel → (MD5, 大きさ, mtime_ns)`` を入れる（直後の目録の追いつきが、
+    ファイルを読み直して MD5 を取らずに済むように。pull_via_index の ``known``）。途中で失敗したときは None を返すので、呼び出し側は使わない。"""
     import io
     import tarfile
 
@@ -253,6 +257,7 @@ def extract_bundle(data: bytes, root: Path = REPO_ROOT, trees: tuple[str, ...] =
             if now - float(meta.get("built_at") or 0) > BUNDLE_MAX_AGE_SEC:
                 return None
             n = 0
+            made: set[Path] = set()
             for m in tf.getmembers():
                 name = m.name
                 if not m.isfile() or name == "_bundle.json" or name.startswith("/") or ".." in name.split("/"):
@@ -263,10 +268,16 @@ def extract_bundle(data: bytes, root: Path = REPO_ROOT, trees: tuple[str, ...] =
                 if src is None:
                     continue
                 local = root / name
-                local.parent.mkdir(parents=True, exist_ok=True)
-                tmp = local.with_name(local.name + ".tmp")
-                tmp.write_bytes(src.read())
+                if local.parent not in made:          # 親のフォルダは 1 回だけ作る
+                    local.parent.mkdir(parents=True, exist_ok=True)
+                    made.add(local.parent)
+                body = src.read()
+                tmp = local.with_name(local.name + ".tmp")     # 直には書かない（途中の失敗・時間切れでポートを開いた後の読み手に、書きかけを見せない）
+                tmp.write_bytes(body)
                 os.replace(tmp, local)
+                if written is not None:
+                    st = local.stat()
+                    written[local.relative_to(root).as_posix()] = (_md5(body), st.st_size, st.st_mtime_ns)   # 綴りの違う同じパスを 1 つの鍵に
                 n += 1
     except (tarfile.TarError, OSError, ValueError, KeyError):
         return None
@@ -556,9 +567,13 @@ def pull(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREE
 
 
 def pull_via_index(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREES, *, recent_days: float = 2.0,
-                   window: float | None = None, workers: int = 16, now: float | None = None) -> dict[str, int] | None:
+                   window: float | None = None, workers: int = 16, now: float | None = None,
+                   known: dict[str, tuple[str, int, int]] | None = None) -> dict[str, int] | None:
     """更新の目録（書き手ごとに 1 つ）だけを読んで、直近 recent_days 日に上がったファイルのうちローカルと違うものを取り込む。
-    一覧（Class A）を使わない。ホストの目録が無い・読めない・古い（push が止まっている）ときは None（呼び出し側が一覧に戻る）。"""
+    一覧（Class A）を使わない。ホストの目録が無い・読めない・古い（push が止まっている）ときは None（呼び出し側が一覧に戻る）。
+
+    ``known``（extract_bundle の ``written``）にあるファイルは、大きさと mtime_ns が書いたときのままなら、その MD5 を使い読み直さない。
+    違えば（後から書き替わった）従来どおり読んで MD5 を取る。GCS の読み出しの回数・量は変わらない（手元の読み直しが減るだけ）。"""
     now = time.time() if now is None else now
     entries: dict[str, list] = {}
     host_ok = False
@@ -579,7 +594,7 @@ def pull_via_index(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, .
     cutoff = now - recent_days * 86400
     oldest = date.today() - timedelta(days=window) if window is not None else None
     todo: list[str] = []
-    seen = 0
+    seen = hashed = 0
     for key, (md5, upd) in entries.items():
         if float(upd) < cutoff:
             continue
@@ -593,10 +608,25 @@ def pull_via_index(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, .
                 continue
         seen += 1
         local = root / rel
-        if not local.is_file() or _md5(local.read_bytes()) != md5:
+        k = known.get(rel) if known else None
+        if k is not None:
+            try:
+                st = local.stat()
+                have = k[0] if (st.st_size, st.st_mtime_ns) == (k[1], k[2]) else None
+            except OSError:
+                have = ""                              # 無い → 取り込む
+        else:
+            have = None
+        if have is None:
+            if not local.is_file():
+                have = ""
+            else:
+                have = _md5(local.read_bytes())
+                hashed += 1
+        if have != md5:
             todo.append(key)
     _download_all(backend, root, todo, workers)
-    return {"seen": seen, "downloaded": len(todo), "via": "index"}
+    return {"seen": seen, "hashed": hashed, "downloaded": len(todo), "via": "index"}
 
 
 def _download_all(backend: Backend, root: Path, todo: list[str], workers: int) -> None:
@@ -754,17 +784,18 @@ def _initial_from_bundle(be: Backend, root: Path, recent_days: float) -> dict | 
     try:
         data = be.download(BUNDLE_KEY)
         t = _stage("束の読み出し", t, bytes=len(data))
-        got = extract_bundle(data, root)
+        written: dict[str, tuple[str, int, int]] = {}
+        got = extract_bundle(data, root, written=written)
         t = _stage("束の展開", t, files=(got or {}).get("files"))
     except Exception:  # noqa: BLE001  束が無い・読めない
         return None
     if got is None:
         return None
     try:
-        after = pull_via_index(be, root, recent_days=recent_days, window=window_days())
+        after = pull_via_index(be, root, recent_days=recent_days, window=window_days(), known=written)
         if after is None:                 # ホストの目録が使えない → 直近分は一覧で
             after = pull(be, root, recent_days=recent_days, window=window_days())
-        t = _stage("目録の追いつき", t)
+        t = _stage("目録の追いつき", t, **{k: after.get(k) for k in ("seen", "hashed", "downloaded") if isinstance(after, dict) and k in after})
         missing = tuple(x for x in TREES if x not in set(got["trees"]))
         rest = pull(be, root, missing, window=window_days()) if missing else {"downloaded": 0}
         _stage("束に無い木", t, trees=len(missing))
