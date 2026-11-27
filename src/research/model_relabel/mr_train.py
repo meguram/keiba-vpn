@@ -48,7 +48,7 @@ def fs_configs(fs: str) -> tuple[list[dict], list[int]]:
     """木の設定（固定）と保存する本数の一覧。"""
     from src.research.megu_cycles import mc_data as MC
     sp = spec()["select"]
-    if fs == "v5bag":
+    if fs in ("v5bag", "v5bag_ped"):
         sets = [dict(MC.XGB_PARAMS, **bs) for bs in MC.BAG_SETS]
         rounds = [int(r) for r in sp["rounds_v5bag"]]
     elif fs == "v6e":
@@ -71,8 +71,17 @@ def fs_configs(fs: str) -> tuple[list[dict], list[int]]:
 def load_matrix(fs: str):
     """X（float32）と meta（race_id・horse_id・year・finish_position）を year<=2024 の行だけ返す。"""
     from src.research.megu_cycles import mc_data as MC
-    if fs == "v5bag":
+    if fs in ("v5bag", "v5bag_ped"):
         X, meta, names = MC._rich_matrix("v5")
+        if fs == "v5bag_ped":
+            # 血統の 4 列（mr_ped.py。凍結の第 4 版の as-of の作り・推論の側も同じ関数）を足す。feat_v4 に無い走は NaN
+            from src.research.model_relabel import mr_ped
+            ped = pd.read_parquet(mr_ped.DEST)
+            k = meta[["race_id", "horse_id"]].astype(str).merge(ped, on=["race_id", "horse_id"], how="left")
+            assert len(k) == len(X)
+            for c in mr_ped.PED_COLS:
+                X[c] = k[c].to_numpy(np.float32)
+            names = list(names) + mr_ped.PED_COLS
     else:
         import pyarrow.parquet as pq
         cols = json.loads(V6E_BUNDLE.read_text(encoding="utf-8"))
@@ -267,7 +276,7 @@ def _assemble_meeting(fs, target, variant, conv, lab, units, n_bags, rounds) -> 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["run", "labels"])
-    ap.add_argument("--fs", choices=["v5bag", "v6e"], default="v5bag")
+    ap.add_argument("--fs", choices=["v5bag", "v5bag_ped", "v6e"], default="v5bag")
     ap.add_argument("--target", choices=["win", "top3", "notbig"], default="win")
     ap.add_argument("--variant", default="orig")
     ap.add_argument("--split", choices=["time", "meeting"], default="time")

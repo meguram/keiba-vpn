@@ -1,6 +1,7 @@
 {
  "note": "拡張ラベルのめぐ AI（担当 model-relabel、2026-11-27）。モデルの成績を見る前に固定する。変えるときは新しい版にして trials.json に数える。",
- "version": "mr-1",
+ "version": "mr-2",
+ "history": ["mr-1（11/27 4e7eb6a3）: ラベル・罰・L・分けを固定", "mr-2（11/27、v5bag の元のラベルの予測を作った後・成績を見る前）: 特徴量の軸 v5bag_ped と、その対の比べ・判定を足した"],
  "years": {"dev_first": 2016, "dev_last": 2024, "outer_main": [2019, 2021], "outer_confirm_once": [2022, 2024], "pred_first": 2017},
  "margin": {
   "primary": "string_cumsum",
@@ -39,6 +40,7 @@
  },
  "meeting_split": {"unit": "race_id[:8]", "k": 5, "seed": 20261128, "inner_calib_frac": 0.2, "note": "rules-council 1 号が条件付きで了承（11/27、decisions.md）。報告だけ。買い方の入力・版の選び・設定の選び直しに使わない。折の一覧は meeting_folds.csv（着順を開く前に commit）"},
  "judge": "外側 2019〜21 で、勝ち馬の −log p の差（拡張 − 基準、開催日で束ねた対のブートストラップ 2,000 回）の 95% 区間が 0 より下、かつ Benter の 2 段の改善分（市場だけとの差）が基準より大きいとき「良い」。複勝は 3 着内の馬ごとの対数損失で同じ判定",
+ "features": {"v5bag": "megu_cycles の v5 の列（約 1,083 列）", "v5bag_ped": "v5bag ＋ 血統のダートの 4 列（dirt_sire・dirt_bms・dirt_mat5・dirt_lv5。pedigree_lab の凍結の第 4 版・推論の側も同じ関数。11/27 にユーザーの依頼で追加）", "v6e": "束の xgb_extras_ped の 1,231 列（代理）", "compare_2x2": "ラベル（元・拡張＋罰）× 特徴量（v5bag・v5bag_ped）。87 列の血統のモデルの点は推論の経路が無いので入れない。種牡馬の血統ベクトルの as-of の表は未完成で次の回", "prereg_note": "前向きの登録 prereg_dirt_mat5 の比べの相手は凍結の v5bag のまま（変えない）", "selection_caveat": "4 列の作り（列の選び・K・MAT_POS・群 A）は pedigree_lab が 2016〜24 の成績を見て決めて凍結した。値は as-of でも、版の選びは外側の年 2019〜24 を含むので、v5bag_ped − v5bag の差は選んだ期間の中の比べ。外の年での再現とは呼ばず、確かめは前向きの記録だけ", "judge_feature": "外側 2019〜21 で、同じ族（base 同士・pw 同士・pord 同士）の v5bag_ped − v5bag の差（勝ち: 勝ち馬の −log p、複勝: y3 の全頭の対数損失、開催日で束ねた対のブートストラップ 2,000 回）の 95% 区間が 0 より下なら「効く」（selection_caveat の限定つき）"},
  "metrics": ["馬ごとの二値の対数損失（本物のラベル）", "L_0.5・L_1.5", "勝ち馬の −log p（レース内で和 1 の後）", "AUC（全体・レース内の平均）", "較正（十分位の表・ECE）", "1 番手の勝率・3 着内率", "上位 3 頭の 3 着内率", "大敗の馬に付けた確率の平均", "Benter の 2 段（確定の市場 q と組んだ勝ち馬の −log p、a・b）"],
  "roi": "計算しない（rules-council 1 号の条件。物差しはラベルの当てはまりだけ。Benter の 2 段は確定の市場 q との組み合わせの対数損失で、回収率ではない）"
 }

@@ -162,7 +162,7 @@ def _ord_score(pb, pa, k):
 
 def candidates(fs: str, target: str, sp: dict, base: pd.DataFrame) -> dict[str, dict[str, np.ndarray]]:
     """族ごとに {候補名: 点数の列（全行）}。"""
-    rounds = sp["select"]["rounds_v5bag" if fs == "v5bag" else "rounds_v6e"]
+    rounds = sp["select"]["rounds_v6e" if fs == "v6e" else "rounds_v5bag"]
     fam: dict[str, dict[str, np.ndarray]] = {"base": {}, "pw": {}, "pord": {}}
     b = load_pred(fs, target, "orig", base)
     for r in rounds:
@@ -270,14 +270,16 @@ def nested_time(fs: str, target: str, years, lams, sp: dict, base: pd.DataFrame)
     return res
 
 
-def paired_boot(res: dict, base: pd.DataFrame, target: str, fam_a: str, fam_b: str, years, n_boot=2000, seed=20261128) -> dict:
-    """族 a − 族 b の差の、開催日で束ねた対のブートストラップ。
+def paired_boot(res: dict, base: pd.DataFrame, target: str, fam_a: str, fam_b: str, years, n_boot=2000, seed=20261128,
+                res_b: dict | None = None) -> dict:
+    """族 a − 族 b の差の、開催日で束ねた対のブートストラップ。res_b を渡すと、族 b は別の特徴量の版（res_b）から取る。
     勝ち: 勝ち馬の −log p の平均。複勝: y3 の馬ごとの二値の対数損失の平均（全頭）。"""
     yname = "y1" if target == "win" else "y3"
+    res_b = res_b or res
     rows = []
     for t in years:
         d0 = base[base["year"] == t].reset_index(drop=True)
-        pa, pb = res["years"][t][fam_a]["_p"], res["years"][t][fam_b]["_p"]
+        pa, pb = res["years"][t][fam_a]["_p"], res_b["years"][t][fam_b]["_p"]
         y = d0[yname].to_numpy(float)
         if target == "win":
             m = y == 1
@@ -332,14 +334,17 @@ def cmd(period: str) -> None:
     t0 = time.time()
     base = base_frame(max(years))
     lams = [sp["metric"]["lambda_main"]] + list(sp["metric"]["lambda_sensitivity"])
-    report = {"spec_version": sp["version"], "period": period, "years": list(years), "results": {}}
-    for fs in ("v5bag", "v6e"):
+    report = {"spec_version": sp["version"], "period": period, "years": list(years), "results": {}, "feature_axis": {}}
+    kept: dict = {}
+    for fs in ("v5bag", "v5bag_ped", "v6e"):
         for target in ("win", "top3"):
             try:
                 allres = nested_time(fs, target, years, lams, sp, base)
             except FileNotFoundError as e:
                 print("予測がまだ揃っていない", fs, target, e, flush=True)
                 continue
+            if fs in ("v5bag", "v5bag_ped"):
+                kept[(fs, target)] = allres
             for lam, res in allres.items():
                 summ = summarize(res, years)
                 boots = {f"{a}-base": paired_boot(res, base, target, a, "base", years)
@@ -348,6 +353,14 @@ def cmd(period: str) -> None:
                 report["results"][f"{fs}|{target}|lam{lam}"] = {"summary": summ, "boot": boots, "per_year": per_year}
                 print(f"{fs}|{target}|lam{lam}", json.dumps({f: {k: summ[f].get(k) for k in ("ll", "L_main", "winner_nlp", "race_auc", "benter_gain")}
                                                              for f in summ}, ensure_ascii=False), json.dumps(boots, ensure_ascii=False), flush=True)
+    # 特徴量の軸（2 × 2）: 同じ族の v5bag_ped − v5bag（spec の judge_feature・selection_caveat）
+    for target in ("win", "top3"):
+        if ("v5bag", target) in kept and ("v5bag_ped", target) in kept:
+            for lam in lams:
+                ra, rb = kept[("v5bag_ped", target)][lam], kept[("v5bag", target)][lam]
+                report["feature_axis"][f"{target}|lam{lam}"] = {f"{f}:ped-v5bag": paired_boot(ra, base, target, f, f, years, res_b=rb)
+                                                                for f in ("base", "pw", "pord")}
+            print("feature_axis", target, json.dumps(report["feature_axis"].get(f"{target}|lam{lams[0]}"), ensure_ascii=False), flush=True)
     dest = DOCS / f"eval_{period}.json"
     dest.write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
     tok.finish(result_path=dest)
@@ -375,7 +388,7 @@ def cmd_meeting() -> None:
     lam = sp["metric"]["lambda_main"]
     keyed = base.set_index(["race_id", "horse_id"])
     report = {"spec_version": sp["version"], "lambda": lam, "results": {}}
-    for fs in ("v5bag", "v6e"):
+    for fs in ("v5bag", "v5bag_ped", "v6e"):
         for target in ("win", "top3"):
             total = 1.0 if target == "win" else 3.0
             yname = "y1" if target == "win" else "y3"
@@ -406,8 +419,8 @@ def cmd_meeting() -> None:
                     d = keyed.loc[list(zip(o["race_id"], o["horse_id"]))].reset_index()
                     m = outer_metrics(o["p"].to_numpy(), o["s"].to_numpy(), d, target, sp)
                     pooled[fam] = (o.assign(**{yname: d[yname].to_numpy(), "date": d["date"].to_numpy()}), m, f"{cname}/{cal}")
-            except FileNotFoundError as e:
-                print("予測がまだ揃っていない", fs, target, e, flush=True)
+            except (FileNotFoundError, KeyError) as e:
+                print("予測か時間の順の選びがまだ揃っていない", fs, target, e, flush=True)
                 continue
             boots = {}
             for fam in ("pw", "pord"):

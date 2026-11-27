@@ -432,6 +432,7 @@ _GUARD_ENTRY = {
     "src/research/megu_cycles/mc_final.py": {"cmd_final", "cmd_drift"},     # めぐサイクルの最後の 1 回の確かめ・再現の楽観の測り（eval_only）   # めぐサイクルの 2022〜24 の確かめ（confirm）・割引きと最後の確かめ（eval_only）
     "src/research/model_relabel/mr_labels.py": {"load_results"},   # 拡張ラベルの教師（reproduce・研究の CLI）
     "src/research/model_relabel/mr_train.py": {"run"},              # 拡張ラベルの学習（reproduce・研究の CLI）
+    "src/research/model_relabel/mr_ped.py": {"build"},              # 血統の 4 列を全走に付ける（reproduce・研究の CLI）
     "src/research/model_relabel/mr_eval.py": {"_ledger"},               # 拡張ラベルの評価（select・2022〜24 は confirm 1 回。研究の CLI）
 }
 _PROD = ("src/pipeline/inference/stage2_bets.py", "src/pipeline/inference/candidate_runner.py", "src/api/stage2_live.py")
