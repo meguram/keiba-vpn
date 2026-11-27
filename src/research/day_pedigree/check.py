@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -41,7 +42,7 @@ VEC = "/home/jovyan/work/aptitude_group_out/vec_v1.parquet"     # aptitude-group
 CONF_MIN = 15          # 確定は発走の 15 分後とみなす
 TEST_LAG = 60          # 検定は T-60
 SHOW_LAG = 0           # 表示は発走の時点
-N_NULL, N_BOOT = 200, 1000
+N_NULL, N_BOOT = int(os.environ.get("DAYPED_NNULL", 200)), int(os.environ.get("DAYPED_NBOOT", 1000))   # 試しの小さい回数だけ環境変数で替える（本番の結果は 200・1000）
 PERIODS = {"2017-20": (2017, 2020), "2021-24": (2021, 2024)}
 
 
@@ -79,7 +80,7 @@ def build(part: int) -> tuple[pd.DataFrame, pd.DataFrame, int]:
     beta = po.fit_eta(R.loc[fitm, "lq"].to_numpy(), R.loc[fitm, "y"].to_numpy())
     eta = beta[0] + beta[1] * R["lq"] + beta[2] * R["lq"] ** 2
     R["pt"] = po.calibrate(eta.to_numpy(), R["rid"].to_numpy(), R["m"].to_numpy())
-    Rc = R.drop_duplicates("rid").sort_values("rid")[["rid", "race_id", "day", "surf", "year", "part", "k", "rno", "meeting",
+    Rc = R.drop_duplicates("rid").sort_values("rid")[["rid", "race_id", "day", "surf", "year", "part", "k", "k_last", "rno", "meeting",
                                                        "venue", "date", "track_condition", "t_start"]].reset_index(drop=True)
     Rc["t_conf"] = Rc["t_start"] + pd.Timedelta(minutes=CONF_MIN)
     tc = Rc["track_condition"].fillna("良")
@@ -247,7 +248,10 @@ def prepare(R: pd.DataFrame, Rc: pd.DataFrame, rng) -> tuple:
     r16 = np.unique(sub["rid"].to_numpy())
     phi_obs = po.phi_pearson(U[r16], I[r16])
     # 作り物（m を固定した分の縮み）と実データ（モデルのずれの過分散）の大きい方。φ < 1 で日の情報を過大に信じないため（critic の 8）
-    phi = float(max(np.mean(phi_sim), np.mean(phi_obs), 1.0))
+    # vec_v1 のペースの 2 次元（a_pace_h・a_pace_s）は 2016 年は全部 0（ペースの札は 2017 年以降だけ）。I が 0 の次元は φ の平均から外す
+    phi = float(np.nanmax([np.nanmean(phi_sim), np.nanmean(phi_obs), 1.0]))
+    if not np.isfinite(phi):
+        raise RuntimeError("φ が有限でない")
     pri = po.priors(Rc, U, I, phi, range(2017, 2025))
     return U, I, Xc, phi, {"sim": phi_sim.tolist(), "obs": phi_obs.tolist()}, pri
 
@@ -255,13 +259,18 @@ def prepare(R: pd.DataFrame, Rc: pd.DataFrame, rng) -> tuple:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("mode", choices=["select", "confirm"])
-    ap.add_argument("--approval", default="", help="confirm のときの rules-council の許可（decisions.md の見出し）")
+    ap.add_argument("--approval", default="", help="confirm のときの rules-council の許可の日付（見出し「day-pedigree の 30% を開ける許可（YYYY-MM-DD）」）")
     a = ap.parse_args()
     if a.mode == "confirm":
         # 30% の側は rules-council の 1 号の許可の後だけ（aptitude-group の段 1 の結論の後）。許可の見出しが decisions.md にあることを確かめる
-        heads = [ln for ln in DECISIONS.read_text(encoding="utf-8").splitlines() if ln.startswith("#")]
-        assert a.approval and any(a.approval in h and "day-pedigree" in h and "30%" in h for h in heads), \
-            "decisions.md に day-pedigree の 30% の許可の見出しが無い"
+        # 見出しは 1 号が「day-pedigree の 30% を開ける許可（YYYY-MM-DD）」の形で書く（rules-council 11/27）。この形だけに当てる
+        import re
+        pat = re.compile(r"^#+ day-pedigree の 30% を開ける許可（(\d{4}-\d{2}-\d{2})）")
+        heads = [m.group(1) for ln in DECISIONS.read_text(encoding="utf-8").splitlines() if (m := pat.match(ln))]
+        if a.approval not in heads:           # python -O でも消えないよう raise にする（critic の 15）
+            raise SystemExit("decisions.md に「day-pedigree の 30% を開ける許可（--approval の日付）」の見出しが無い")
+        if "DAYPED_NNULL" in os.environ or "DAYPED_NBOOT" in os.environ:     # 試しの回数で 30% の 1 回を使い切らない（critic の 1）
+            raise SystemExit("confirm では試しの回数の環境変数（DAYPED_NNULL・DAYPED_NBOOT）を使わない")
     dd.open_token("select" if a.mode == "select" else "confirm", "check_v1",
                   f"段 2 の主の検定（A 族・T-60・{'探す 70%' if a.mode == 'select' else '確かめ 30%・' + a.approval}）")
     rng = np.random.default_rng(20261128)
@@ -281,7 +290,7 @@ def main() -> None:
         # 30% の情報は、着順を使わずに見積もる: 70% の行あたりの情報 × 30% の判定の行の数（読み込みの直後に数えた）
         info30 = res["eval"]["main"].get("info", 0.0) * n30 / max(res["eval"]["rows"], 1)
         res["power_for_30"] = power_for_confirm(res["eval"], info30) if info30 > 0 else {"power": 0.0, "open_30": False}
-    path = dd.OUT / f"check_{a.mode}.json"
+    path = dd.OUT / (f"check_{a.mode}.json" if N_NULL == 200 and N_BOOT == 1000 else f"check_{a.mode}_trial.json")
     path.write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
     print(json.dumps({k: v for k, v in res.items() if k not in ("tau2", "mu")}, ensure_ascii=False, indent=1, default=float))
     dd.finish_all(str(path))
