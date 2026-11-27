@@ -1,6 +1,6 @@
 {
- "note": "穴馬 AI（担当 longshot-ai、2026-11-27）。着順を開く前に固定する。変えるときは新しい版にして試した数に入れる。計画は docs/operations/longshot_ai/plan.md。la-2 は会議の決定（docs/operations/roi_plus_council/decisions.md の「longshot-ai の la-2」、11/27・着順を開く前）",
- "version": "la-2",
+ "note": "穴馬 AI（担当 longshot-ai、2026-11-27）。着順を開く前に固定する。変えるときは新しい版にして試した数に入れる。計画は docs/operations/longshot_ai/plan.md。la-2 は会議の決定（docs/operations/roi_plus_council/decisions.md の「longshot-ai の la-2」、11/27・着順を開く前）。la-3（11/27 夕、ユーザーの追加の指定・統括役経由。数を見る前）: 市場の logit と順位相関の高い列を外した版を 2 本足した",
+ "version": "la-3",
  "years": {
   "dev_first": 2016,
   "dev_last": 2024,
@@ -39,9 +39,11 @@
   "L1_M_xgb": "対照。v5 の列のまま（市場に由来する列を外さない）",
   "L1_MF_lgb": "副。LightGBM（megu_cycles の PARAMS・500 本）",
   "L1_MF_off": "副。T-60 の再現の Harville q3 の logit を offset",
-  "L1T_MF_xgb": "副。母集団を T-60 の再現（odds_pre0）で 10 倍以上として学ぶ"
+  "L1T_MF_xgb": "副。母集団を T-60 の再現（odds_pre0）で 10 倍以上として学ぶ",
+  "L1_MF_rho50": "副。L1_MF から |ρ| ≥ 0.5 の列を外す",
+  "L1_MF_rho30": "副。L1_MF から |ρ| ≥ 0.3 の列を外す"
  },
- "n_trials": 8,
+ "n_trials": 10,
  "calibration": "Platt（logit の 1 次）。年 t は t−1 年の前向きの予測で当てる",
  "primary_metric": "★ の本物の 3 着内率（y3）",
  "judge": {
@@ -70,7 +72,7 @@
  ],
  "roi": "記述だけ。単勝・複勝・★ を軸の片方にした馬連・ワイド（相手は pair_describe のとおり 1 頭に固定）。買い方にしない",
  "bootstrap_seed": 20261127,
- "main_arm": "L1_MF_xgb（確かめに送るのはこれだけ。2019〜21 で落ちたら閉じる。他の 7 本は記述）",
+ "main_arm": "L1_MF_xgb（確かめに送るのはこれだけ。2019〜21 で落ちたら閉じる。他の 9 本は記述）",
  "controls": {
   "C0": "全馬・y3・同じ MF 列・同じ BAG_SETS × XGB_PARAMS × 800 本・年 t は t より前で学ぶ（主の比べ先）",
   "market": "評価の母集団の中で T-60 の再現のオッズが最も低い馬",
@@ -147,5 +149,25 @@
   "note": "★ の p は本会議の 30% の着順でも学んだもの。確かめは前向きの記録だけ"
  },
  "use": "開催の後の再生での前向きの記録だけ（本番の経路は v5 の列を 136 / 1,083 列しか作れない）",
- "label_threshold_origin": "1 馬身は 11/27 のユーザーの指定（model-relabel の mr-3、評価の数を見る前）。割合の表は見たが、モデルの成績は見ていない"
+ "label_threshold_origin": "1 馬身は 11/27 のユーザーの指定（model-relabel の mr-3、評価の数を見る前）。割合の表は見たが、モデルの成績は見ていない",
+ "market_corr": {
+  "what": "各列と logit(q_final)（確定の単勝の 1/オッズをレース内で和 1）の Spearman の順位相関",
+  "rows": "2016〜2021 年（着順は読まない。オッズと特徴量だけ）",
+  "scopes": [
+   "全馬",
+   "母集団（確定 10 倍以上）の中"
+  ],
+  "thresholds": [
+   0.5,
+   0.3
+  ],
+  "drop_rule": "全馬・母集団のどちらかで |ρ| が閾値以上なら外す（和集合）",
+  "table": "/home/jovyan/work/longshot_ai_out/market_corr_v5mf.parquet（model-relabel と共有）",
+  "judge": "記述だけ（確かめに送るのは L1_MF_xgb だけの決定 1 のまま）。物差しは ★ の 3 着内率の比べ（C0・市場）と Benter の 2 段の上乗せ",
+  "note": "相関の高い列は力のある列そのものが多く、外すと単体の当たりは下がるのが当然。下がったことを『市場の情報を使っていた証拠』とは読まない。逆も同じ: 当たりが下がらなくても『市場と独立』とは言わない（順位相関で見えるのは単調な関係だけ）",
+  "years_note": "ρ は 2016〜21 年（予測の年 2019〜21 の確定オッズを含む）で 1 回決める。model-relabel の表（mr-6）とそろえるため。記述の腕なので判定は汚れないが「予測の年のオッズで列を選んだ」と記録する（1 号、11/27）",
+  "no_feedback": "2 本の結果を見て market_free_columns.md や主の腕の列を直さない。直すなら新しい版として登録し、2019〜21 を開いた後なら閉じた扱い（1 号、11/27）",
+  "source_all": "model-relabel の docs/operations/model_relabel/market_corr_2016_2021.csv を全馬の正とし、こちらは同じ定義で rho_pop を足す",
+  "frozen_lists": "config/longshot_ai/drop_rho50.json・drop_rho30.json（corr で作って凍結。train --drop はこれだけを読む）"
+ }
 }
