@@ -273,9 +273,29 @@ def _assemble_meeting(fs, target, variant, conv, lab, units, n_bags, rounds) -> 
     return dest
 
 
+JOBS = [f"{fs}:{t}:{v}" for fs in ("v5bag", "v6e", "v5bag_ped")
+        for t, vs in (("win", ("orig", "ext_w1", "ext_w2", "ext_w4")), ("top3", ("orig", "ext_w1", "ext_w2", "ext_w4")), ("notbig", ("orig",)))
+        for v in vs]
+
+
+def status() -> None:
+    """時間の順の全 27 本の済み・残り（部品の数）。止まっても続きから流せる（部品ごとに保存）。"""
+    done, left = [], []
+    for j in JOBS:
+        fs, t, v = j.split(":")
+        n_bags = 1 if fs == "v6e" else 3
+        d = PARTS / "time" / f"{fs}_{t}_{v}_convert_A"
+        have = len(list(d.glob("bag*_*.npy"))) - len(list(d.glob("*.tmp.npy"))) if d.exists() else 0
+        (done if have >= n_bags * len(YEARS) else left).append(f"{j}（部品 {have}/{n_bags * len(YEARS)}）")
+    print(f"済み {len(done)} 本・残り {len(left)} 本")
+    print("残り: " + " ".join(x.split("（")[0] for x in left))
+    for x in left:
+        print("  ", x)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["run", "labels"])
+    ap.add_argument("cmd", choices=["run", "labels", "status"])
     ap.add_argument("--fs", choices=["v5bag", "v5bag_ped", "v6e"], default="v5bag")
     ap.add_argument("--target", choices=["win", "top3", "notbig"], default="win")
     ap.add_argument("--variant", default="orig")
@@ -284,6 +304,8 @@ def main() -> None:
     ap.add_argument("--only-unit", default=None)
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
+    if a.cmd == "status":
+        return status()
     if a.cmd == "labels":
         for k in ("convert_A", "convert_B_sensitivity"):
             LB.labels_dev(k).to_parquet(OUT / f"labels_{k}.parquet", index=False)
