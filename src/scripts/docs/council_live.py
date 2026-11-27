@@ -760,6 +760,142 @@ class CouncilHub:
         return feed.summary(self.listed.get(sid), procs)
 
 
+# ── 研究の大枠（config/council_viewer/themes.json） ──
+
+THEMES_REL = Path("config/council_viewer/themes.json")
+THEMES_LOCAL_REL = Path("data/local/council_viewer/themes.json")  # 手元で書き換えるとき（git の外。あればこちらを使う）
+THEME_ID_RE = re.compile(r"[A-Za-z0-9_\-]{1,40}")
+MAX_THEMES = 12
+MAX_THEME_SESSIONS = 8
+
+
+def parse_themes(data) -> list[dict]:
+    """themes.json の中身 → 画面に出す形（文は 1 行にして伏せ字を通す。形の違う項目は捨てる）。"""
+    rows = data.get("themes") if isinstance(data, dict) else None
+    out = []
+    for i, t in enumerate(rows if isinstance(rows, list) else []):
+        if not isinstance(t, dict) or not t.get("name"):
+            continue
+        tid = str(t.get("id", ""))
+        raw = t.get("sessions")
+        names = [safe_label(n, 80) for n in (raw if isinstance(raw, list) else []) if isinstance(n, str) and n.strip()]
+        out.append({"id": tid if THEME_ID_RE.fullmatch(tid) else f"t{i}", "name": safe_label(str(t["name"]), 80),
+                    "goal": mask_secrets(one_line(str(t.get("goal", "")), 200)),
+                    "milestone": mask_secrets(one_line(str(t.get("milestone", "")), 120)),
+                    "sessions": names[:MAX_THEME_SESSIONS]})
+        if len(out) >= MAX_THEMES:
+            break
+    return out
+
+
+class ThemeFile:
+    """themes.json を、更新されたときだけ読み直す（書き換えたら次の問い合わせで出る）。
+
+    ``paths`` の先にあるものを使う（既定: data/local の手元の写し → config の版）。
+    """
+
+    def __init__(self, *paths: Path) -> None:
+        self.paths = paths
+        self.key: tuple | None = None
+        self.themes: list[dict] = []
+        self.error = ""
+        self._lock = threading.Lock()
+
+    def get(self) -> tuple[list[dict], str]:
+        with self._lock:
+            path = next((p for p in self.paths if p.is_file()), None)
+            if path is None:
+                self.key, self.themes, self.error = None, [], "themes.json がありません"
+                return [], self.error
+            try:
+                st = path.stat()
+            except OSError:
+                return list(self.themes), self.error
+            key = (str(path), st.st_mtime_ns, st.st_size)
+            if key != self.key:
+                self.key = key
+                try:
+                    self.themes, self.error = parse_themes(json.loads(path.read_text(encoding="utf-8"))), ""
+                except (OSError, ValueError) as e:
+                    self.themes, self.error = [], f"themes.json を読めません（{type(e).__name__}）"
+            return list(self.themes), self.error
+
+
+CARD_TAIL = 1024 * 1024  # カードは記録の末尾 1MB だけ読む（feed は作らない。開いているタブの feed を追い出さない）
+
+
+class CardCache:
+    """大枠のカードの軽い要約（状態の理由・最新の発言の先頭）。記録の大きさ・時刻が変わったときだけ読み直す。"""
+
+    def __init__(self, tail: int = CARD_TAIL) -> None:
+        self.tail = tail
+        self.memo: dict[str, tuple[tuple, list[dict]]] = {}
+        self._lock = threading.Lock()
+
+    def events(self, path: Path) -> list[dict]:
+        try:
+            st = path.stat()
+        except OSError:
+            return []
+        key = (st.st_size, st.st_mtime_ns)
+        with self._lock:
+            hit = self.memo.get(str(path))
+            if hit and hit[0] == key:
+                return hit[1]
+        agents, evs = AgentDirectory(), []
+        for raw in TailFile(path, self.tail).read_new_lines():
+            if raw.startswith(SKIP_PREFIXES):
+                continue
+            try:
+                obj = json.loads(raw)
+                if isinstance(obj, dict):
+                    evs.extend(parse_main_line(obj, agents, "担当"))
+            except Exception:  # noqa: BLE001  形の違う 1 行は飛ばす
+                continue
+        with self._lock:
+            self.memo[str(path)] = (key, evs)
+            while len(self.memo) > 32:
+                self.memo.pop(next(iter(self.memo)))
+        return evs
+
+
+def theme_cards(hub: "CouncilHub", themes: list[dict], tabs: list[dict], cache: "CardCache | None" = None) -> list[dict]:
+    """大枠ごとのカード: 属するセッションの状態・待っている理由・最新の発言の先頭。名前が無い・終わったものは「なし」。
+
+    同じ名前が複数あるときは、動いている（終わった・記録だけでない）もののうち、いちばん新しく始まったものを選ぶ。
+    """
+    cache = cache or CardCache()
+    live_by: dict[str, dict] = {}
+    done_names = set()
+    for t in tabs:
+        if t["state"] == "done":
+            done_names.add(t["name"])
+        elif t["state"] != "past":
+            cur = live_by.get(t["name"])
+            if cur is None or t["started"] > cur["started"]:
+                live_by[t["name"]] = t
+    cards = []
+    for th in themes:
+        sess = []
+        for name in th["sessions"]:
+            t = live_by.get(name)
+            if t is None:
+                sess.append({"name": name, "id": "", "state": "none",
+                             "note": "終わった" if name in done_names else "動いているセッションが無い"})
+                continue
+            row = {"name": name, "id": t["id"], "state": t["state"], "reason": "", "head": "", "ts": ""}
+            main = hub.find_main(t["id"])
+            evs = cache.events(main) if main else []
+            if t["state"] in ("waiting", "blocked"):
+                row["reason"] = wait_reasons(evs, t["state"], t.get("short", ""))[0]
+            own = next((e for e in reversed(evs) if e["cls"] == "sc" and e["kind"] == "text"), None)
+            if own:
+                row["head"], row["ts"] = one_line(own["text"], 140), own["ts"]
+            sess.append(row)
+        cards.append({**th, "sessions": sess})
+    return cards
+
+
 # ── 動いているセッションの一覧（claude agents --json） ──
 
 AGENTS_SEC = 30.0  # claude agents を呼ぶのは 30 秒に 1 回まで（画面が何枚開いていても）

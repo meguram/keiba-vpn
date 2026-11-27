@@ -761,3 +761,114 @@ def test_live_api_tabs_and_summary(tmp_path: Path):
     finally:
         srv.shutdown()
         srv.server_close()
+
+
+# ── 研究の大枠（config/council_viewer/themes.json） ──
+
+def test_parse_themes_masks_and_drops_bad_rows():
+    rows = cl.parse_themes({"themes": [
+        {"id": "pedigree", "name": "血統", "goal": "連絡 a@b.example.com\n次の行", "sessions": ["aptitude-group", "", 3], "milestone": "12/4 A の門"},
+        {"id": "../x", "name": "名前だけ"},
+        {"goal": "名前が無い"}, "文字列",
+    ]})
+    assert [r["id"] for r in rows] == ["pedigree", "t1"]
+    assert rows[0]["goal"] == "連絡 ［メールを伏せた］ 次の行" and rows[0]["sessions"] == ["aptitude-group"]
+    assert rows[0]["milestone"] == "12/4 A の門" and rows[1]["sessions"] == [] and rows[1]["milestone"] == ""
+    assert cl.parse_themes([]) == [] and cl.parse_themes({"themes": "x"}) == []
+
+
+def test_repo_themes_file_is_valid():
+    path = Path(__file__).resolve().parents[2] / cl.THEMES_REL
+    rows, err = cl.ThemeFile(path).get()
+    assert err == "" and len(rows) == 3
+    assert rows[2]["sessions"] == ["pair-bets", "rules-council"]
+
+
+def test_theme_file_rereads_when_changed(tmp_path: Path):
+    f = tmp_path / "themes.json"
+    tf = cl.ThemeFile(f)
+    assert tf.get() == ([], "themes.json がありません")
+    f.write_text(json.dumps({"themes": [{"id": "a", "name": "A", "sessions": ["x"]}]}), encoding="utf-8")
+    assert [r["name"] for r in tf.get()[0]] == ["A"]
+    f.write_text("{壊れた", encoding="utf-8")
+    os.utime(f, (time.time() + 5, time.time() + 5))
+    rows, err = tf.get()
+    assert rows == [] and err.startswith("themes.json を読めません")
+
+
+def test_theme_cards_states_and_none(tmp_path: Path):
+    def agents():
+        rows = _agents_json()
+        rows.append({"id": "cccccccc", "sessionId": "cccccccc-0000-0000-0000-00000000000c", "cwd": REPO, "name": "finished",
+                     "state": "done", "startedAt": 1})
+        return rows
+
+    hub, _ = _agents_hub(tmp_path, agents)
+    tabs, _ = hub.tabs()
+    themes = cl.parse_themes({"themes": [{"id": "x", "name": "X", "sessions": ["track-bias", "finished", "missing"]}]})
+    card = cl.theme_cards(hub, themes, tabs)[0]
+    by = {s["name"]: s for s in card["sessions"]}
+    assert by["track-bias"]["state"] == "waiting" and by["track-bias"]["id"] == WORK and by["track-bias"]["head"] == "作業中"
+    assert by["track-bias"]["reason"] == cl.NO_REASON
+    assert by["finished"]["state"] == "none" and by["finished"]["note"] == "終わった"
+    assert by["missing"] == {"name": "missing", "id": "", "state": "none", "note": "動いているセッションが無い"}
+
+
+def test_live_api_includes_themes(tmp_path: Path):
+    pytest.importorskip("markdown")
+    from src.scripts.docs import council_viewer as cv
+
+    hub, _ = _agents_hub(tmp_path)
+    root = tmp_path / "repo"
+    (root / cl.THEMES_REL).parent.mkdir(parents=True)
+    (root / cl.THEMES_REL).write_text(json.dumps({"themes": [{"id": "t", "name": "T", "goal": "g", "sessions": ["track-bias"]}]}),
+                                      encoding="utf-8")
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), cv.make_handler(root, hub))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        c = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=10)
+        c.request("GET", "/live/api/sessions")
+        d = json.loads(c.getresponse().read().decode("utf-8"))
+        assert d["themes_error"] == "" and d["themes"][0]["sessions"][0]["id"] == WORK
+        c = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=10)
+        c.request("GET", "/live")
+        body = c.getresponse().read().decode("utf-8")
+        assert body.index('id="themes"') < body.index('class="bar"')  # 一番上の段
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_theme_cards_do_not_open_feeds_and_pick_newest(tmp_path: Path):
+    def agents():
+        rows = _agents_json()
+        old = dict(rows[0], sessionId="eeeeeeee-0000-0000-0000-0000000000e0", id="eeeeee00", state="done", startedAt=1)
+        return [old] + rows  # 同じ名前の終わった古いセッションが先に並ぶ
+
+    hub, _ = _agents_hub(tmp_path, agents)
+    tabs, _ = hub.tabs()
+    themes = cl.parse_themes({"themes": [{"id": "x", "name": "X", "sessions": ["track-bias"]}]})
+    card = cl.theme_cards(hub, themes, tabs)[0]
+    assert card["sessions"][0]["id"] == WORK and card["sessions"][0]["state"] == "waiting"
+    assert hub.feeds == {}  # 開いているタブの feed を追い出さない
+    assert cl.parse_themes({"themes": [{"name": "A", "sessions": "abc"}]})[0]["sessions"] == []
+
+
+def test_theme_file_prefers_local_copy(tmp_path: Path):
+    repo_f, local_f = tmp_path / "config.json", tmp_path / "local.json"
+    repo_f.write_text(json.dumps({"themes": [{"name": "版"}]}), encoding="utf-8")
+    tf = cl.ThemeFile(local_f, repo_f)
+    assert tf.get()[0][0]["name"] == "版"
+    local_f.write_text(json.dumps({"themes": [{"name": "手元"}]}), encoding="utf-8")
+    assert tf.get()[0][0]["name"] == "手元"
+
+
+def test_card_cache_rereads_only_on_change(tmp_path: Path):
+    f = tmp_path / "s.jsonl"
+    _write(f, [_a("t1", {"type": "text", "text": "一"})])
+    cc = cl.CardCache()
+    first = cc.events(f)
+    assert [e["text"] for e in first] == ["一"] and cc.events(f) is first
+    with f.open("a", encoding="utf-8") as h:
+        h.write(json.dumps(_a("t2", {"type": "text", "text": "二"}), ensure_ascii=False) + "\n")
+    assert [e["text"] for e in cc.events(f)] == ["一", "二"]
