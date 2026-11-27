@@ -199,3 +199,26 @@ def test_target_and_weight_ext1_uses_y_p1():
     assert y.tolist() == [1, 1, 0, 0] and wt.tolist() == [1, 1, 1, 2]
     with pytest.raises(AssertionError):
         target_and_weight(lab, "win", "ext1_w1")
+    y, wt = target_and_weight(lab, "win", "ext_w2_nc")          # _nc はラベル・重みが同じ（行の除き方だけ違う）
+    assert y.tolist() == [1, 1, 0, 0] and wt.tolist() == [1, 1, 1, 2]
+
+
+def test_chalk_races():
+    res = pd.DataFrame({"race_id": ["a"] * 4 + ["b"] * 4, "finish_position": [1, 2, 3, 4, 1, 2, 3, -1],
+                        "popularity": [2, 1, 3, 10, 1, 2, 5, 4]})
+    assert L.chalk_races(res).tolist() == [True] * 4 + [False] * 4
+    # 1 着の同着（1・1・3）・取消（-1）は印に関わらない
+    r2 = pd.DataFrame({"race_id": ["c"] * 4, "finish_position": [1, 1, 3, -1], "popularity": [1, 2, 3, 1]})
+    assert L.chalk_races(r2).tolist() == [True] * 4
+    # 3 着の同着で 4 頭: 全員が 3 番人気以内でないと付かない
+    r3 = pd.DataFrame({"race_id": ["d"] * 4, "finish_position": [1, 2, 3, 3], "popularity": [1, 2, 3, 4]})
+    assert not L.chalk_races(r3).any()
+    # 3 着内の人気が欠けたら付けない
+    r4 = pd.DataFrame({"race_id": ["e"] * 3, "finish_position": [1, 2, 3], "popularity": [1, 2, np.nan]})
+    assert not L.chalk_races(r4).any()
+
+
+def test_variant_of_nc():
+    from src.research.model_relabel.mr_eval import variant_of
+    assert variant_of("ncorig|r800") == ("orig_nc", None)
+    assert variant_of("ncw4|r200") == ("ext_w4_nc", None)

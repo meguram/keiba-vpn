@@ -160,6 +160,9 @@ def _ord_score(pb, pa, k):
     return 1 / (1 + np.exp(-(_logit(pb) + k * np.log(np.clip(pa, EPS, 1)))))
 
 
+MISSING: list[str] = []       # 予測が未完で飛ばした族（report に残す。試した数と結果を合わせるため）
+
+
 def candidates(fs: str, target: str, sp: dict, base: pd.DataFrame) -> dict[str, dict[str, np.ndarray]]:
     """族ごとに {候補名: 点数の列（全行）}。"""
     rounds = sp["select"]["rounds_v6e" if fs == "v6e" else "rounds_v5bag"]
@@ -178,11 +181,20 @@ def candidates(fs: str, target: str, sp: dict, base: pd.DataFrame) -> dict[str, 
     for k in sp["penalty"]["P_ord"]["kappa"]:
         for r in rounds:
             fam["pord"][f"k{k}|r{r}"] = _ord_score(e1[f"p_r{r}"].to_numpy(float), nb[f"p_r{r}"].to_numpy(float), k)
+    if fs == "v5bag":                              # 本命決着のレースを学習から除いた版（_nc。候補の名前は nc で始める）
+        try:
+            nc = {v: load_pred(fs, target, f"{v}_nc", base) for v in ["orig"] + [f"ext_w{w}" for w in sp["penalty"]["P_w"]["w"]]}
+            fam["base_nc"] = {f"ncorig|r{r}": nc["orig"][f"p_r{r}"].to_numpy(float) for r in rounds}
+            fam["pw_nc"] = {f"ncw{w}|r{r}": nc[f"ext_w{w}"][f"p_r{r}"].to_numpy(float) for w in sp["penalty"]["P_w"]["w"] for r in rounds}
+        except FileNotFoundError as err:
+            print("本命決着を除いた版の予測がまだ無いので base_nc・pw_nc を飛ばす", err, flush=True)
+            MISSING.append(f"{fs}|{target}|base_nc・pw_nc")
     if target == "top3":
         try:
             ext1 = {w: load_pred(fs, target, f"ext1_w{w}", base) for w in sp["penalty"]["P_w"]["w"]}
         except FileNotFoundError as err:          # 1 馬身の版が未完でも、ほかの族の評価は続ける
             print("1 馬身の版の予測がまだ無いので pw1・pord1 を飛ばす", fs, err, flush=True)
+            MISSING.append(f"{fs}|{target}|pw1・pord1")
             del fam["pw1"], fam["pord1"]
             return fam
         for w in sp["penalty"]["P_w"]["w"]:
@@ -199,6 +211,9 @@ def candidates(fs: str, target: str, sp: dict, base: pd.DataFrame) -> dict[str, 
 def variant_of(cname: str) -> tuple[str, float | None]:
     """候補の名前から、読む予測の変種と κ（pord のとき）を返す。"""
     head = cname.split("|")[0]
+    if head.startswith("nc"):
+        v, k = variant_of(head[2:] + "|r0")
+        return f"{v}_nc", k
     if head == "orig":
         return "orig", None
     if head.startswith("x1w"):
@@ -382,6 +397,9 @@ def cmd(period: str) -> None:
                 summ = summarize(res, years)
                 boots = {f"{a}-base": paired_boot(res, base, target, a, "base", years)
                          for a in res["years"][years[0]] if a != "base"}
+                for a, b in (("pw_nc", "pw"), ("base_nc", "base")):          # 除きの効き目（同じ族どうし）
+                    if a in res["years"][years[0]]:
+                        boots[f"{a}-{b}"] = paired_boot(res, base, target, a, b, years)
                 per_year = {str(t): {f: {k: v for k, v in r.items() if k != "_p"} for f, r in res["years"][t].items()} for t in years}
                 report["results"][f"{fs}|{target}|lam{lam}"] = {"summary": summ, "boot": boots, "per_year": per_year}
                 print(f"{fs}|{target}|lam{lam}", json.dumps({f: {k: summ[f].get(k) for k in ("ll", "L_main", "winner_nlp", "race_auc", "benter_gain")}
@@ -394,6 +412,9 @@ def cmd(period: str) -> None:
                 report["feature_axis"][f"{target}|lam{lam}"] = {f"{f}:ped-v5bag": paired_boot(ra, base, target, f, f, years, res_b=rb)
                                                                 for f in ra["years"][years[0]] if "_fixed_" not in f and f in rb["years"][years[0]]}
             print("feature_axis", target, json.dumps(report["feature_axis"].get(f"{target}|lam{lams[0]}"), ensure_ascii=False), flush=True)
+    report["missing_families"] = MISSING
+    if MISSING:
+        print("[警告] 飛ばした族がある（揃ってから流し直す）:", MISSING, flush=True)
     dest = DOCS / f"eval_{period}.json"
     dest.write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
     tok.finish(result_path=dest)
@@ -404,7 +425,7 @@ def meeting_configs(sel: dict, fs: str, target: str, lam: float) -> dict:
     """開催単位の分けに使う設定: 時間の順の選び（λ 主・外側 2019〜21）で、族ごとに最も多く選ばれた (候補, 較正)。"""
     py = sel["results"][f"{fs}|{target}|lam{lam}"]["per_year"]
     out = {}
-    for fam in [f for f in next(iter(py.values())) if "_fixed_" not in f]:
+    for fam in [f for f in next(iter(py.values())) if "_fixed_" not in f and not f.endswith("_nc")]:   # _nc の版は時間の順だけ
         c = pd.Series([(py[t][fam]["chosen"], py[t][fam]["cal"]) for t in sorted(py)]).value_counts()
         out[fam] = c.index[0]
     return out

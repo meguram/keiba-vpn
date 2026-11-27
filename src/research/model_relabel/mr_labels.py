@@ -111,9 +111,9 @@ def load_results(years=range(2016, 2025), ledger: bool = True) -> pd.DataFrame:
     """開発の行（2016〜24）の結果表を読む。2025 年以降は読まない。2022〜24 は開発の検証の期間なので台帳に残す。"""
     if ledger:
         from src.ops import data_ledger as DL
-        tok = DL.guard(tool="src/research/model_relabel/mr_labels.py:load_results", family="model_relabel", version="labels-mr-1",
-                       period=(f"{min(years)}-01-01", f"{max(years)}-12-31"), purpose="reproduce", reads=("着順",), frozen_paths=[SPEC],
-                       reason="拡張ラベル（着差・時計）を学習の教師として作るだけ。成績は数えない")
+        tok = DL.guard(tool="src/research/model_relabel/mr_labels.py:load_results", family="model_relabel", version="labels-mr-4",
+                       period=(f"{min(years)}-01-01", f"{max(years)}-12-31"), purpose="reproduce", reads=("着順", "人気"), frozen_paths=[SPEC],
+                       reason="拡張ラベル（着差・時計）を学習の教師として作り、本命決着の印（確定の人気）を学習の行の選びにだけ使う。成績は数えない")
         tok.finish()
     frames = []
     for y in years:
@@ -121,7 +121,7 @@ def load_results(years=range(2016, 2025), ledger: bool = True) -> pd.DataFrame:
         p = TABLES / str(y) / "race_result_flat.parquet"
         import pyarrow.parquet as pq
         names = pq.ParquetFile(p).schema_arrow.names
-        cols = ["race_id", "horse_id", "finish_position", "margin", "time_sec", "field_size", "surface", "grade", "race_class"]
+        cols = ["race_id", "horse_id", "finish_position", "margin", "time_sec", "field_size", "surface", "grade", "race_class", "popularity"]
         cols += [c for c in ("finish_position_raw",) if c in names]
         frames.append(pd.read_parquet(p, columns=cols))
     return pd.concat(frames, ignore_index=True)
@@ -134,7 +134,21 @@ def labels_dev(conv_key: str = "convert_A") -> pd.DataFrame:
     for c in ("field_size", "surface", "grade", "race_class"):
         lab[c] = res[c].to_numpy()
     lab["year"] = lab["race_id"].str[:4].astype(int)
+    lab["chalk_race"] = chalk_races(res)
     return lab
+
+
+def chalk_races(res: pd.DataFrame) -> np.ndarray:
+    """1〜3 着の馬がすべて 3 番人気以内だったレースの印（行ごと）。学習の行を除く版（_nc）にだけ使う。特徴量には入れない。
+    確定の人気・着順で決まるので、発走前には分からない。評価からは除かない（評価は全レース。11/27 統括役）。"""
+    fp = pd.to_numeric(res["finish_position"], errors="coerce")
+    pop = pd.to_numeric(res["popularity"], errors="coerce")
+    top = (fp >= 1) & (fp <= 3)              # 同着で 4 頭以上いるときは全員（spec の chalk_definition）
+    rid = res["race_id"]
+    mx = pop.where(top).groupby(rid).transform("max")
+    n_top = top.groupby(rid).transform("sum")
+    n_pop = (top & pop.notna()).groupby(rid).transform("sum")
+    return ((n_top > 0) & (n_pop == n_top) & (mx <= 3)).to_numpy()      # 3 着内の人気が 1 頭でも欠けたら印を付けない
 
 
 def rate_table(lab: pd.DataFrame) -> dict:

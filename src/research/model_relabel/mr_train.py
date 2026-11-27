@@ -4,7 +4,8 @@
   final_v6e16 の束の xgb_extras_ped の feature_cols（1,231 列）。木の設定は v5bag の BAG_SETS・XGB_PARAMS、
   v6e は xgb_extras_ped の params に固定する（選び直さない。config/model_relabel/spec.json）。
 - 目標: win（元 y1・拡張 y_w）・top3（元 y3・拡張 y_p）・notbig（P-ord の m_a = 大敗でない）。
-- 変種: orig（元のラベル）・ext_w1・ext_w2・ext_w4（拡張のラベル、大敗の負例の重み w）・ext1_w1・ext1_w2・ext1_w4（複勝の 1 馬身の版 y_p1）。
+- 変種: orig（元のラベル）・ext_w1・ext_w2・ext_w4（拡張のラベル、大敗の負例の重み w）・ext1_w1・ext1_w2・ext1_w4（複勝の 1 馬身の版 y_p1）・
+  *_nc（本命決着のレースを学習の行からだけ除く版。v5bag の orig・ext_w*。予測・較正・評価は全レース）。
 - 分け:
   - time: 年 t（2017〜24）は t より前の年で学ぶ。
   - meeting: 開催の 5 分割（docs/operations/model_relabel/meeting_folds.csv）。学びの側の calib_k=1 の開催は学びに入れず較正に回す。
@@ -109,7 +110,7 @@ def attach_labels(meta: pd.DataFrame, conv_key: str = "convert_A", max_year: int
     lab = pd.read_parquet(path, filters=[("year", "<=", max_year)]) if path.exists() else LB.labels_dev(conv_key)
     lab = lab[lab["year"] <= max_year].drop_duplicates(["race_id", "horse_id"])
     key = meta[["race_id", "horse_id"]].astype(str)
-    m = key.merge(lab[["race_id", "horse_id", "y1", "y3", "y_w", "y_p", "y_p1", "big", "ext_ok"]], on=["race_id", "horse_id"], how="left")
+    m = key.merge(lab[["race_id", "horse_id", "y1", "y3", "y_w", "y_p", "y_p1", "big", "ext_ok", "chalk_race"]], on=["race_id", "horse_id"], how="left")
     assert len(m) == len(meta)
     miss = m["y1"].isna()
     fin = pd.to_numeric(meta["finish_position"], errors="coerce").to_numpy()
@@ -117,6 +118,8 @@ def attach_labels(meta: pd.DataFrame, conv_key: str = "convert_A", max_year: int
     assert (fin[miss.to_numpy()] != 1).all(), "結果表に無い勝ち馬がいる"
     for c in ("y1", "y3", "y_w", "y_p", "y_p1", "big"):
         m[c] = m[c].fillna(False).astype(bool)
+    # 本命決着の印はレースの値（結果表に無い行＝取消などにもレースの値を引き継ぐ）
+    m["chalk_race"] = m["race_id"].map(lab.groupby("race_id")["chalk_race"].any()).fillna(False).astype(bool).to_numpy()
     m["ext_ok"] = m["ext_ok"].fillna(True).astype(bool)
     agree = (m["y1"].to_numpy() == (fin == 1)).mean()
     assert agree > 0.999, f"meta と結果表の 1 着の一致が低い: {agree}"
@@ -127,6 +130,7 @@ def attach_labels(meta: pd.DataFrame, conv_key: str = "convert_A", max_year: int
 
 def target_and_weight(lab: pd.DataFrame, target: str, variant: str) -> tuple[np.ndarray, np.ndarray]:
     big = lab["big"].to_numpy()
+    variant = variant.removesuffix("_nc")          # _nc（本命決着のレースを学習から除く版）はラベル・重みは同じ。行の除き方は run で
     if target == "notbig":
         assert variant == "orig"
         return (~big).astype(np.float32), np.ones(len(lab), np.float32)
@@ -163,7 +167,10 @@ def _fingerprint(lab: pd.DataFrame, target: str, variant: str, sets: list[dict],
     import hashlib
     y, wt = target_and_weight(lab, target, variant)
     h = hashlib.md5(np.ascontiguousarray(np.stack([y, wt])).tobytes()).hexdigest()
-    return {"spec_version": spec()["version"], "label_md5": h, "sets": sets, "rounds": rounds}
+    fp = {"spec_version": spec()["version"], "label_md5": h, "sets": sets, "rounds": rounds}
+    if variant.endswith("_nc"):                    # 学習の行の除き方も印に入れる
+        fp["chalk_md5"] = hashlib.md5(np.ascontiguousarray(lab["chalk_race"].to_numpy(bool)).tobytes()).hexdigest()
+    return fp
 
 
 def _check_manifest(d: Path, fp: dict) -> None:
@@ -197,6 +204,9 @@ def run(fs: str, target: str, variant: str, split: str = "time", conv: str = "co
     sets, rounds = fs_configs(fs)
     if split == "time":
         units = [(str(t), yr < t, yr == t) for t in YEARS]
+        if variant.endswith("_nc"):          # 本命決着（1〜3 着がすべて 3 番人気以内）のレースを学習の行からだけ除く。予測は全行
+            keep = ~lab["chalk_race"].to_numpy()
+            units = [(u, tr & keep, te) for u, tr, te in units]
     else:
         f = pd.read_csv(FOLDS_CSV, dtype={"meeting": str}).set_index("meeting")
         mt = lab["meeting"].map(f["fold"]).to_numpy()
@@ -285,11 +295,11 @@ def _assemble_meeting(fs, target, variant, conv, lab, units, n_bags, rounds) -> 
 JOBS = [f"{fs}:{t}:{v}" for fs in ("v5bag", "v6e", "v5bag_ped")
         for t, vs in (("win", ("orig", "ext_w1", "ext_w2", "ext_w4")),
                       ("top3", ("orig", "ext_w1", "ext_w2", "ext_w4", "ext1_w1", "ext1_w2", "ext1_w4")), ("notbig", ("orig",)))
-        for v in vs]
+        for v in vs] + [f"v5bag:{t}:{v}_nc" for t in ("win", "top3") for v in ("orig", "ext_w1", "ext_w2", "ext_w4")]
 
 
 def status() -> None:
-    """時間の順の全 36 本の済み・残り（部品の数）。止まっても続きから流せる（部品ごとに保存）。"""
+    """時間の順の全 44 本の済み・残り（部品の数）。止まっても続きから流せる（部品ごとに保存）。"""
     done, left = [], []
     for j in JOBS:
         fs, t, v = j.split(":")
