@@ -447,7 +447,7 @@ def dnf_sensitivity(res: dict, base: pd.DataFrame, target: str, years) -> dict:
     total = 1.0 if target == "win" else 3.0
     dn = dnf_rows(base)
     out = {"dnf_horses": int(dn["year"].isin(list(years)).sum())}
-    fams = [f for f in res["years"][years[0]] if "_fixed_" not in f]
+    fams = list(res["years"][years[0]])          # 固定の w の群も含める（mfs − mf の対は mf の pw_fixed_w{w} を使う）
     for how in ("none", "min", "median"):           # none = 戻さない（同じ数え方の比べ先）
         vals = {}
         for f in fams:
