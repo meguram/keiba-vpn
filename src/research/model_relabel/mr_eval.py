@@ -142,6 +142,15 @@ def base_frame(max_year: int) -> pd.DataFrame:
     q["race_id"], q["horse_id"] = q["race_id"].astype(str), q["horse_id"].astype(str)
     m = m.merge(q[["race_id", "horse_id", "q_final"]].drop_duplicates(["race_id", "horse_id"]), on=["race_id", "horse_id"], how="left")
     assert len(m) == len(meta)
+    # 評価は平地のレースだけ（spec mr-7。障害は市場の q が無く、学習には今の v5bag と同じく入れる）。予測の表は鍵で行をそろえる
+    lab = pd.read_parquet(LB.OUT / "labels_convert_A.parquet", columns=["race_id", "surface", "year"], filters=[("year", "<=", max_year)])
+    obst = set(lab.loc[lab["surface"] == "障", "race_id"])
+    m["_row"] = np.arange(len(m))
+    qmiss = set(m.loc[m["q_final"].isna(), "race_id"])           # 平地にも q の欠けたレースがある（2023 年に 1 行）。勝ち・複勝・Benter の行をそろえる
+    drop = obst | qmiss
+    print(f"評価の集合: 障害 {len(obst)} レース・q の欠けた平地 {len(qmiss - obst)} レースを除く", flush=True)
+    m = m[~m["race_id"].isin(drop)].reset_index(drop=True)
+    assert m["q_final"].notna().all()
     return m
 
 
@@ -152,7 +161,10 @@ def load_pred(fs, target, variant, base: pd.DataFrame, split="time", conv="conve
         raise FileNotFoundError(p)
     x = pd.read_parquet(p, filters=[("year", "<=", int(base["year"].max()))])
     if split == "time":
+        x = x.iloc[base["_row"].to_numpy()].reset_index(drop=True)          # 平地の行だけ（base の _row は meta の行の番号）
         assert (x["race_id"].to_numpy() == base["race_id"].to_numpy()).all() and (x["horse_id"].to_numpy() == base["horse_id"].to_numpy()).all()
+    else:
+        x = x[x["race_id"].isin(set(base["race_id"]))].reset_index(drop=True)
     return x
 
 
@@ -434,11 +446,16 @@ def _ledger(period: str, lo: str, hi: str, purpose: str):
                     reason="拡張ラベルのモデルの本物のラベルでの当てはまり（回収率は数えない）")
 
 
-def cmd(period: str) -> None:
+def cmd(period: str, only: str | None = None) -> None:
     sp = TR.spec()
+    if only:          # 試しは select だけ（confirm の 1 回を使い切らない）。組の名前も確かめる
+        assert period == "select", "--only は select だけ"
+        fs_, tg_ = only.split("|")
+        assert fs_ in ("v5bag", "v5bag_ped", "v5bag_mf", "v5bag_mfc05", "v5bag_mfc03", "v6e") and tg_ in ("win", "top3"), only
     key = "outer_main" if period == "select" else "outer_confirm_once"
     years = range(sp["years"][key][0], sp["years"][key][1] + 1)
-    tok = _ledger(period, f"{min(years) - 2}-01-01", f"{max(years)}-12-31", "select" if period == "select" else "confirm")
+    tok = _ledger(period if not only else f"{period}-smoke", f"{min(years) - 2}-01-01", f"{max(years)}-12-31",
+                  "select" if period == "select" else "confirm")
     t0 = time.time()
     base = base_frame(max(years))
     lams = [sp["metric"]["lambda_main"]] + list(sp["metric"]["lambda_sensitivity"])
@@ -446,6 +463,8 @@ def cmd(period: str) -> None:
     kept: dict = {}
     for fs in ("v5bag", "v5bag_ped", "v5bag_mf", "v5bag_mfc05", "v5bag_mfc03", "v6e"):
         for target in ("win", "top3"):
+            if only and f"{fs}|{target}" != only:
+                continue
             try:
                 allres = nested_time(fs, target, years, lams, sp, base)
             except FileNotFoundError as e:
@@ -488,7 +507,7 @@ def cmd(period: str) -> None:
     report["missing_families"] = MISSING
     if MISSING:
         print("[警告] 飛ばした族がある（揃ってから流し直す）:", MISSING, flush=True)
-    dest = DOCS / f"eval_{period}.json"
+    dest = DOCS / f"eval_{period}.json" if not only else LB.OUT / f"eval_{period}_smoke.json"     # 試しは docs に書かない
     dest.write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
     tok.finish(result_path=dest)
     print("done", dest, round(time.time() - t0), "秒", flush=True)
@@ -509,6 +528,7 @@ def cmd_meeting() -> None:
     rules-council 1 号の条件: 買い方の入力・版の選び・設定の選び直しに使わない。2022〜24 も含むので、時間の順の confirm の後に流す。"""
     sp = TR.spec()
     sel = json.loads((DOCS / "eval_select.json").read_text(encoding="utf-8"))
+    assert sel["spec_version"] == sp["version"], f"eval_select.json の spec の版（{sel['spec_version']}）が今の版（{sp['version']}）と違う"
     assert (DOCS / "eval_confirm.json").exists(), "時間の順の 2022〜24 の確かめ（confirm）の後に流す"
     tok = _ledger("meeting", "2016-01-01", "2024-12-31", "eval_only")
     base = base_frame(2024)
@@ -576,6 +596,7 @@ def market_choice() -> dict:
     """spec の market_corr.labels の規則: v5bag_mf の時間の順の内側の選び（λ 主・外側 2019〜21）で、族 pw の中で最も多く選ばれた w（同数なら小さい w）。"""
     sp = TR.spec()
     sel = json.loads((DOCS / "eval_select.json").read_text(encoding="utf-8"))
+    assert sel["spec_version"] == sp["version"], f"eval_select.json の spec の版（{sel['spec_version']}）が今の版（{sp['version']}）と違う"
     out = {"source": {"spec_version": sel["spec_version"], "eval_select": "v5bag_mf の λ 主・外側 2019〜21 の族 pw の選び"}}
     for target in ("win", "top3"):
         py = sel["results"][f"v5bag_mf|{target}|lam{sp['metric']['lambda_main']}"]["per_year"]
@@ -590,11 +611,12 @@ def market_choice() -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["select", "confirm", "meeting", "market_choice"])
+    ap.add_argument("--only", default=None, help="試し: fs|target の 1 組だけ（結果は model_relabel_out に書く）")
     a = ap.parse_args()
     if a.cmd == "market_choice":
         market_choice()
     else:
-        cmd_meeting() if a.cmd == "meeting" else cmd(a.cmd)
+        cmd_meeting() if a.cmd == "meeting" else cmd(a.cmd, a.only)
 
 
 if __name__ == "__main__":

@@ -359,10 +359,14 @@ def main() -> None:
     if a.cmd == "status":
         return status()
     if a.cmd == "labels":
+        dests = [OUT / f"labels_{k}.parquet" for k in ("convert_A", "convert_B_sensitivity")]
+        if any(d.exists() for d in dests):   # 上書きしない（mr_labels の save と同じ。先に全部を確かめる）
+            raise SystemExit(f"{[str(d) for d in dests if d.exists()]} がある。上書きしない")
         for k in ("convert_A", "convert_B_sensitivity"):
-            tmp = OUT / f"labels_{k}.tmp.parquet"       # 学習が読んでいる最中に置き換えても壊れないように
+            dest = OUT / f"labels_{k}.parquet"
+            tmp = OUT / f"labels_{k}.tmp.parquet"
             LB.labels_dev(k).to_parquet(tmp, index=False)
-            os.replace(tmp, OUT / f"labels_{k}.parquet")
+            os.replace(tmp, dest)
         print("labels saved")
         return
     run(a.fs, a.target, a.variant, a.split, a.conv, a.only_unit)

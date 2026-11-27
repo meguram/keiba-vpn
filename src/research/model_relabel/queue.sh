@@ -20,5 +20,6 @@ for job in "$@"; do
   done
   echo "[queue] 開始 $job $(TZ=Asia/Tokyo date '+%m/%d %H:%M')"
   flock /tmp/claude-1000/heavy.lock nice -n 19 $PY -m src.research.model_relabel.mr_train run --fs "$fs" --target "$tg" --variant "$var" --split "$split" || { echo "[queue] 失敗・停止 $job"; exit 1; }
+  sleep 90          # 1 本ごとに 1〜2 分空ける（11/27 ユーザーの言葉「負荷に注意して慎重に」）
 done
 echo "[queue] 全部終わり $(TZ=Asia/Tokyo date '+%m/%d %H:%M')"

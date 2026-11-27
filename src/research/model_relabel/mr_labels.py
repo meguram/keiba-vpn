@@ -140,7 +140,7 @@ def labels_dev(conv_key: str = "convert_A") -> pd.DataFrame:
 
 def chalk_races(res: pd.DataFrame) -> np.ndarray:
     """1〜3 着の馬がすべて 3 番人気以内だったレースの印（行ごと）。学習の行を除く版（_nc）にだけ使う。特徴量には入れない。
-    確定の人気・着順で決まるので、発走前には分からない。評価からは除かない（評価は全レース。11/27 統括役）。"""
+    確定の人気・着順で決まるので、発走前には分からない。評価からは除かない（評価は spec mr-7 の平地の集合のまま）。"""
     fp = pd.to_numeric(res["finish_position"], errors="coerce")
     pop = pd.to_numeric(res["popularity"], errors="coerce")
     top = (fp >= 1) & (fp <= 3)              # 同着で 4 頭以上いるときは全員（spec の chalk_definition）
@@ -176,10 +176,14 @@ def main() -> None:
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     if a.cmd == "save":
+        dests = [OUT / f"labels_{k}.parquet" for k in ("convert_A", "convert_B_sensitivity")]
+        if any(d.exists() for d in dests):   # 共有の中間物（longshot-ai も読む）なので上書きしない（11/27 統括役）。先に全部を確かめる
+            raise SystemExit(f"{[str(d) for d in dests if d.exists()]} がある。上書きしない（作り直すなら OUT を変えるか古い表を退避）")
         for k in ("convert_A", "convert_B_sensitivity"):
-            tmp = OUT / f"labels_{k}.tmp.parquet"       # 学習が読んでいる最中に置き換えても壊れないように
+            dest = OUT / f"labels_{k}.parquet"
+            tmp = OUT / f"labels_{k}.tmp.parquet"
             labels_dev(k).to_parquet(tmp, index=False)
-            os.replace(tmp, OUT / f"labels_{k}.parquet")
+            os.replace(tmp, dest)
         print("saved", OUT)
         return
     lab = labels_dev()
