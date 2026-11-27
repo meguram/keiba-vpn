@@ -1,0 +1,26 @@
+{
+  "_doc": "手元の会議のビューア（/live）の「研究の大枠」。版はここ（develop に commit して変える）。共有の作業ツリーで手早く替えるときは data/local/council_viewer/themes.json（git の外）に写して書き換える（あればそちらを使う）。name: 大枠の名前・goal: 1 行のゴール・sessions: 属するセッションの名前（claude agents の name）・milestone: 次の節目（無ければ空）。要求のたびに読み直す（起動し直しは要らない）。",
+  "themes": [
+    {
+      "id": "pedigree",
+      "name": "血統の解析・分析・研究",
+      "goal": "血統から勝率・複勝率を予測する切り口を、偶然を拾わない検証で確かめる",
+      "sessions": ["aptitude-group"],
+      "milestone": ""
+    },
+    {
+      "id": "relabel",
+      "name": "めぐ AI の再モデリング（ラベルの拡張）",
+      "goal": "学習のラベルを広げて、めぐ AI のモデルを作り直す",
+      "sessions": ["model-relabel"],
+      "milestone": ""
+    },
+    {
+      "id": "pair-bets",
+      "name": "めぐ印の選定と馬連・ワイドの買い目",
+      "goal": "めぐ印を選び直し、回収率 100% を安定して出せる馬連・ワイドの買い目のロジックを探す",
+      "sessions": ["pair-bets", "rules-council"],
+      "milestone": ""
+    }
+  ]
+}

@@ -125,6 +125,24 @@ AI と市場の食い違いが 2 頭分で掛け算になるためで、上乗�
     o.append("<p>AI（c13 の凍結の組み合わせ・確定のオッズ・LBS。ワイドは下限）の期待値の線ごとの数と、その組の AI ÷ 組の市場・組の市場 ÷ 単勝からの組:</p>")
     o.append(table(["線", "単勝（頭/レース）", "馬連（組/レース）", "ワイド（組/レース）", "馬連 AI ÷ 組の市場", "ワイド AI ÷ 組の市場", "馬連 組の市場 ÷ 単勝から", "ワイド 組の市場 ÷ 単勝から"], e_rows))
 
+    if (SRC / "ai_band.json").exists():
+        AB = json.loads((SRC / "ai_band.json").read_text(encoding="utf-8"))
+        ab_rows = []
+        for ty, key, nm in (("umaren", "all", "馬連（全部）"), ("umaren", "pop_le_80", "馬連（81 番人気より下を除く）"), ("wide", "all", "ワイド")):
+            for y, v in AB[ty][key].items():
+                r_ = v["m_over_lbs"]
+                ab_rows.append([f"{nm} {y}", f3(r_[0]), f3(min(r_[1:-1])), f3(r_[-1]), f3(v["top_over_bottom"])])
+        verd = {"馬連（全部）": AB["umaren"]["verdict"], "馬連（81 番人気より下を除く）": AB["umaren"]["verdict_pop_le_80"], "ワイド": AB["wide"]["verdict"]}
+        o.append("<h2>AI ÷ LBS の帯ごとの m ÷ LBS（組のオッズを帯に使わない）</h2><p>予測と線は数える前に固定した（predictions_ai_band.json）。"
+                 "線: 上の帯 ÷ 下の帯が 3 年とも 0.97〜1.03 なら P1（選び方の偏りだけ）、3 年とも 1.03 より上なら P2、3 年とも 0.97 より下なら P3、割れたら決まらない。判定: "
+                 + "・".join(f"{k} {esc(v)}" for k, v in verd.items())
+                 + f"。線の上の P1 は、端の帯どうしの比が 1 に近いことだけを言い、帯によらず平らという中身は表で確かめる。"
+                 f"m を使わない帯の m ÷ LBS は {f3(min(min(v['m_over_lbs']) for ty, key in (('umaren', 'all'), ('umaren', 'pop_le_80'), ('wide', 'all')) for v in AB[ty][key].values()))}〜"
+                 f"{f3(max(max(v['m_over_lbs']) for ty, key in (('umaren', 'all'), ('umaren', 'pop_le_80'), ('wide', 'all')) for v in AB[ty][key].values()))} の範囲（3 つの版・記述だけ）。形はおおむね U 字で、両端が高く中ほどが低い。"
+                 "上の帯が 1 を超えるのは、組の市場が AI と同じ向きの情報を持つ形とも読めるが、下の帯（AI が低く見る組）も 1 を超える版があり、この読みとは逆向きになる。両端の組を LBS が低く見積もるずれとも読め、区別できない。"
+                 "81 番人気より下を除く版は、組を除いた後に十分位を切り直した（組の人気が欠けた組も落ちる）。</p>")
+        o.append(table(["券種・年", "下の帯（第 1 十分位）", "中ほどの最小", "上の帯（第 10 十分位）", "上 ÷ 下"], ab_rows))
+
     s_rows = [[b, f3(S["umaren"]["o"][b]["median"]), f3(S["wide"]["o"][b]["median"]), f3(S["wide"]["o_mid"][b]["median"])] for b in sb]
     o.append(f"<h2>組の s*（確定 ÷ T-60 のオッズ）</h2><p>2026-10-24 以降の {S['umaren']['races']} レース（手元の写し・着順なし）。選ぶ前の全部の組の中央値で、選んだ組ほど縮む分は入らない。門 0 の模擬の払戻の縮みにだけ使う。</p>")
     o.append(table(["T-60 の組の人気", "馬連", "ワイド（下限）", "ワイド（中点）"], s_rows))

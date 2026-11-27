@@ -338,9 +338,14 @@ def test_modeling_final_html_served_and_listed(root: Path, tmp_path: Path):
 
 def test_live_page_newest_first_with_sticky_latest():
     body = cv.live_page("n")
-    bar = body[body.index('<div class="bar">'):body.index('<div id="log">')]
-    assert 'id="tabs"' in bar and 'id="sum"' in bar and 'id="latest"' in bar  # 最新の枠は固定の帯の中
-    assert bar.index('id="sum"') < bar.index('id="latest"')
+    bar = body[body.index('<div class="bar">'):body.index('<div id="cols">')]
+    assert 'id="tabs"' in bar and 'id="sum"' in bar and 'id="latest"' not in bar
+    cols = body[body.index('<div id="cols">'):]
+    assert cols.index('id="recent"') < cols.index('id="latest"') < cols.index('id="past"') < cols.index('id="log"')  # 左に直近・右に過去
     assert 'id="news"' not in body and "toBottom" not in body  # 一番下へ動かす作りはやめた
     assert "latest.insertBefore(row, latest.firstChild)" in body  # 新しい発言は上に足す
-    assert "#latest { max-height:25vh; }" in body  # スマホの幅でも画面の半分を超えない
+    assert "grid-template-columns:1fr 1fr" in body and "@media (max-width:899px)" in body
+    assert "<strong>直近の会話</strong>" in cols and "<strong>過去の会話</strong>" in cols
+    assert "#recent { max-height:40vh;" in body  # 狭い幅では上下に並べ、直近は 40vh まで
+    for n in cv.LIVE_RECENT:
+        assert f'<option value="{n}">' in body
