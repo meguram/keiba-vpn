@@ -143,3 +143,37 @@ def test_fill_apply_keeps_other_column_types(tmp_path, monkeypatch):
     got = pq.read_table(y / "race_result_flat.parquet")
     assert got.schema.field("horse_number").type == pa.int64() and got.schema.field("weather").type == pa.null()
     assert got.column("race_class").to_pylist() == ["サラ系２歳 未勝利"] * 2
+
+
+def test_incremental_append_without_meta_index_fills_class_from_local_shutuba(tmp_path, monkeypatch):
+    """meta_index を渡さない増分の追記（recent-retry の後の _trigger_track_speed_for_date）でも、出馬表の race_class で補う（2026-11-21〜23）。"""
+    monkeypatch.setattr(et, "OUTPUT_DIR", tmp_path)
+    y = tmp_path / "2026"
+    old, new = "202605050401", "202605050501"
+    _write(y / "race_result_flat.parquet", [_rr(old, 1, race_class="サラ系３歳 未勝利", date="2026-11-15")])
+    _write(y / "race_shutuba_flat.parquet", [_sh(new, "サラ系２歳 未勝利")])
+    doc = {"race_id": new, "date": "2026-11-22", "surface": "ダート", "distance": 1300, "grade": "未勝利",
+           "entries": [{"horse_number": 1, "finish_position": 1, "horse_id": "h1"}]}
+    et.export_category_chunked("2026", "race_result", _Storage({new: doc}), keys=[new])
+    f = pd.read_parquet(y / "race_result_flat.parquet")
+    assert f.loc[f["race_id"].astype(str) == new, "race_class"].tolist() == ["サラ系２歳 未勝利"]
+    assert f.loc[f["race_id"].astype(str) == old, "race_class"].tolist() == ["サラ系３歳 未勝利"]
+
+
+def test_with_local_shutuba_meta_keeps_existing_values(tmp_path, monkeypatch):
+    monkeypatch.setattr(et, "OUTPUT_DIR", tmp_path)
+    _write(tmp_path / "2026" / "race_shutuba_flat.parquet", [_sh("A", "出馬表の値"), _sh("B", "出馬表の値")])
+    idx = et._with_local_shutuba_meta("2026", {"A": {"race_class": "元の値"}, "B": {"race_class": ""}}, ["A", "B", "C"])
+    assert idx["A"]["race_class"] == "元の値" and idx["B"]["race_class"] == "出馬表の値" and "C" not in idx
+    assert et._with_local_shutuba_meta("2027", None, ["A"]) is None        # 出馬表の flat が無い年は何もしない
+
+
+def test_with_local_shutuba_meta_fills_surface_and_jump_without_touching_caller(tmp_path, monkeypatch):
+    monkeypatch.setattr(et, "OUTPUT_DIR", tmp_path)
+    _write(tmp_path / "2026" / "race_shutuba_flat.parquet",
+           [{**_sh("A", "x"), "surface": "ダート"}, {**_sh("J", None), "surface": "障"}])
+    src = {"A": {"surface": ""}, "J": {"surface": "芝"}}
+    idx = et._with_local_shutuba_meta("2026", src, ["A", "J"])
+    assert idx["A"]["surface"] == "ダート"                               # 空の面を補う
+    assert idx["J"]["surface"] == "障"                                   # 出馬表が「障」なら誤った「芝」を上書き
+    assert src == {"A": {"surface": ""}, "J": {"surface": "芝"}}          # 呼び出し元の dict は変えない

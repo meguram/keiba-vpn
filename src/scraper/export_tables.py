@@ -278,6 +278,28 @@ def _build_meta_index_from_race_result_flat(year: str) -> dict[str, dict]:
 
 
 FILL_RACE_CLASS_CATEGORIES = ("race_result", "race_result_on_time")
+
+
+def _with_local_shutuba_meta(year: str, meta_index: dict[str, dict] | None, race_ids: list[str]) -> dict[str, dict] | None:
+    """meta_index の空の欄（race_class・surface）を、ローカルの race_shutuba_flat の値で補った写しを返す（GCS・netkeiba は読まない）。
+    _fill_index_from_local_shutuba と同じく、出馬表の面が「障」なら空でない面も「障」で上書きする。呼び出し元の dict は変えない。
+    確定結果・速報の文書には race_class が無い。meta_index を渡さない増分の追記（recent-retry の後の
+    auto_scrape._trigger_track_speed_for_date）は、ここで補わないと race_class が空のまま書かれた（2026-11-21〜23 の平地の全レース）。"""
+    sh = _local_shutuba_meta(year)
+    if not sh:
+        return meta_index
+    out = dict(meta_index or {})
+    for rid in race_ids:
+        add = sh.get(rid)
+        if not add:
+            continue
+        cur = dict(out.get(rid) or {})
+        for f, v in add.items():
+            if _is_blank(cur.get(f)) or (f == "surface" and str(v).startswith("障") and cur.get(f) != "障"):
+                cur[f] = "障" if f == "surface" and str(v).startswith("障") else v
+        out[rid] = cur
+    return out
+
 DAILY_EXPORT_LOCK = "/tmp/keiba_export_tables_daily.lock"
 
 
@@ -803,6 +825,8 @@ def export_category_chunked(
                 year, category, n_total, len(existing_ids), len(existing_ids) + n_total,
             )
 
+    if category in FILL_RACE_CLASS_CATEGORIES:                 # 書き出すレースが決まってから（飛ばす回は読まない）
+        meta_index = _with_local_shutuba_meta(year, meta_index, jra_keys)
     logger.info("[%s/%s] %d JRA races → チャンク処理 (chunk=%d)",
                 year, category, n_total, CHUNK_SIZE)
 
