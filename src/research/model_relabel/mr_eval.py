@@ -166,8 +166,14 @@ MISSING: list[str] = []       # 予測が未完で飛ばした族（report に�
 def candidates(fs: str, target: str, sp: dict, base: pd.DataFrame) -> dict[str, dict[str, np.ndarray]]:
     """族ごとに {候補名: 点数の列（全行）}。"""
     rounds = sp["select"]["rounds_v6e" if fs == "v6e" else "rounds_v5bag"]
+    if fs in ("v5bag_mfc05", "v5bag_mfc03"):
+        # 市場と相関の高い列を外す版（spec の market_corr）: 元のラベルと、規則で決めた 1 つの w だけ（market_choice.json）
+        w = json.loads((DOCS / "market_choice.json").read_text(encoding="utf-8"))[target]
+        b, e = load_pred(fs, target, "orig", base), load_pred(fs, target, f"ext_w{w}", base)
+        return {"base": {f"orig|r{r}": b[f"p_r{r}"].to_numpy(float) for r in rounds},
+                "pw": {f"w{w}|r{r}": e[f"p_r{r}"].to_numpy(float) for r in rounds}}
     fam: dict[str, dict[str, np.ndarray]] = {"base": {}, "pw": {}, "pord": {}}
-    with_p1 = target == "top3" and fs != "v5bag_mf"      # 1 馬身の版は v5bag_mf では作らない（mr-5）
+    with_p1 = target == "top3" and fs in ("v5bag", "v5bag_ped", "v6e")      # 1 馬身の版は v5bag_mf・mfc では作らない（mr-5・6）
     if with_p1:
         fam["pw1"], fam["pord1"] = {}, {}               # 複勝の 1 馬身の版（候補の名前は x1 で始めて、1/2 馬身の版と重ねない）
     b = load_pred(fs, target, "orig", base)
@@ -253,8 +259,44 @@ def benter(p_fit, d_fit, p_app, d_app, year_key) -> dict:
     if year_key not in _MARKET:
         b0 = minimize(lambda w: _clogit_nll([0.0, w[0]], *f), x0=[1.0], method="Nelder-Mead").x[0]
         _MARKET[year_key] = float(_clogit_nll([0.0, b0], *g))
-    return {"a": round(float(a), 4), "b": round(float(b), 4), "nll_combo": float(_clogit_nll([a, b], *g)),
+    return {"a": round(float(a), 4), "b": round(float(b), 4), "a_raw": float(a), "b_raw": float(b), "nll_combo": float(_clogit_nll([a, b], *g)),
             "nll_market": _MARKET[year_key], "races": int(g[3].max() + 1)}
+
+
+def benter_rows(p_app, d_app, a, b) -> pd.DataFrame:
+    """Benter の 2 段の、年 t の勝ち馬ごとの −log p（q の欠けたレースは落とす）。対のブートストラップ用（鍵 race_id・date）。"""
+    rid = pd.factorize(d_app["race_id"])[0]
+    ok = pd.Series(d_app["q_final"].notna().to_numpy()).groupby(rid).transform("all").to_numpy()
+    d = d_app[ok].reset_index(drop=True)
+    z = a * np.log(np.clip(np.asarray(p_app)[ok], EPS, 1)) + b * np.log(np.clip(d["q_final"].to_numpy(float), EPS, 1))
+    r = d["race_id"].to_numpy()
+    mx = pd.Series(z).groupby(r).transform("max").to_numpy()
+    lse = np.log(pd.Series(np.exp(z - mx)).groupby(r).transform("sum").to_numpy()) + mx
+    w = d["y1"].to_numpy(bool)          # 1 着同着のレースは勝ち馬が 2 頭（鍵は race_id＋horse_id）
+    return pd.DataFrame({"key": (d["race_id"] + "_" + d["horse_id"]).to_numpy()[w], "date": d.loc[w, "date"].to_numpy(), "nll": -(z - lse)[w]})
+
+
+_MARKET3: dict = {}
+
+
+def benter3(p_fit, d_fit, p_app, d_app, year_key) -> tuple[dict, pd.DataFrame]:
+    """複勝の 2 段: y3 を logit(p̂) と logit(q_final) の二値のロジスティック回帰で当てる（年 t−1 で当て、年 t で数える）。市場だけの回帰と比べる。"""
+    from sklearn.linear_model import LogisticRegression
+
+    def prep(p, d):
+        ok = d["q_final"].notna().to_numpy()
+        Z = np.column_stack([_logit(np.asarray(p)[ok]), _logit(d["q_final"].to_numpy(float)[ok])])
+        return Z, d["y3"].to_numpy(float)[ok], d[ok]
+    Zf, yf, _ = prep(p_fit, d_fit)
+    Za, ya, da = prep(p_app, d_app)
+    m = LogisticRegression(C=1e6, max_iter=1000).fit(Zf, yf)
+    pa = m.predict_proba(Za)[:, 1]
+    if year_key not in _MARKET3:
+        m0 = LogisticRegression(C=1e6, max_iter=1000).fit(Zf[:, 1:], yf)
+        _MARKET3[year_key] = float(np.mean(ll(m0.predict_proba(Za[:, 1:])[:, 1], ya)))
+    rows = pd.DataFrame({"key": (da["race_id"] + "_" + da["horse_id"]).to_numpy(), "date": da["date"].to_numpy(), "nll": ll(pa, ya)})
+    return {"a": round(float(m.coef_[0][0]), 4), "b": round(float(m.coef_[0][1]), 4), "nll_combo": float(rows["nll"].mean()),
+            "nll_market": _MARKET3[year_key], "n": int(len(rows))}, rows
 
 
 def outer_metrics(p, s_raw, d: pd.DataFrame, target: str, sp: dict) -> dict:
@@ -282,7 +324,8 @@ def nested_time(fs: str, target: str, years, lams, sp: dict, base: pd.DataFrame)
     yr = base["year"].to_numpy()
     groups = dict(fam)
     for w in sp["penalty"]["P_w"]["w"]:
-        groups[f"pw_fixed_w{w}"] = {k: v for k, v in fam["pw"].items() if k.startswith(f"w{w}|")}
+        if any(k.startswith(f"w{w}|") for k in fam["pw"]) and not fs.startswith("v5bag_mfc"):     # mfc は w が 1 つなので固定の群を作らない
+            groups[f"pw_fixed_w{w}"] = {k: v for k, v in fam["pw"].items() if k.startswith(f"w{w}|")}
         if "pw1" in fam:
             groups[f"pw1_fixed_w{w}"] = {k: v for k, v in fam["pw1"].items() if k.startswith(f"x1w{w}|")}
     res = {lam: {"years": {}} for lam in lams}
@@ -303,8 +346,11 @@ def nested_time(fs: str, target: str, years, lams, sp: dict, base: pd.DataFrame)
                 p0 = calibrate(cal, s[i1], d1[yname].to_numpy(float), d1["race_id"].to_numpy(), s[i0], d0["race_id"].to_numpy(), total)
                 m = outer_metrics(p0, s[i0], d0, target, sp)
                 if target == "win":
-                    m["benter"] = benter(inner[key][0], d1, p0, d0, (fs, t))
-                outer[key] = (p0, m)
+                    m["benter"] = benter(inner[key][0], d1, p0, d0, t)
+                    brows = benter_rows(p0, d0, m["benter"]["a_raw"], m["benter"]["b_raw"])
+                else:
+                    m["benter"], brows = benter3(inner[key][0], d1, p0, d0, t)
+                outer[key] = (p0, m, brows)
             return outer[key]
 
         for lam in lams:
@@ -312,8 +358,8 @@ def nested_time(fs: str, target: str, years, lams, sp: dict, base: pd.DataFrame)
             for gname, cands in groups.items():
                 keys = [(c, cal) for c in cands for cal in sp["select"]["calibration"]]
                 key = min(keys, key=lambda k: inner[k][1][lam])
-                p0, m = outer_of(key)
-                rec[gname] = {"chosen": key[0], "cal": key[1], "L_inner": round(inner[key][1][lam], 6), "outer": m, "_p": p0}
+                p0, m, brows = outer_of(key)
+                rec[gname] = {"chosen": key[0], "cal": key[1], "L_inner": round(inner[key][1][lam], 6), "outer": m, "_p": p0, "_b": brows}
             res[lam]["years"][t] = rec
             print(f"  {fs} {target} λ={lam} {t}: " + "・".join(f"{k} {v['chosen']}/{v['cal']}" for k, v in rec.items()), flush=True)
     return res
@@ -337,6 +383,18 @@ def paired_boot(res: dict, base: pd.DataFrame, target: str, fam_a: str, fam_b: s
         else:
             la, lb_, dd = ll(pa, y), ll(pb, y), d0["date"].to_numpy()
         rows.append(pd.DataFrame({"date": dd, "a": la, "b": lb_}))
+    return _boot(pd.concat(rows), n_boot, seed)
+
+
+def paired_boot_benter(res_a: dict, fam_a: str, res_b: dict, fam_b: str, years, n_boot=2000, seed=20261128) -> dict:
+    """Benter の 2 段の上乗せの差（a − b、勝ち: 勝ち馬の −log p・複勝: y3 の対数損失）の、開催日で束ねた対のブートストラップ。
+    市場だけの値は両者で同じなので、上乗せの差 ＝ 2 段の損失の差。"""
+    rows = []
+    for t in years:
+        ra, rb = res_a["years"][t][fam_a]["_b"], res_b["years"][t][fam_b]["_b"]
+        m = ra.merge(rb[["key", "nll"]], on="key", suffixes=("", "_b"))
+        assert len(m) == len(ra) == len(rb), "2 段の行がそろわない"
+        rows.append(pd.DataFrame({"date": m["date"].to_numpy(), "a": m["nll"].to_numpy(), "b": m["nll_b"].to_numpy()}))
     return _boot(pd.concat(rows), n_boot, seed)
 
 
@@ -371,7 +429,8 @@ def _ledger(period: str, lo: str, hi: str, purpose: str):
     from src.ops import data_ledger as DL
     sp = TR.spec()
     return DL.guard(tool="src/research/model_relabel/mr_eval.py", family="model_relabel", version=f"eval-{period}-{sp['version']}",
-                    period=(lo, hi), purpose=purpose, reads=("着順",), frozen_paths=[TR.SPEC],
+                    period=(lo, hi), purpose=purpose, reads=("着順",),
+                    frozen_paths=[TR.SPEC] + [p for p in (TR.MARKET_CORR, TR.MARKET_CHOICE) if p.exists()],
                     reason="拡張ラベルのモデルの本物のラベルでの当てはまり（回収率は数えない）")
 
 
@@ -385,15 +444,20 @@ def cmd(period: str) -> None:
     lams = [sp["metric"]["lambda_main"]] + list(sp["metric"]["lambda_sensitivity"])
     report = {"spec_version": sp["version"], "period": period, "years": list(years), "results": {}, "feature_axis": {}}
     kept: dict = {}
-    for fs in ("v5bag", "v5bag_ped", "v5bag_mf", "v6e"):
+    for fs in ("v5bag", "v5bag_ped", "v5bag_mf", "v5bag_mfc05", "v5bag_mfc03", "v6e"):
         for target in ("win", "top3"):
             try:
                 allres = nested_time(fs, target, years, lams, sp, base)
             except FileNotFoundError as e:
                 print("予測がまだ揃っていない", fs, target, e, flush=True)
                 continue
-            if fs in ("v5bag", "v5bag_ped", "v5bag_mf"):
+            if fs != "v6e":
                 kept[(fs, target)] = allres
+            if fs == "v5bag_mf" and (DOCS / "market_choice.json").exists():
+                # market_choice.json が、この回の v5bag_mf の選びから同じ規則で作った値と一致するか（古い w のまま使わない）
+                chk = _modal_w(allres[sp["metric"]["lambda_main"]], years)
+                got = json.loads((DOCS / "market_choice.json").read_text(encoding="utf-8"))
+                assert got.get(target) == chk, f"market_choice.json（{got}）が今回の v5bag_mf の選び（{target}: {chk}）と違う"
             for lam, res in allres.items():
                 summ = summarize(res, years)
                 boots = {f"{a}-base": paired_boot(res, base, target, a, "base", years)
@@ -401,19 +465,25 @@ def cmd(period: str) -> None:
                 for a, b in (("pw_nc", "pw"), ("base_nc", "base")):          # 除きの効き目（同じ族どうし）
                     if a in res["years"][years[0]]:
                         boots[f"{a}-{b}"] = paired_boot(res, base, target, a, b, years)
-                per_year = {str(t): {f: {k: v for k, v in r.items() if k != "_p"} for f, r in res["years"][t].items()} for t in years}
+                per_year = {str(t): {f: {k: v for k, v in r.items() if not k.startswith("_")} for f, r in res["years"][t].items()} for t in years}
                 report["results"][f"{fs}|{target}|lam{lam}"] = {"summary": summ, "boot": boots, "per_year": per_year}
                 print(f"{fs}|{target}|lam{lam}", json.dumps({f: {k: summ[f].get(k) for k in ("ll", "L_main", "winner_nlp", "race_auc", "benter_gain")}
                                                              for f in summ}, ensure_ascii=False), json.dumps(boots, ensure_ascii=False), flush=True)
     # 特徴量の軸: 同じ族の v5bag_ped − v5bag（spec の judge_feature・selection_caveat）と v5bag_mf − v5bag（judge_market_free）
     for target in ("win", "top3"):
-        for alt in ("v5bag_ped", "v5bag_mf"):
-            if ("v5bag", target) not in kept or (alt, target) not in kept:
+        for alt, ref in (("v5bag_ped", "v5bag"), ("v5bag_mf", "v5bag"), ("v5bag_mfc05", "v5bag_mf"), ("v5bag_mfc03", "v5bag_mf")):
+            if (ref, target) not in kept or (alt, target) not in kept:
                 continue
             for lam in lams:
-                ra, rb = kept[(alt, target)][lam], kept[("v5bag", target)][lam]
-                report["feature_axis"][f"{alt}|{target}|lam{lam}"] = {f"{f}:{alt}-v5bag": paired_boot(ra, base, target, f, f, years, res_b=rb)
-                                                                      for f in ra["years"][years[0]] if "_fixed_" not in f and f in rb["years"][years[0]]}
+                ra, rb = kept[(alt, target)][lam], kept[(ref, target)][lam]
+                fams = [f for f in ra["years"][years[0]] if "_fixed_" not in f and f in rb["years"][years[0]]]
+                pairs = [(f, f) for f in fams]
+                if alt.startswith("v5bag_mfc"):     # mfc の pw は w を 1 つに決めた版なので、mf の側は同じ w の固定の群と対にする（同じラベルどうし）
+                    w = json.loads((DOCS / "market_choice.json").read_text(encoding="utf-8"))[target]
+                    pairs = [("base", "base"), ("pw", f"pw_fixed_w{w}")]
+                report["feature_axis"][f"{alt}|{target}|lam{lam}"] = {
+                    **{f"{a}:{alt}-{ref}:{b}": paired_boot(ra, base, target, a, b, years, res_b=rb) for a, b in pairs},
+                    **{f"{a}:{alt}-{ref}:{b}:benter": paired_boot_benter(ra, a, rb, b, years) for a, b in pairs}}
             print("feature_axis", alt, target, json.dumps(report["feature_axis"].get(f"{alt}|{target}|lam{lams[0]}"), ensure_ascii=False), flush=True)
     report["missing_families"] = MISSING
     if MISSING:
@@ -496,11 +566,35 @@ def cmd_meeting() -> None:
     tok.finish(result_path=dest)
 
 
+def _modal_w(res: dict, years) -> int:
+    ws = pd.Series([int(res["years"][t]["pw"]["chosen"].split("|")[0][1:]) for t in years])
+    c = ws.value_counts()
+    return int(min(c.index[c == c.max()]))
+
+
+def market_choice() -> dict:
+    """spec の market_corr.labels の規則: v5bag_mf の時間の順の内側の選び（λ 主・外側 2019〜21）で、族 pw の中で最も多く選ばれた w（同数なら小さい w）。"""
+    sp = TR.spec()
+    sel = json.loads((DOCS / "eval_select.json").read_text(encoding="utf-8"))
+    out = {"source": {"spec_version": sel["spec_version"], "eval_select": "v5bag_mf の λ 主・外側 2019〜21 の族 pw の選び"}}
+    for target in ("win", "top3"):
+        py = sel["results"][f"v5bag_mf|{target}|lam{sp['metric']['lambda_main']}"]["per_year"]
+        ws = pd.Series([int(py[t]["pw"]["chosen"].split("|")[0][1:]) for t in sorted(py)])
+        c = ws.value_counts()
+        out[target] = int(min(c.index[c == c.max()]))
+    (DOCS / "market_choice.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    print("market_choice", out, flush=True)
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["select", "confirm", "meeting"])
+    ap.add_argument("cmd", choices=["select", "confirm", "meeting", "market_choice"])
     a = ap.parse_args()
-    cmd_meeting() if a.cmd == "meeting" else cmd(a.cmd)
+    if a.cmd == "market_choice":
+        market_choice()
+    else:
+        cmd_meeting() if a.cmd == "meeting" else cmd(a.cmd)
 
 
 if __name__ == "__main__":

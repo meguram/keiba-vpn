@@ -39,6 +39,8 @@ V6E_BUNDLE = Path(os.environ.get("MODEL_RELABEL_V6E_BUNDLE")
 FOLDS_CSV = ROOT / "docs/operations/model_relabel/meeting_folds.csv"
 YEARS = range(2017, 2025)
 MARKET_POLICY_DROP = ("oikiri_eval", "oikiri_eval_rank", "oikiri_eval_gap")
+MARKET_CORR = ROOT / "docs/operations/model_relabel/market_corr_2016_2021.csv"      # commit して凍結の照合に入れる
+MARKET_CHOICE = ROOT / "docs/operations/model_relabel/market_choice.json"
 NTHREAD = int(os.environ.get("MODEL_RELABEL_NTHREAD") or 4)
 
 
@@ -50,7 +52,7 @@ def fs_configs(fs: str) -> tuple[list[dict], list[int]]:
     """木の設定（固定）と保存する本数の一覧。"""
     from src.research.megu_cycles import mc_data as MC
     sp = spec()["select"]
-    if fs in ("v5bag", "v5bag_ped", "v5bag_mf"):
+    if fs.startswith("v5bag"):
         sets = [dict(MC.XGB_PARAMS, **bs) for bs in MC.BAG_SETS]
         rounds = [int(r) for r in sp["rounds_v5bag"]]
     elif fs == "v6e":
@@ -73,15 +75,23 @@ def fs_configs(fs: str) -> tuple[list[dict], list[int]]:
 def load_matrix(fs: str):
     """X（float32）と meta（race_id・horse_id・year・finish_position）を year<=2024 の行だけ返す。"""
     from src.research.megu_cycles import mc_data as MC
-    if fs in ("v5bag", "v5bag_ped", "v5bag_mf"):
+    if fs.startswith("v5bag"):
         X, meta, names = MC._rich_matrix("v5")
-        if fs == "v5bag_mf":
+        if fs.startswith("v5bag_mf"):
             # 市場を確実に外す版（11/27 ユーザーの指定・longshot-ai の market_free_columns.md の規則 8）: v5 の 1,083 列に市場の列は 0。
             # 公開の意見で人気と重なりうる追い切り評価の 3 列を方針で外す
             drop = [c for c in names if c in MARKET_POLICY_DROP]
             assert len(drop) == len(MARKET_POLICY_DROP), drop
             X = X.drop(columns=drop)
             names = [c for c in names if c not in MARKET_POLICY_DROP]
+        if fs in ("v5bag_mfc05", "v5bag_mfc03"):
+            # 市場の logit と相関の高い列を外す版（spec の market_corr。2016〜21 で測った表 market_corr_2016_2021.csv）
+            th = {"v5bag_mfc05": 0.5, "v5bag_mfc03": 0.3}[fs]
+            t = pd.read_csv(MARKET_CORR)
+            assert set(t["column"]) == set(names), "相関の表の列が v5bag_mf と違う"
+            drop = set(t.loc[t["abs_rho"] >= th, "column"])
+            X = X.drop(columns=[c for c in names if c in drop])
+            names = [c for c in names if c not in drop]
         if fs == "v5bag_ped":
             # 血統の 4 列（mr_ped.py。凍結の第 4 版の as-of の作り・推論の側も同じ関数）を足す。feat_v4 に無い走は NaN
             from src.research.model_relabel import mr_ped
@@ -206,7 +216,8 @@ def run(fs: str, target: str, variant: str, split: str = "time", conv: str = "co
     from src.ops import data_ledger as DL
     t0 = time.time()
     tok = DL.guard(tool="src/research/model_relabel/mr_train.py:run", family="model_relabel", version=f"train-{split}-{fs}-{target}-{variant}-{conv}",
-                   period=("2016-01-01", "2024-12-31"), purpose="reproduce", reads=("着順",), frozen_paths=[SPEC],
+                   period=("2016-01-01", "2024-12-31"), purpose="reproduce", reads=("着順",),
+                   frozen_paths=[SPEC] + ([MARKET_CORR, MARKET_CHOICE] if fs.startswith("v5bag_mfc") else []),
                    reason="拡張ラベルの前へ進める学習の教師（着順・着差・時計）を読むだけ。成績は数えない")
     X, meta, names = load_matrix(fs)
     lab = attach_labels(meta, conv)
@@ -310,10 +321,19 @@ JOBS = [f"{fs}:{t}:{v}" for fs in ("v5bag", "v6e", "v5bag_ped")
     + [f"v5bag_mf:{t}:{v}" for t in ("win", "top3") for v in ("orig", "ext_w1", "ext_w2", "ext_w4")] + ["v5bag_mf:notbig:orig"]
 
 
+def mfc_jobs() -> list[str]:
+    """相関で外す版の 8 本（元と market_choice.json の w × 勝ち・複勝 × 2 段）。w は v5bag_mf の select の後に決まる。"""
+    p = ROOT / "docs/operations/model_relabel/market_choice.json"
+    if not p.exists():
+        return []
+    ch = json.loads(p.read_text(encoding="utf-8"))
+    return [f"{fs}:{t}:{v}" for fs in ("v5bag_mfc05", "v5bag_mfc03") for t in ("win", "top3") for v in ("orig", f"ext_w{ch[t]}")]
+
+
 def status() -> None:
-    """時間の順の全 53 本の済み・残り（部品の数）。止まっても続きから流せる（部品ごとに保存）。"""
+    """時間の順の全 53 本（と相関で外す版の 8 本）の済み・残り（部品の数）。止まっても続きから流せる（部品ごとに保存）。"""
     done, left = [], []
-    for j in JOBS:
+    for j in JOBS + mfc_jobs():
         fs, t, v = j.split(":")
         n_bags = 1 if fs == "v6e" else 3
         d = PARTS / "time" / f"{fs}_{t}_{v}_convert_A"
@@ -328,7 +348,7 @@ def status() -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["run", "labels", "status"])
-    ap.add_argument("--fs", choices=["v5bag", "v5bag_ped", "v5bag_mf", "v6e"], default="v5bag")
+    ap.add_argument("--fs", choices=["v5bag", "v5bag_ped", "v5bag_mf", "v5bag_mfc05", "v5bag_mfc03", "v6e"], default="v5bag")
     ap.add_argument("--target", choices=["win", "top3", "notbig"], default="win")
     ap.add_argument("--variant", default="orig")
     ap.add_argument("--split", choices=["time", "meeting"], default="time")
