@@ -2,9 +2,12 @@
 
 council_viewer の /live と /live/api/*（画面が数秒おきに取りに来る）が使う。手元のファイルを読むだけ（GCS・外の網は読まない。費用 0 円）。
 
-- 探す: ``<claude の設定>/projects/`` の下の、このリポジトリ（本体と .claude/worktrees/*）のフォルダの ``*.jsonl`` のうち、
-  最近（既定 24 時間）更新されたもの。会議の顔ぶれ（roi-plus-man-1〜3・pedigree-1〜2）を呼んだセッションか、
-  名前（agent-name・custom-title）が rules-council・pedigree-lab・bet-optimizer のものだけを出す（ほかのセッションの中身は出さない）。
+- タブ: ``claude agents --json``（30 秒に 1 回まで）に載っている、このリポジトリのセッション（統括役が先頭）と、
+  最近（既定 24 時間）の会議のセッション（会議の顔ぶれ roi-plus-man-1〜3・pedigree-1〜2 を呼んだか、
+  名前が rules-council・pedigree-lab・bet-optimizer のもの）。中身を出すのはこのどちらかだけ。
+- 記録の場所: ``<claude の設定>/projects/`` の下の、このリポジトリ（本体と .claude/worktrees/*）のフォルダの ``<sessionId>.jsonl``。
+- 帯: 状態（実行中・待機中・止まっている・終わった）・待っている理由（記録の末尾から作る規則。wait_reasons）・
+  ゴール（最初の利用者の文）・今の作業・背景の処理（``/proc/<pid>/fd/1`` と記録の背景の番号の照合）。
 - 読む: 本体の記録と、そのサブエージェントの記録 ``<session>/subagents/agent-*.jsonl``。
   ``/tmp/claude-<uid>/*/<session>/tasks/a*.output`` は同じファイルへのシンボリックリンクなので、実体のパスで 1 本にまとめる。
 - 話し手: 担当の地の文、各号（roi-plus-man-1〜3、号を名乗って代わりに呼んだ general-purpose）、血統の 1・2 号、統括役、通知。
@@ -17,6 +20,8 @@ import html
 import json
 import os
 import re
+import shutil
+import subprocess
 import tempfile
 import threading
 import time
@@ -47,6 +52,9 @@ END_RE = re.compile(r"-----END [A-Z ]+-----")
 RAW_OUTPUT_TAGS = ("<bash-stdout", "<bash-stderr", "<bash-input", "<local-command-stdout", "<local-command-stderr",
                    "<command-name", "<command-message", "<command-args")
 MASKED = "（秘密を含みうる行を伏せた）"
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)+")
+IPV4_RE = re.compile(r"(?<![0-9.])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9]|\.[0-9])")
+IP_OK = frozenset({"127.0.0.1", "0.0.0.0"})  # 手元の番地は伏せない
 STAGE_RE = re.compile(r"(?<![A-Za-z0-9])R([0-3])(?![0-9]|-[0-9])")  # R0-17 は議題の番号なので段にしない
 TOPIC_RE = re.compile(r"(?<![A-Za-z0-9])(R0-[0-9]+|RC-[0-9]+)")
 GOU_RE = re.compile(r"([123])\s*号")
@@ -57,6 +65,8 @@ FROM_NAME_RE = re.compile(r'from-name="([^"]{1,80})"')
 NOTIF_SUMMARY_RE = re.compile(r"<summary>(.*?)</summary>", re.S)
 AGENT_ID_RE = re.compile(r"agentId:\s*(a[0-9a-f]{6,})")
 TASK_OUTPUT_RE = re.compile(r"^a[0-9a-f]{6,}\.output$")
+NOTIF_TASK_RE = re.compile(r"<task-id>([A-Za-z0-9]{4,40})</task-id>")
+TASK_ID_RE = re.compile(r"[A-Za-z0-9]{4,40}")
 
 GOU_LABEL = {"1": "1 号（リーダー）", "2": "2 号（市場）", "3": "3 号（運用）"}
 PEDIGREE_LABEL = {"1": "血統 1 号", "2": "血統 2 号"}
@@ -80,7 +90,8 @@ def mask_secrets(text: str) -> str:
             out.append(line)
         if in_block and END_RE.search(line):
             in_block = False
-    return "\n".join(out)
+    text = EMAIL_RE.sub("［メールを伏せた］", "\n".join(out))
+    return IPV4_RE.sub(lambda m: m.group(0) if m.group(0) in IP_OK else "［IP を伏せた］", text)
 
 
 def safe_label(text: str, limit: int = 80) -> str:
@@ -137,7 +148,9 @@ def is_decision(cls: str, description: str, text: str, stage: str = "") -> bool:
 def _tool_line(block: dict) -> str:
     name = block.get("name", "?")
     inp = block.get("input") if isinstance(block.get("input"), dict) else {}
-    what = inp.get("description") or inp.get("file_path") or inp.get("pattern") or inp.get("query") or ""
+    what = inp.get("description") or inp.get("file_path") or inp.get("pattern") or inp.get("query") or inp.get("summary") or ""
+    if name == "SendMessage" and inp.get("to"):
+        what = f"→ {inp['to']}" + (f" {what}" if what else "")
     return one_line(f"{name}: {what}" if what else name)
 
 
@@ -157,6 +170,8 @@ class AgentDirectory:
         self.by_id: dict[str, tuple[str, str]] = {}
         self._pending: dict[str, tuple[str, str]] = {}  # tool_use_id → (種類, 説明)
         self.latest: dict[str, str] = {}  # agentId → SendMessage で続きを頼んだときの要約（段・議題をこちらから取る）
+        self.bg_pending: dict[str, dict] = {}  # tool_use_id → 背景で流した Bash の出来事（結果の番号を書き足す）
+        self.bg_tasks: dict[str, tuple[str, str]] = {}  # 背景の処理の番号 → (Bash の 1 行, 時刻)
 
     def note_call(self, tool_use_id: str, agent_type: str, description: str) -> None:
         self._pending[tool_use_id] = (agent_type, description)
@@ -187,12 +202,32 @@ class AgentDirectory:
 # ── 1 行の JSONL → 出来事 ──
 
 def _event(ts: str, speaker: str, cls: str, kind: str, text: str, stage: str = "", decision: bool = False,
-           topic: str = "") -> dict:
+           topic: str = "", **hints) -> dict:
+    """``hints`` は状態の判定の手がかり（tool・bg・wait・to・task）。画面には渡さない（council_viewer.EVENT_FIELDS）。"""
     limit = TEXT_LIMIT if kind == "text" else LINE_LIMIT
     text = mask_secrets(text)
-    return {"ts": ts or "", "speaker": speaker, "cls": cls, "kind": kind,
-            "text": clip(text, limit) if kind == "text" else one_line(text, limit),
-            "stage": stage, "decision": decision, "topic": topic}
+    e = {"ts": ts or "", "speaker": speaker, "cls": cls, "kind": kind,
+         "text": clip(text, limit) if kind == "text" else one_line(text, limit),
+         "stage": stage, "decision": decision, "topic": topic}
+    e.update(hints)
+    return e
+
+
+WAIT_CMD_RE = re.compile(r"(^|[;&|(\s])(sleep\s|until\s|while\s)")
+
+
+def _tool_hints(block: dict) -> dict:
+    """ツールの呼び出しの手がかり。命令の中身は画面に出さず、待つ形かどうかだけ見る。"""
+    inp = block.get("input") if isinstance(block.get("input"), dict) else {}
+    h = {"tool": str(block.get("name", ""))}
+    if inp.get("run_in_background") is True:
+        h["bg"] = True
+    cmd = inp.get("command")
+    if isinstance(cmd, str) and WAIT_CMD_RE.search(cmd):
+        h["wait"] = True
+    if h["tool"] == "SendMessage":
+        h["to"] = safe_label(str(inp.get("to", "")), 60)
+    return h
 
 
 def parse_main_line(obj: dict, agents: AgentDirectory, owner: str = OWNER_DEFAULT) -> list[dict]:
@@ -225,7 +260,10 @@ def parse_main_line(obj: dict, agents: AgentDirectory, owner: str = OWNER_DEFAUL
                 label, _ = speaker_for_agent(*agents.get(aid))
                 out.append(_event(ts, owner, "sc", "call", f"続きを頼む → {label}: {summ}", stage_of(summ), topic=topic_of(summ)))
             elif bt == "tool_use":
-                out.append(_event(ts, owner, "sc", "tool", _tool_line(b)))
+                ev = _event(ts, owner, "sc", "tool", _tool_line(b), **_tool_hints(b))  # 伏せ字は _event の中で通る
+                if ev.get("bg"):
+                    agents.bg_pending[b.get("id", "")] = ev
+                out.append(ev)
         return out
     if t == "user" and isinstance(content, list):
         for b in content:  # ツールの結果は出さない。Agent の結果からは agentId だけ拾う
@@ -239,6 +277,11 @@ def parse_main_line(obj: dict, agents: AgentDirectory, owner: str = OWNER_DEFAUL
                     aid = m.group(1) if m else None
                 if aid:
                     agents.note_result(b.get("tool_use_id", ""), aid)
+                task = tur.get("backgroundTaskId") if isinstance(tur, dict) else None
+                ev = agents.bg_pending.pop(b.get("tool_use_id", ""), None)
+                if isinstance(task, str) and TASK_ID_RE.fullmatch(task) and ev is not None:
+                    ev["task"] = task  # 通知（task-notification）の番号と突き合わせる
+                    agents.bg_tasks[task] = (ev["text"], ts)
         return out
     if t == "user" and isinstance(content, str):
         raw = content
@@ -258,7 +301,9 @@ def parse_main_line(obj: dict, agents: AgentDirectory, owner: str = OWNER_DEFAUL
             return []
         if "<task-notification" in raw:
             s = NOTIF_SUMMARY_RE.search(raw)
-            return [_event(ts, "通知", "sn", "notice", html.unescape(s.group(1)) if s else "通知")]  # 通知の中は &gt; などで書かれる
+            tid = NOTIF_TASK_RE.search(raw)
+            return [_event(ts, "通知", "sn", "notice", html.unescape(s.group(1)) if s else "通知",  # 通知の中は &gt; などで書かれる
+                           task=tid.group(1) if tid else "")]
         x = XSESSION_RE.search(raw)
         body = (x.group(2) if x else REMINDER_RE.sub("", raw)).strip()
         if not body or body.startswith("This session is being continued"):
@@ -465,6 +510,8 @@ class SessionFeed:
         self.last_poll = 0.0
         self.created = time.time()
         self.last_used = self.created  # 作ったばかりのものを先に捨てない  # 作り直すと番号が 1 から振り直しになる（画面はこれで取り直しを知る）
+        self._goal: str | None = None
+        self._goal_size = -1  # ゴールを探したときの記録の大きさ（頭 2MB を探し終えたら読み直さない）
         self._lock = threading.Lock()
 
     def discover(self) -> None:
@@ -522,6 +569,45 @@ class SessionFeed:
         if time.time() - self.last_poll >= min_sec:
             self.poll_once()
 
+    def goal(self) -> str:
+        """最初の利用者の文（初めの指示）。頭だけ 1 回読んで覚える。"""
+        if not self._goal:  # 始めたばかりで、まだ書かれていないときは、記録が伸びたときだけ読み直す
+            try:
+                size = self.main.stat().st_size
+            except OSError:
+                size = -1
+            if size != self._goal_size and (self._goal_size < GOAL_SCAN_HEAD or self._goal is None):
+                self._goal_size = size
+                self._goal = first_user_text(self.main)
+        return self._goal or ""
+
+    def last_activity(self) -> float:
+        """本体とサブエージェントの記録の、いちばん新しい更新の時刻（UNIX 秒）。"""
+        best = 0.0
+        for real in list(self.tails):
+            try:
+                best = max(best, os.stat(real).st_mtime)
+            except OSError:
+                continue
+        return best
+
+    def summary(self, agent: dict | None, procs: dict | None = None, now: float | None = None) -> dict:
+        """選んだセッションの帯（状態・待っている理由・ゴール・今の作業・背景の処理）。"""
+        now = time.time() if now is None else now
+        with self._lock:
+            evs = list(self.events)
+            bg_tasks = dict(self.agents.bg_tasks)  # poll_once が別のスレッドで足すので、ロックの中で写す
+        last = activity_mtime(self.main)  # タブと同じ材料（本体＋サブエージェントの記録）
+        agent = agent or {}
+        state = run_state(agent.get("state", ""), agent.get("status", ""), last, now) if agent else "past"
+        bg = background_tasks(bg_tasks, procs or {}, now)
+        own_text = next((e for e in reversed(evs) if e["cls"] == "sc" and e["kind"] == "text"), None)
+        own_tool = next((e for e in reversed(evs) if e["cls"] == "sc" and e["kind"] == "tool"), None)
+        orch = next((e for e in reversed(evs) if e["cls"] == "so" and e["kind"] == "text"), None)
+        return {"state": state, "agent_state": agent.get("state", ""), "short": agent.get("short", ""),
+                "reasons": wait_reasons(evs, state, agent.get("short", ""), bg) if state in ("waiting", "blocked") else [],
+                "goal": self.goal(), "orch": orch, "text": own_text, "tool": own_tool, "last": last, "bg": bg}
+
     def since(self, seq: int, limit: int = 30) -> list[dict]:
         """``seq`` より後の出来事。``seq`` が 0（初回）・先の番号（起動し直し）なら、発言（ツール以外）が
         ``limit`` 件になるところから後ろを返す（間のツールの行も含める）。"""
@@ -541,14 +627,22 @@ class SessionFeed:
 
 
 class CouncilHub:
-    """最近更新された記録から会議のセッションを探し、セッションごとの出来事を渡す。"""
+    """タブの一覧（動いているセッション＋最近の会議）と、セッションごとの出来事を渡す。
 
-    def __init__(self, dirs_fn, tmp_base: Path | None = None, window_hours: float = WINDOW_HOURS) -> None:
+    中身を出すのは、``claude agents`` に載っている（このリポジトリの）セッションか、会議と判定したセッションだけ。
+    """
+
+    def __init__(self, dirs_fn, tmp_base: Path | None = None, window_hours: float = WINDOW_HOURS,
+                 agents: "AgentList | None" = None, procs: "ProcScanner | None" = None) -> None:
         self.dirs_fn = dirs_fn  # () → 探すフォルダの一覧（呼ぶたびに探し直す。worktree が増えても追う）
         self.tmp_base = tmp_base
         self.window_sec = window_hours * 3600
+        self.agents = agents
+        self.procs = procs
         self.infos: dict[str, SessionInfo] = {}
         self.feeds: dict[str, SessionFeed] = {}
+        self.listed: dict[str, dict] = {}  # sessionId → claude agents の 1 行（最後に取れた分）
+        self.paths: dict[str, Path] = {}  # sessionId → 本体の記録（見つけたら覚える）
         self.last_discover = 0.0
         self.epoch = f"{time.time():.3f}"  # 起動し直すと番号が戻るので、画面はこれが替わったら初めから取り直す
         self._lock = threading.Lock()
@@ -578,11 +672,50 @@ class CouncilHub:
                 del self.infos[key]
 
     def sessions(self) -> list[dict]:
+        """最近の会議のセッション（古い形の一覧。tabs の材料）。"""
         self.discover()
         with self._lock:  # discover が別のスレッドで agent_types を足している間に回さない
             rows = [i.public() for i in self.infos.values() if i.council]
         rows.sort(key=lambda r: r["mtime"], reverse=True)
         return rows
+
+    def find_main(self, sid: str) -> Path | None:
+        """sessionId → 本体の記録。24 時間より古くても探す（止まったままのセッションも出す）。"""
+        p = self.paths.get(sid)
+        if p is not None and p.is_file():
+            return p
+        for d in self.dirs_fn():
+            q = d / f"{sid}.jsonl"
+            if q.is_file():
+                self.paths[sid] = q
+                return q
+        return None
+
+    def tabs(self, now: float | None = None) -> tuple[list[dict], bool]:
+        """(タブの行, claude agents を読めたか)。統括役を先頭に、動いているセッション → 最近の会議の順。"""
+        now = time.time() if now is None else now
+        council = {r["id"]: r for r in self.sessions()}
+        rows, ok = self.agents.get() if self.agents else ([], False)
+        listed = {r["sid"]: r for r in rows}
+        with self._lock:
+            if ok or rows:
+                self.listed = listed
+        out = []
+        for r in rows:
+            main = self.find_main(r["sid"])
+            last = activity_mtime(main) if main else 0.0
+            c = council.get(r["sid"], {})
+            out.append({"id": r["sid"], "short": r["short"], "name": r["name"] or c.get("name") or r["short"],
+                        "state": run_state(r["state"], r["status"], last, now), "agent_state": r["state"],
+                        "place": r["place"], "started": r["started"], "mtime": last, "members": c.get("members", []),
+                        "found": main is not None})
+        for sid, c in council.items():
+            if sid not in listed:
+                out.append({"id": sid, "short": sid[:8], "name": c["name"], "state": "past", "agent_state": "",
+                            "place": "", "started": 0, "mtime": c["mtime"], "members": c["members"], "found": True})
+        out.sort(key=lambda t: (not t["name"].startswith("claude-orchestrator"), t["state"] == "past",
+                                t["started"] if t["state"] != "past" else -t["mtime"]))
+        return out, ok
 
     def _info(self, sid: str) -> SessionInfo | None:
         for i in self.infos.values():
@@ -590,24 +723,336 @@ class CouncilHub:
                 return i
         return None
 
+    def agent_row(self, sid: str) -> dict | None:
+        return self.listed.get(sid)
+
     def feed(self, sid: str) -> SessionFeed | None:
-        """会議と判定したセッションだけ読む（ほかのセッションの中身は出さない）。"""
+        """claude agents に載っているか、会議と判定したセッションだけ読む（ほかのセッションの中身は出さない）。"""
         self.discover()
         with self._lock:
             info = self._info(sid)
-            if info is None:
-                return None
+            row = self.listed.get(sid)
+        if info is None and row is None:
+            return None
+        found = self.find_main(sid) if info is None else None  # ファイルを探す間はロックを持たない
+        with self._lock:
+            if info is not None:
+                path, name = info.path, info.name
+            else:
+                if found is None:
+                    return None
+                path, name = found, row["name"]
+            owner = f"担当 {safe_label(name)}" if name else "担当"
             f = self.feeds.get(sid)
             if f is None:
-                f = SessionFeed(info.path, self.tmp_base, f"担当 {safe_label(info.name)}" if info.name else "担当")
+                f = SessionFeed(path, self.tmp_base, owner)
                 self.feeds[sid] = f
                 while len(self.feeds) > MAX_FEEDS:
                     old = min(self.feeds.values(), key=lambda x: x.last_used)
                     del self.feeds[old.sid]
-            elif info.name and f.owner != f"担当 {safe_label(info.name)}":
-                f.owner = f"担当 {safe_label(info.name)}"
+            elif name and f.owner != owner:
+                f.owner = owner
         f.poll_if_due()
         return f
+
+    def summary(self, sid: str, feed: SessionFeed) -> dict:
+        procs = self.procs.get() if self.procs else {}
+        return feed.summary(self.listed.get(sid), procs)
+
+
+# ── 動いているセッションの一覧（claude agents --json） ──
+
+AGENTS_SEC = 30.0  # claude agents を呼ぶのは 30 秒に 1 回まで（画面が何枚開いていても）
+ACTIVE_SEC = 180.0  # 直近 3 分に記録の動きがあれば「実行中」
+SID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+SHORT_RE = re.compile(r"[0-9a-f]{8}")
+AGENT_STATES = ("working", "blocked", "done")
+
+
+def run_claude_agents() -> list:
+    """``claude agents --json``（動いている裏のセッションの一覧）。読むだけ（セッションには何も送らない）。"""
+    path = os.pathsep.join([str(Path.home() / ".local" / "bin"), os.environ.get("PATH") or "/usr/bin:/bin"])
+    exe = shutil.which("claude", path=path)
+    if not exe:
+        raise FileNotFoundError("claude")
+    env = dict(os.environ, PATH=path, CLAUDE_CONFIG_DIR=str(claude_base()))
+    r = subprocess.run([exe, "agents", "--json"], capture_output=True, timeout=20, env=env,
+                       stdin=subprocess.DEVNULL, check=False)
+    if r.returncode != 0:
+        raise RuntimeError(f"claude agents: {r.returncode}")
+    d = json.loads(r.stdout)
+    if not isinstance(d, list):
+        raise ValueError("claude agents: not a list")
+    return d
+
+
+def agent_row(x, repo_root: str | None) -> dict | None:
+    """claude agents の 1 行 → タブに使う分だけ（cwd は worktree の名前だけにする）。このリポジトリの外は捨てる。"""
+    if not isinstance(x, dict):
+        return None
+    sid = str(x.get("sessionId", ""))
+    if not SID_RE.fullmatch(sid):
+        return None
+    cwd = str(x.get("cwd", ""))
+    if repo_root and not (cwd == repo_root or cwd.startswith(repo_root.rstrip("/") + "/")):
+        return None
+    short = str(x.get("id", ""))
+    if not SHORT_RE.fullmatch(short):
+        short = sid[:8]
+    place = "本体"
+    if "/.claude/worktrees/" in cwd:
+        place = safe_label(cwd.split("/.claude/worktrees/", 1)[1].split("/", 1)[0], 60)
+    state = str(x.get("state", ""))
+    started = x.get("startedAt")
+    return {"sid": sid, "short": short, "name": safe_label(str(x.get("name", "")), 80) if x.get("name") else "",
+            "state": state if state in AGENT_STATES else "other",
+            "status": str(x.get("status", "")) if x.get("status") in ("busy", "idle") else "",
+            "place": place, "started": float(started) / 1000 if isinstance(started, (int, float)) else 0.0}
+
+
+class AgentList:
+    """claude agents の結果を覚える。呼ぶのは ``interval`` 秒に 1 回まで・同時に 1 本まで（失敗も覚える）。"""
+
+    def __init__(self, fn=run_claude_agents, repo_root: str | None = None, interval: float = AGENTS_SEC,
+                 clock=time.monotonic) -> None:
+        self.fn = fn
+        self.repo_root = repo_root
+        self.interval = interval
+        self.clock = clock
+        self.rows: list[dict] = []
+        self.ok = False
+        self.last: float | None = None
+        self.calls = 0
+        self._lock = threading.Lock()
+
+    def get(self) -> tuple[list[dict], bool]:
+        if not self._lock.acquire(blocking=self.last is None):  # 呼んでいる間は前の結果を返す（初回だけは待つ）
+            return list(self.rows), self.ok
+        try:
+            now = self.clock()
+            if self.last is None or now - self.last >= self.interval:
+                self.last = now
+                self.calls += 1
+                try:
+                    rows = [r for r in (agent_row(x, self.repo_root) for x in self.fn()) if r]
+                    self.rows, self.ok = rows, True
+                except Exception:  # noqa: BLE001  前の一覧を残す（画面を空にしない）
+                    self.ok = False
+            return list(self.rows), self.ok
+        finally:
+            self._lock.release()
+
+
+def run_state(agent_state: str, status: str, last: float, now: float) -> str:
+    """4 つの状態: running（実行中）・waiting（待機中）・blocked（止まっている）・done（終わった）。
+
+    blocked・done は claude agents の state のまま。それ以外は、claude agents の status（busy → 実行中・idle → 待機中）。
+    status が無いときは、記録が直近 ``ACTIVE_SEC`` 秒に動いていれば実行中、そうでなければ待機中。
+    """
+    if agent_state == "done":
+        return "done"
+    if agent_state == "blocked":
+        return "blocked"
+    if status:  # claude agents が busy・idle を明かしていれば、それを使う
+        return "running" if status == "busy" else "waiting"
+    return "running" if (last and now - last <= ACTIVE_SEC) else "waiting"
+
+
+def activity_mtime(main: Path) -> float:
+    """本体の記録と、そのサブエージェントの記録のいちばん新しい更新の時刻。"""
+    best = 0.0
+    for p in [main, *(main.parent / main.stem / "subagents").glob("agent-*.jsonl")]:
+        try:
+            best = max(best, p.stat().st_mtime)
+        except OSError:
+            continue
+    return best
+
+
+GOAL_SCAN_HEAD = 2 * 1024 * 1024
+
+
+def first_user_text(path: Path, head: int = GOAL_SCAN_HEAD) -> str:
+    """記録の頭から、最初の利用者の文（skill の差し込み・通知・要約からの再開・手で打ったコマンドを除く）。"""
+    try:
+        with path.open("rb") as f:
+            data = f.read(head)
+    except OSError:
+        return ""
+    lines = data.split(b"\n")
+    if len(data) >= head:
+        lines = lines[:-1]  # 書きかけ・切れた行は捨てる
+    for raw in lines:
+        if raw.startswith(SKIP_PREFIXES) or b'"user"' not in raw:
+            continue
+        try:
+            obj = json.loads(raw)
+        except ValueError:
+            continue
+        if not isinstance(obj, dict) or obj.get("type") != "user" or obj.get("isMeta"):
+            continue
+        msg = obj.get("message")
+        content = msg.get("content") if isinstance(msg, dict) else None
+        if isinstance(content, list):
+            content = "\n".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
+        if not isinstance(content, str):
+            continue
+        if any(tag in content for tag in RAW_OUTPUT_TAGS) or "<task-notification" in content or "<agent-message" in content:
+            continue
+        x = XSESSION_RE.search(content)
+        body = (x.group(2) if x else REMINDER_RE.sub("", content)).strip()
+        if not body or body.startswith("This session is being continued"):
+            continue
+        return clip(mask_secrets(body), TEXT_LIMIT)
+    return ""
+
+
+# ── 待っている理由（記録の末尾から作る規則。推測で作らない） ──
+
+ASK_RE = re.compile(r"承認をお願い|承認をください|承認を待|判断をください|ご判断|判断をお願い|判断を仰|判断を待|"
+                    r"返事が(?:無|な)ければ|返事を待|指示をください|指示を待|確認をお願い|ご確認ください|お待ちしています")
+TIME_WAIT_RE = re.compile(r"((?:[0-9]{1,2}/[0-9]{1,2}|[0-9]{1,2}:[0-9]{2}|[0-9]{1,2} ?時)(?:（[^）]{1,4}）)? ?"
+                          r"(?:以降|を待|まで待|になったら|になってから))")
+APPROVAL_TOOLS = frozenset({"ExitPlanMode", "AskUserQuestion"})
+WAIT_TOOLS = frozenset({"Monitor"})
+SENTENCE_SPLIT_RE = re.compile(r"(?<=[。！？!?])|\n")
+NO_REASON = "理由は記録から読み取れない"
+
+
+def _sentence(text: str, m: re.Match) -> str:
+    """一致した場所を含む 1 文。"""
+    start = max(text.rfind("。", 0, m.start()), text.rfind("\n", 0, m.start())) + 1
+    ends = [i for i in (text.find("。", m.end()), text.find("\n", m.end())) if i >= 0]
+    end = min(ends) + 1 if ends else len(text)
+    return one_line(text[start:end].strip(), 120)
+
+
+def wait_reasons(events: list[dict], state: str, short: str = "", bg: list[dict] | None = None) -> list[str]:
+    """待機中・止まっているときの「何を待っているか・理由」（強い順）。規則は tests/scripts/test_council_live.py で固定。
+
+    1. 止まっている（blocked）: 最後の自分の動きが ExitPlanMode・AskUserQuestion → 承認の画面。ほかは承認の画面の可能性。
+    2. 背景の処理が ps に生きている → その処理の終わりを待っている。
+       生きているか分からなくても、最後の自分のツールが背景の Bash（run_in_background。sleep・until の待ちも含む）・
+       Monitor で、その後にその番号の通知が来ていない → 同じ。前景の sleep・until は、終わってから待機中になるので見ない。
+    3. 最後の自分のツールが SendMessage で、その後に返事（統括役宛てなら統括役の発言、ほかの宛先ならほかの話し手の発言）
+       が無い → 宛先の返事を待っている。
+    4. 最後の自分の動きがサブエージェントの呼び出し → その報告を待っている。
+    5. 最後の自分の発言に「承認をお願い」「判断をください」「返事が無ければ」など → 統括役・ユーザーの返事を待っている。
+    6. 最後の自分の発言に「12/1 以降」「17:00 以降」など → 時刻を待っている。
+    どれにも当たらなければ「理由は記録から読み取れない」。
+    """
+    out: list[str] = []
+    sid = short if SHORT_RE.fullmatch(short or "") else ""
+    attach = f"（claude attach {sid}）" if sid else ""
+    own = [(i, e) for i, e in enumerate(events) if e.get("cls") == "sc"]
+    last_i, last = own[-1] if own else (-1, None)
+    tool_i, tool = next(((i, e) for i, e in reversed(own) if e["kind"] == "tool"), (-1, None))
+    text_i, text = next(((i, e) for i, e in reversed(own) if e["kind"] == "text"), (-1, None))
+    after = lambda i, cls: any(e.get("cls") == cls for e in events[i + 1:])  # noqa: E731
+    if state == "blocked":
+        if last is not None and last["kind"] == "tool" and last.get("tool") in APPROVAL_TOOLS:
+            out.append(f"ユーザーの承認の画面で止まっている{attach}")
+        else:
+            out.append(f"承認の画面などで止まっている可能性{attach}")
+    for b in (bg or [])[:3]:
+        out.append(f"背景の処理の終わりを待っている: {b['line']}（{b['minutes']} 分）")
+    if not bg and tool is not None and (tool.get("bg") or tool.get("tool") in WAIT_TOOLS):
+        task = tool.get("task")  # 番号が分かれば、その番号の通知が来たら終わり。分からなければ（Monitor など）どの通知でも
+        done = any(e.get("cls") == "sn" and (not task or e.get("task") == task) for e in events[tool_i + 1:])
+        if not done:
+            out.append(f"背景の処理の終わりを待っている: {tool['text']}")
+    if tool is not None and tool.get("tool") == "SendMessage":
+        to = tool.get("to") or ""
+        orch = not to or "orchestrator" in to or to == "main"
+        replied = any(e.get("kind") == "text" and (e.get("cls") == "so" if orch else e.get("cls") not in ("sc", "sn", "so"))
+                      for e in events[tool_i + 1:])  # ほかの宛先は、その後の地の文・報告（ツールの行は数えない）
+        if not replied:
+            out.append("統括役の返事を待っている" if orch else f"{to} の返事を待っている")
+    if last is not None and last["kind"] == "call":
+        out.append(f"サブエージェントの報告を待っている: {one_line(last['text'], 100)}")
+    if text is not None and not after(text_i, "so"):
+        m = ASK_RE.search(text["text"])
+        if m:
+            out.append(f"統括役・ユーザーの返事を待っている: {_sentence(text['text'], m)}")
+        t = TIME_WAIT_RE.search(text["text"])
+        if t:
+            out.append(f"時刻を待っている: {t.group(1)}")
+    return out or [NO_REASON]
+
+
+# ── 背景の処理（そのセッションが run_in_background で流したもの。ps と記録の照合。読むだけ） ──
+
+TASK_LINK_RE = re.compile(r"/tasks/([A-Za-z0-9]{4,40})\.output$")
+PROCS_SEC = 10.0
+
+
+class ProcScanner:
+    """``/proc/<pid>/fd/1`` が ``…/tasks/<番号>.output`` を指す処理を、番号ごとにまとめる（命令行・環境変数は読まない）。"""
+
+    def __init__(self, proc_root: Path = Path("/proc"), interval: float = PROCS_SEC, clock=time.monotonic) -> None:
+        self.root = proc_root
+        self.interval = interval
+        self.clock = clock
+        self.last: float | None = None
+        self.found: dict[str, dict] = {}
+        self._lock = threading.Lock()
+
+    def _boot(self) -> float:
+        try:
+            for line in (self.root / "stat").read_text().splitlines():
+                if line.startswith("btime "):
+                    return float(line.split()[1])
+        except (OSError, ValueError):
+            pass
+        return 0.0
+
+    def scan(self) -> dict[str, dict]:
+        boot, hz = self._boot(), os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
+        out: dict[str, dict] = {}
+        try:
+            pids = [d for d in self.root.iterdir() if d.name.isascii() and d.name.isdigit()]
+        except OSError:
+            return out
+        for d in pids:
+            try:
+                m = TASK_LINK_RE.search(os.readlink(d / "fd" / "1"))
+            except OSError:
+                continue
+            if not m:
+                continue
+            started = 0.0
+            try:
+                stat = (d / "stat").read_text()
+                fields = stat[stat.rindex(")") + 2:].split()
+                started = boot + int(fields[19]) / hz if boot else 0.0
+            except (OSError, ValueError, IndexError):
+                pass
+            t = out.setdefault(m.group(1), {"pids": 0, "started": started})
+            t["pids"] += 1
+            if started and (not t["started"] or started < t["started"]):
+                t["started"] = started
+        return out
+
+    def get(self) -> dict[str, dict]:
+        with self._lock:
+            now = self.clock()
+            if self.last is None or now - self.last >= self.interval:
+                self.last = now
+                self.found = self.scan()
+            return dict(self.found)
+
+
+def background_tasks(bg_tasks: dict[str, tuple[str, str]], procs: dict[str, dict], now: float) -> list[dict]:
+    """記録の背景の処理のうち、ps に生きているもの（名前は記録の Bash の 1 行。経過は処理の始まりから）。"""
+    out = []
+    for task, (line, ts) in bg_tasks.items():
+        p = procs.get(task)
+        if not p:
+            continue
+        mins = int(max(0.0, now - p["started"]) // 60) if p.get("started") else 0
+        out.append({"task": task, "line": line, "ts": ts, "pids": p["pids"], "minutes": mins})
+    out.sort(key=lambda b: b["ts"])
+    return out
 
 
 def default_hub(repo_root: Path) -> CouncilHub:
@@ -621,4 +1066,8 @@ def default_hub(repo_root: Path) -> CouncilHub:
     else:
         base, prefix = claude_base(), project_prefix(repo_root)
         dirs = lambda: project_dirs(base, prefix)  # noqa: E731
-    return CouncilHub(dirs, default_tmp_base(), hours)
+    root = str(repo_root)
+    if "/.claude/worktrees/" in root:
+        root = root.split("/.claude/worktrees/", 1)[0]
+    agents = None if os.environ.get("KEIBA_COUNCIL_LIVE_AGENTS") == "0" else AgentList(run_claude_agents, root)
+    return CouncilHub(dirs, default_tmp_base(), hours, agents, ProcScanner())

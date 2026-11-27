@@ -90,13 +90,15 @@ def phi_check(X: np.ndarray, pt: np.ndarray, rid: np.ndarray, m: np.ndarray, n_r
         r = y - pt
         Us.append(np.stack([np.bincount(rid, weights=r * Xc[:, f], minlength=R) for f in range(X.shape[1])], axis=1).sum(0))
     Us = np.array(Us)
-    return Us.var(axis=0) / np.diagonal(I, axis1=1, axis2=2).sum(0)
+    d = np.diagonal(I, axis1=1, axis2=2).sum(0)
+    return np.where(d > 0, Us.var(axis=0) / np.where(d > 0, d, 1.0), np.nan)
 
 
 def phi_pearson(U: np.ndarray, I: np.ndarray) -> np.ndarray:
     """実データの U の散らばり（Pearson の比）: Σ_r U_r² / Σ_r I_r（特徴ごと）。
     レース 1 本の I は小さい（約 0.5）ので、日の効きの分（τ²·I²）はほぼ入らず、モデルのずれの過分散を拾う。"""
-    return (U ** 2).sum(0) / np.diagonal(I, axis1=1, axis2=2).sum(0)
+    d = np.diagonal(I, axis1=1, axis2=2).sum(0)
+    return np.where(d > 0, (U ** 2).sum(0) / np.where(d > 0, d, 1.0), np.nan)
 
 
 def dl_tau2(Ud: np.ndarray, Id: np.ndarray, phi: float) -> np.ndarray:

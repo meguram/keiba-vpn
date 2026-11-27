@@ -298,3 +298,49 @@ def test_safe_md_drops_wrapped_dangerous_links(href: str):
     out = cv.safe_md_to_html(f"[押す]({href})\n\n[r]\n\n[r]: javascript:alert(2)")
     assert "javascript" not in out.lower().replace("javascript&amp;colon;", "").split("href")[-1] or "href" not in out
     assert 'href="javascript' not in out.lower() and "href=\"&lt;javascript" not in out.lower()
+
+
+def test_modeling_final_html_served_and_listed(root: Path, tmp_path: Path):
+    mdir = root / cv.HTML_MODEL_REL
+    (mdir / "sub").mkdir(parents=True)
+    (mdir / "ensemble_architecture.html").write_text("<title>構成図</title><p>ens</p>", encoding="utf-8")
+    (mdir / "sub" / "deep.html").write_text("x", encoding="utf-8")
+    (mdir / "out_link.html").symlink_to(tmp_path / "outside.html")
+    (tmp_path / "outside.html").write_text("secret", encoding="utf-8")
+    assert cv.html_file(root, "ensemble_architecture.html", cv.HTML_MODEL_REL).endswith(b"<p>ens</p>")
+    for bad in ("sub/deep.html", "out_link.html", "../../../../.env", "bad name.html"):
+        assert cv.html_file(root, bad, cv.HTML_MODEL_REL) is None, bad
+    out = cv.index_html(root)
+    sec = out[out.index("<h2>成果の HTML</h2>"):]
+    assert "<code>docs/html/modeling/final/</code>" in sec
+    assert 'href="/html/modeling/final/ensemble_architecture.html"' in sec and "構成図" in sec
+    assert "deep.html" not in sec and "out_link.html" not in sec.split("modeling/final/")[1]
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), cv.make_handler(root))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        def get(path: str):
+            c = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=5)
+            c.request("GET", path)
+            r = c.getresponse()
+            r.read()
+            return r
+
+        r = get("/html/modeling/final/ensemble_architecture.html")
+        assert r.status == 200 and (r.getheader("Content-Security-Policy") or "").startswith("sandbox")
+        for bad in ("/html/modeling/final/sub/deep.html", "/html/modeling/final/out_link.html",
+                    "/html/modeling/final/../../../.env", "/html/modeling/final/%2e%2e/%2e%2e/.env",
+                    "/html/modeling/final/", "/html/modeling/final"):
+            assert get(bad).status == 404, bad
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_live_page_newest_first_with_sticky_latest():
+    body = cv.live_page("n")
+    bar = body[body.index('<div class="bar">'):body.index('<div id="log">')]
+    assert 'id="tabs"' in bar and 'id="sum"' in bar and 'id="latest"' in bar  # 最新の枠は固定の帯の中
+    assert bar.index('id="sum"') < bar.index('id="latest"')
+    assert 'id="news"' not in body and "toBottom" not in body  # 一番下へ動かす作りはやめた
+    assert "latest.insertBefore(row, latest.firstChild)" in body  # 新しい発言は上に足す
+    assert "#latest { max-height:25vh; }" in body  # スマホの幅でも画面の半分を超えない

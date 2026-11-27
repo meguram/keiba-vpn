@@ -62,7 +62,7 @@ OLD_STATUS = {"legacy", "snapshot", "history"}
 # 既定と違う棚に置く章（slug → 棚）
 OVERRIDE: dict[str, str] = {
     # 本番の仕様（モデル・規則・運用の正）
-    "model_versions": "spec", "retrain_order": "spec", "upstream_model_outputs": "spec",
+    "model_versions": "spec", "retrain_order": "spec", "upstream_model_outputs": "spec", "ensemble_architecture": "spec",
     "training_pipeline_decisions": "spec", "race_performance_rating_system": "spec", "megu_index_v3a": "spec",
     "exotic_bet_probabilities": "spec", "final_odds_model": "spec", "ev_calibration_adopt": "spec",
     "feature_serving_low_memory": "spec", "data_terms_and_public_policy": "spec", "local_dataset_endpoints": "spec",
@@ -77,7 +77,7 @@ OVERRIDE: dict[str, str] = {
     # 血統
     "NOTE_APTITUDE_5GEN": "res-pedigree", "PEDIGREE_NOTE_APTITUDE": "res-pedigree", "PERFORMANCE_GENES": "res-pedigree",
     "sire_lines_all": "res-pedigree", "horse_pedigree_10gen_merge_design": "res-pedigree", "pedigree_position_cross": "res-pedigree",
-    "pedigree_roi": "res-pedigree", "pedigree_model": "res-pedigree", "pedigree_easy": "res-pedigree", "pedigree_side_cohit": "res-pedigree", "dam_age_firstfoal": "res-pedigree",
+    "pedigree_roi": "res-pedigree", "pedigree_model": "res-pedigree", "pedigree_easy": "res-pedigree", "day_pedigree": "res-pedigree", "pedigree_side_cohit": "res-pedigree", "dam_age_firstfoal": "res-pedigree",
     "weight_growth_performance": "res-pedigree",
     # 馬券と印（学習・実験の部にある馬券の記録）
     "bet_cycles": "res-bet", "latest_strategy_tables": "res-bet", "megu_why_below_100": "res-bet", "megu_cycles_50": "res-bet", "longshot_course_rules": "res-bet", "rules_council_summary": "res-bet", "rules_council_favorites": "res-bet", "rules_council_t60_band": "res-bet", "rules_council_daybias": "res-bet", "rules_council_debut": "res-bet", "bet_patterns_from_honmei": "res-bet", "pair_bets": "res-bet", "bet_optimization_story": "res-bet", "bet_r2_walkthrough": "res-bet", "rules_bet_opt": "res-bet", "odds_rank_accuracy": "res-bet",
@@ -142,7 +142,7 @@ GROUPS: dict[str, list[Group]] = {
               ["DATASET_CATALOG", "DATASOURCES", "data_scraping_storage_reference", "database_schemas", "data_features_reference", "data_flow_schedule",
                "local_dataset_endpoints", "data_terms_and_public_policy"]),
         Group("モデルと規則（今、本番で動く版）", "どの版が本番かの正は model_versions（モデルの版と採用状況）。確定事項の正は training_pipeline_decisions（決定ログ）。",
-              ["model_versions", "retrain_order", "upstream_model_outputs", "training_pipeline_decisions", "race_performance_rating_system", "megu_index_v3a",
+              ["model_versions", "retrain_order", "upstream_model_outputs", "ensemble_architecture", "training_pipeline_decisions", "race_performance_rating_system", "megu_index_v3a",
                "final_odds_model", "exotic_bet_probabilities", "ev_calibration_adopt", "feature_serving_low_memory"]),
     ],
     "ops": [
@@ -196,7 +196,7 @@ GROUPS: dict[str, list[Group]] = {
     ],
     "res-pedigree": [
         Group("血統のまとめ", "結論は「いまのベスト分析 / 血統分析のまとめ」。",
-              ["pedigree_easy", "pedigree_model", "pedigree_roi", "pedigree_side_cohit", "pedigree_position_cross", "dam_age_firstfoal", "weight_growth_performance", "sire_lines_all",
+              ["pedigree_easy", "pedigree_model", "day_pedigree", "pedigree_roi", "pedigree_side_cohit", "pedigree_position_cross", "dam_age_firstfoal", "weight_growth_performance", "sire_lines_all",
                "PERFORMANCE_GENES", "PEDIGREE_NOTE_APTITUDE", "NOTE_APTITUDE_5GEN", "horse_pedigree_10gen_merge_design",
                "track_bias_pedigree_pipeline", "pedigree_stage_research_notes"],
               [E("docs/ideas/sire_dam_influence.md", "父と母の影響"), E("docs/ideas/euro_kick_sire_lines.md", "欧州型の瞬発力の系統")]),
