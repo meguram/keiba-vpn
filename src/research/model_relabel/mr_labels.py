@@ -9,7 +9,7 @@
 - 学習の側だけで使う。推論の経路（src/pipeline/）からは import しない（tests/research/test_model_relabel.py で確かめる）。
 
 費用 0 円（手元の結果表だけ。GCS を読まない）。
-  python -m src.research.model_relabel.labels table
+  python -m src.research.model_relabel.mr_labels table
 """
 
 from __future__ import annotations
@@ -109,7 +109,7 @@ def load_results(years=range(2016, 2025), ledger: bool = True) -> pd.DataFrame:
     """開発の行（2016〜24）の結果表を読む。2025 年以降は読まない。2022〜24 は開発の検証の期間なので台帳に残す。"""
     if ledger:
         from src.ops import data_ledger as DL
-        tok = DL.guard(tool="src/research/model_relabel/labels.py:load_results", family="model_relabel", version="labels-mr-1",
+        tok = DL.guard(tool="src/research/model_relabel/mr_labels.py:load_results", family="model_relabel", version="labels-mr-1",
                        period=(f"{min(years)}-01-01", f"{max(years)}-12-31"), purpose="reproduce", reads=("着順",), frozen_paths=[SPEC],
                        reason="拡張ラベル（着差・時計）を学習の教師として作るだけ。成績は数えない")
         tok.finish()

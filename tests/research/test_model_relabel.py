@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.research.model_relabel import folds, labels as L
+from src.research.model_relabel import folds, mr_labels as L
 
 ROOT = Path(__file__).resolve().parents[2]
 CONV = L.load_spec()["margin"]["convert_A"]
@@ -145,3 +145,27 @@ def test_ext_ok_shared_with_not_finished():
     assert not out["ext_ok"].any()
     out["field_size"], out["surface"], out["grade"], out["year"] = 3, "芝", "", 2020
     assert L.rate_table(out)["races_no_extend"] == 1
+
+
+def test_blocked_race_day_window():
+    import datetime as dt
+
+    from src.research.model_relabel.mr_train import blocked
+    jst = dt.timezone(dt.timedelta(hours=9))
+    at = lambda s: dt.datetime.fromisoformat(s).replace(tzinfo=jst)      # noqa: E731
+    assert not blocked(at("2026-11-28 07:29")) and blocked(at("2026-11-28 07:30"))
+    assert blocked(at("2026-11-28 16:59")) and not blocked(at("2026-11-28 17:00"))
+    assert blocked(at("2026-11-30 12:00"))            # 月曜の開催
+    assert not blocked(at("2026-12-01 12:00"))        # 平日
+    assert blocked(at("2026-12-12 10:00"))            # 土曜
+
+
+def test_race_normalize_sum_and_cap():
+    from src.research.model_relabel.mr_eval import race_normalize
+    rid = np.array([1, 1, 1, 1, 2, 2, 2])
+    p = np.array([0.9, 0.5, 0.1, 0.05, 0.3, 0.3, 0.3])
+    q = race_normalize(p, rid, 3.0)
+    assert q.max() <= 1
+    assert math.isclose(q[:4].sum(), 3.0, rel_tol=1e-4) and math.isclose(q[4:].sum(), 3.0, rel_tol=1e-3)
+    w = race_normalize(p, rid, 1.0)
+    assert math.isclose(w[:4].sum(), 1.0, rel_tol=1e-6)
