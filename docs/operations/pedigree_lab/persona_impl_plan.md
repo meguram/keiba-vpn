@@ -41,10 +41,10 @@
 - ダートの閾値: 2024 年のダートの行で、T-60 の再現の人気（pre_odds の drift）が 6 番人気以下の馬の、正規化した `dirt_mat5` の上位 10% の値です。
 - 芝の閾値: 同じ作りで、2024 年の芝の行の `turf_mat5`。
 - 2024 年は開発の行の最後の年です。2025・26 年を新しく開けないために、「前の年まで」を 2024 年で止めます。満期まで直しません。
-- 着順は読みません。台帳には記述（describe）として残します。
+- 着順は読みません。台帳には select（2016〜2024 年）として残します。
 
 ### 規則の凍結（条件 3）
-- 規則・閾値・理由の文の作りを `src/pipeline/pedigree_persona/rules.py` と `config/pedigree_persona/frozen.json` に置き、commit の sha と sha256 を persona_design.md に書きます。
+- 規則・閾値・理由の文の作りを `src/research/pedigree_persona/rules.py` と `config/pedigree_persona/frozen.json` に置き、commit の sha と sha256 を persona_design.md に書きます。
 - 推論の道具は起動時に frozen.json の sha256 を照合します。直すときは版を分け、理由を書きます。
 
 ## 2. 出力の JSON の形（race_analysis/pedigree_persona/<race_id>.json）
@@ -103,3 +103,17 @@
 
 ## 統括役の決定（2026-11-26）
 - 計画を承認。直し 4 点: 置き場を別のファイルに・T-60 の cron の作り（手元だけ・1 秒・flock・nice 19・負荷の測り）・開催日に動く新しい処理なので 12/1 以降の平日に入れ、12/6 は影だけ・閾値の凍結・照合・禁止の語・発走後に落とす作りは計画どおり。
+
+## 実装の状態（2026-11-27・担当 pedigree-persona）
+- 規則の凍結: `src/research/pedigree_persona/rules.py`（版 pp-1・sha256 bdf979ca4f9b6f4f…）・`columns.py`（3e02a34a336d0aeb…）と `config/pedigree_persona/frozen.json`（sha256 bbddb91d7e387154…）。作ったのは `src/research/pedigree_lab/persona_freeze.py`（台帳は select）。
+  - 凍結の道具は 3 回流した（11/27 09:11・09:30・10 時台）。2 回目と 3 回目は、規則のファイルを直したため（祖先の名前の整え・critic の指摘の禁止の語の足し・列の作りの sha の照合）。閾値と sd の作りは変えておらず、3 回とも値は同じ（ダート 1.208406・芝 1.262158・芝の sd 0.00538127）。閾値は 1 回目から見ている。
+  - 研究の道具は、登録の 3 ファイルに加えて、前の夜の段が呼ぶ 7 ファイル（build_base・data・features4・features2・gates・scene_dist・final_eval）の sha256 も 11/27 の版で固定した（columns.FROZEN_SHA256）。研究の側でこれらを直すと、前の夜の段は止まる。
+  - ダートの sd を同じ作りで測り直すと 0.00539185 で、登録の定数 0.00539186 との比は 1.0000。
+  - 芝の sd は 0.00538127。閾値はダート 1.2084・芝 1.2622（2024 年の split 0・1・新馬戦を除く・T-60 は再現 5 回・6 番人気以下の上位 10%）。
+- 照合: 11/21・22・23 の 3 日で、前の夜の段の 4 列と記録の CSV の差は 0.0（線は 1e-6）。馬の組・血統の無い馬も一致した（`src/research/pedigree_persona/verify.py`）。
+- 通しの試し（11/23・本物の T-60 の写し）: 23 レースのうち 13 レースで一覧あり、7 レースで当てはまる馬なし、3 レースは新馬戦など。T-60 の段は 1 回 1.7 秒（20 レース）、対象が無い回は 0.5 秒。欄のファイルは 1 レース約 4 KB。
+- 置き場の作り: 欄 `data/local/race_analysis/pedigree_persona/<race_id>.json`、生の値 `data/local/pedigree_persona/<日付>/{raw.parquet,meta.json,races.json}`。画面に出す目印は `data/local/meta/pedigree_persona_show.on`（12/6 は置かない）。
+- cron: `scripts/cron/install_pedigree_persona_cron.sh`（12/1 以降の平日に root で流す。まだ入れていない）。
+- 本番の経路の決まり（test_data_ledger）: src/api・src/pipeline・scripts/cron には `pedigree_lab` の文字を置けないので、道具は `src/research/pedigree_persona/` に置いた（めぐ分析と同じ置き方）。前の夜の段は台帳を開かない（研究の道具の関数を呼ぶだけ）。
+- 前の夜の段は台帳を開かない（統括役の承認 11/27）。本番の推論と同じ扱いで、過去の結果を as-of の特徴量の元として読むだけで評価や選び直しに使わず、本番の推論の経路は台帳を参照しない決まり（test_data_ledger）に合わせる。前向きの記録の道具（forward_record）は研究の道具なので、今のまま reproduce と forward の token を開く。
+- 欄のファイルは、めぐ分析の掃除（store.py の *.json）の対象外で、溜まり続ける（1 レース約 4 KB・年 3,500 レースで約 14 MB）。

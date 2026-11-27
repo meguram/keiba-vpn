@@ -1,0 +1,35 @@
+{
+ "version": "pp-1",
+ "made_at": "2026-11-27T09:43:21+09:00",
+ "rules_sha256": "bdf979ca4f9b6f4f88640733a1009776b8f2f70a4ab3e82aa5b572f07b9c3396",
+ "code_sha256": {
+  "persona_freeze.py": "1d319eca35605e13128db737fbdfae50beec37c1396d8d4f0e8d2761de5ea842",
+  "columns.py": "3e02a34a336d0aeb396d567fbb00726490999271addb14a19bb7bccac243bb5f"
+ },
+ "sd": {
+  "ダート": 0.00539186,
+  "芝": 0.00538127
+ },
+ "sd_dirt_measured": 0.00539185,
+ "sd_dirt_ratio": 1.0,
+ "threshold": {
+  "ダート": 1.208406,
+  "芝": 1.262158
+ },
+ "population": "2024 年の split 0・1・新馬戦を除く・T-60 は再現（pre_odds.simulate 5 回）・6 番人気以下・上位 10%",
+ "counts": {
+  "ダート": {
+   "rows": 17264,
+   "races": 1235,
+   "pop6_rows_per_sim": 11089.0
+  },
+  "芝": {
+   "rows": 14987,
+   "races": 1112,
+   "pop6_rows_per_sim": 9427.0
+  }
+ },
+ "pop_min": 6,
+ "top_frac": 0.1,
+ "max_picks": 2
+}
