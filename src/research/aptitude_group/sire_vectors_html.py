@@ -17,6 +17,7 @@ from scipy.stats import spearmanr
 from sklearn.manifold import TSNE
 
 from src.research.aptitude_group import common
+from src.research.aptitude_group import lines as lines_mod
 from src.research.aptitude_group.lines import line_labels, short
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -45,33 +46,12 @@ def maps(X: np.ndarray) -> dict:
 PED5 = Path("/home/jovyan/work/keiba-vpn/data/local/horse_pedigree_5gen")
 
 
-PARENT: dict[str, str] = {}      # 祖先の id → その父の id（5 代の血統の位置から。build で読み込む）
+QUAL: set[str] = set()      # 札を数える中核の種牡馬（build で入れる）
 
 
 def line_of(h: str, lab: dict[str, str]) -> str | None:
-    """札の表（sire_line_origin）に無い種牡馬は、父系の祖先を上へたどり、最初に札のある祖先の札を使う（critic 3 回目の 2）。
-    たどり方: 父の対応 PARENT（手元の血統の位置から作る。古い外国の祖先にも効く）→ 本人の 5 代の血統の JSON。"""
-    if h in lab:
-        return lab[h]
-    x = h
-    for _ in range(8):
-        x = PARENT.get(x)
-        if x is None:
-            break
-        if x in lab:
-            return lab[x]
-    p = PED5 / h[:4] / f"{h}.json"
-    if not p.exists():
-        return None
-    try:
-        anc = json.loads(p.read_text(encoding="utf-8")).get("ancestors", [])
-    except Exception:
-        return None
-    for g in range(1, 6):
-        for a in anc:
-            if a.get("generation") == g and a.get("position") == 0 and a.get("horse_id") in lab:
-                return lab[a["horse_id"]]
-    return None
+    """大系統の札（lines.line_of と同じ。予測のモデルと地図で同じ関数）。"""
+    return lines_mod.line_of(h, lab, QUAL)
 
 
 def side_payload(rows: list[dict], dims: list[str], lab: dict[str, str], dl: dict[str, tuple[str, str]]) -> dict:
@@ -120,9 +100,12 @@ def add_predictions(ps: dict, pred: dict, names: dict[str, str], lab: dict[str, 
         return out
     for r in ps["rows"]:
         if r["id"] in pred["oof"]:
-            r["oof"] = coords(np.array(pred["oof"][r["id"]]), r["line"])
+            if None not in pred["oof"][r["id"]]:
+                r["oof"] = coords(np.array(pred["oof"][r["id"]]), r["line"])
     small = []
     for h, v in pred["small"].items():
+        if any(x is None for x in v["pred"] + v["blend"]):      # NaN を None にした予測は出さない（critic 6 回目）
+            continue
         lo = line_of(h, lab)
         line = short(lo) if lo else "札なし"
         small.append({"id": h, "name": names.get(h, h), "runs": v["runs"], "line": line, "pred6": v["pred"], "blend6": v["blend"],
@@ -140,8 +123,9 @@ def line_rows(lv: dict, side: str) -> list[dict]:
     return rows
 
 
-def add_boot(payload_side: dict, ids: np.ndarray, B: np.ndarray) -> None:
-    """ブートストラップの各回のベクトルを、同じ PCA の軸に写して 2 次元の共分散（1σ の楕円）にし、各回の 6 本も埋め込む（距離の区間用）。"""
+def add_boot(payload_side: dict, ids: np.ndarray, B: np.ndarray, embed: bool = True) -> None:
+    """ブートストラップの各回のベクトルを、同じ PCA の軸に写して 2 次元の共分散（1σ の楕円）にする。
+    embed=True なら各回の 6 本も埋め込む（距離の引き直しの幅用）。(A)(B) は楕円だけ（ページの大きさの上限のため。幅は「—」）。"""
     rows = payload_side["rows"]
     pos = {h: i for i, h in enumerate(ids)}
     X = np.array([r["m6"] for r in rows], float)
@@ -165,7 +149,7 @@ def add_boot(payload_side: dict, ids: np.ndarray, B: np.ndarray) -> None:
             r.setdefault("ell", {})[space] = [round(float(np.sqrt(ev[1])), 3), round(float(np.sqrt(ev[0])), 3),
                                               round(float(np.arctan2(evec[1, 1], evec[0, 1])), 3)]
     for r in rows:
-        if r["id"] in pos:
+        if embed and r["id"] in pos:                      # (A)(B) は楕円だけ（各回の値は埋め込まない。ページの大きさの上限 5MB のため）
             b = B[:, pos[r["id"]], :]
             r["boot"] = [[round(float(x), 2) for x in v] if np.isfinite(v).all() else None for v in b]   # 欠けた回は null で残す（回をそろえる・critic 3 回目の 3）
 
@@ -270,7 +254,8 @@ function drawMap() {
   const M = S()[space], C = view === 'pc' ? M.pc : M.ts, R = rows();
   const show = R.map(r => !line || r.line === line);
   const keys = topKeys(R.filter((r, i) => show[i])); const col = k => { const i = keys.indexOf(k); return i < 0 ? 'var(--other)' : `var(--s${i + 1})`; };
-  const xs = C.map(c => c[0]), ys = C.map(c => c[1]); const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const extra = (side === 'sire' && D.pred && view === 'pc') ? [...(predMode === 'none' ? [] : D.pred.small.filter(p => !line || p.line === line).map(p => (predMode === 'blend' ? p.c_blend : p.c_pred)[space])), ...(sel && sel.oof ? [sel.oof[space]] : [])] : [];
+  const xs = C.map(c => c[0]).concat(extra.map(c => c[0])), ys = C.map(c => c[1]).concat(extra.map(c => c[1]));   // ◇ も範囲に入れる（critic 6 回目） const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
   const W = 720, H = 520, pad = 34; const sx = x => pad + (x - x0) / ((x1 - x0) || 1) * (W - 2 * pad), sy = y => H - pad - (y - y0) / ((y1 - y0) || 1) * (H - 2 * pad);
   const maxr = Math.max(...R.map(r => r.runs));
   let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="種牡馬の 2 次元の地図"><defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--muted)"/></marker></defs><rect width="${W}" height="${H}" fill="var(--panel)" rx="8"/>`;
@@ -310,7 +295,7 @@ function drawMap() {
   $('#map').innerHTML = s + '</svg>';
   $('#legend').innerHTML = keys.map((k, i) => `<span><span style="color:var(--s${i + 1})">${SHAPE[i]}</span> ${esc(keyName(k))}</span>`).join('') + '<span><span style="color:var(--other)">●</span> その他</span>';
   $('#distort').textContent = `この地図のゆがみ: 6 本の元の距離と、地図の上の距離の順位相関 ${(view === 'pc' ? M.rho_pc : M.rho_ts).toFixed(2)}（1 に近いほど、地図の遠近が元の近さに忠実）。` + (view === 'pc' ? `2 本の軸で 6 本の分散の ${((M.var[0] + M.var[1]) * 100).toFixed(0)}% を表す。` : 't-SNE は近い同士の並びを保ち、遠い同士の距離は当てにならない。');
-  $('#predacc').textContent = (side === 'sire' && D.pred) ? `予測（血統構成から。白抜きの◇）の当たり具合: 交差検証の相関 ` + M6.map(d => `${LAB[d]} ${D.pred.corr[d].toFixed(2)}`).join('・') + `（大系統の平均だけ: ` + M6.map(d => D.pred.corr_line_only[d].toFixed(2)).join('・') + `）。誤差は 1 標準偏差ほど残るので、◇の位置はおおよその見当。PCA の地図でだけ出す。` : '';
+  $('#predacc').textContent = (side === 'sire' && D.pred) ? `予測（血統構成から。白抜きの◇）の当たり具合: 交差検証の相関 ` + M6.map(d => `${LAB[d]} ${D.pred.corr[d] == null ? '—' : D.pred.corr[d].toFixed(2)}`).join('・') + `（大系統の平均だけ: ` + M6.map(d => D.pred.corr_line_only[d] == null ? '—' : D.pred.corr_line_only[d].toFixed(2)).join('・') + `）。誤差は 1 標準偏差ほど残るので、◇の位置はおおよその見当。PCA の地図でだけ出す。` : '';
   $('#map').querySelectorAll('[data-pid]').forEach(c => {
     c.addEventListener('mousemove', e => { const p = D.pred.small.find(x => x.id === c.dataset.pid); tip.style.display = 'block'; tip.style.left = (e.clientX + 12) + 'px'; tip.style.top = (e.clientY + 12) + 'px';
       tip.innerHTML = `<b>◇ ${esc(p.name)}</b>（${esc(p.line)}）<br>${predMode === 'blend' ? '予測と実測を走数で混ぜた値' : '血統構成からの予測'}・産駒の走数 ${p.runs}<br>` + M6.map((d, k) => `${LAB[d]} ${(predMode === 'blend' ? p.blend6 : p.pred6)[k].toFixed(2)}`).join('・'); });
@@ -441,13 +426,9 @@ def summary_html(info: dict) -> str:
 def build() -> None:
     d = json.loads((common.OUT / "sire_vectors.json").read_text())
     dl, info = detailed()
-    pp_ = common.OUT / "parent_links.json"
-    if not pp_.exists():                              # 父の対応は 1 回だけ作って置く（血統の全馬の位置を読むので少し重い）
-        from src.research.aptitude_group.line_vectors import pedigree_links
-        pp_.write_text(json.dumps(pedigree_links(set())[1]))
-    PARENT.update(json.loads(pp_.read_text()))
     qualified = {r["id"] for r in d["sire"]["rows"] if r.get("core", True)}   # 札は中核（300 走以上）で数える（lines・detailed と同じ・critic 3 回目の 5）
     lab = line_labels(qualified, with_ancestors=True)     # 鎖の中の古い祖先にも札（母父・(B) の札なしを減らす）
+    QUAL.update(qualified)
     payload = {"dims": d["dims"], "sire": side_payload(d["sire"]["rows"], d["dims"], lab, dl),
                "bms": side_payload(d["bms"]["rows"], d["dims"], lab, {}), "has_dl": bool(dl)}
     lvp = common.OUT / "line_vectors.json"
@@ -466,6 +447,12 @@ def build() -> None:
         add_boot(payload["sire"], z["sire_ids"].astype(str), z["sire_B"])
         add_boot(payload["bms"], z["bms_ids"].astype(str), z["bms_B"])
         payload["n_boot"] = int(z["sire_B"].shape[0])
+    lbp = common.OUT / "line_vectors_boot.npz"
+    if lbp.exists() and "A" in payload:
+        z = np.load(lbp, allow_pickle=False)
+        for k in ("A", "B"):
+            if f"{k}_B" in z:
+                add_boot(payload[k], z[f"{k}_ids"].astype(str), z[f"{k}_B"], embed=False)
     js_data = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")      # < をすべて逃がす（critic 2 回目の 16）
     lab_js = json.dumps(LABEL, ensure_ascii=False).replace("<", "\\u003c")
     ps, pb = payload["sire"], payload["bms"]
@@ -497,6 +484,7 @@ def build() -> None:
 <div class="legend" id="legend"></div>
 <div id="map"></div>
 <p class="sub">誤差の楕円（PCA の地図だけ）: 産駒の走りを開催の単位で引き直したブートストラップの各回のベクトルを、同じ軸に写した広がり。実線 = 68%、破線 = 95%。走数の少ない種牡馬ほど楕円が大きい。t-SNE は写しが回ごとに変わるので、楕円は出さず、点の濃さで見せる。</p>
+<p class="sub">サイアーライン (A)・牝系 (B) は誤差の楕円だけを出し、距離の引き直しの幅は「—」（各回の値をページに埋め込まない。大きさの上限のため）。</p>
 <p class="sub">距離の「引き直しの幅」: ブートストラップの各回の 2 頭の距離の 2.5〜97.5%。測りの雑音で距離は上ぶれするので、幅は本当の距離より上に寄る（近い組ほど強い）。</p>
 <p class="sub">点の大きさ = 走数。点の濃さ = 値の確かさの順位（同じ側の中で、走数が少なく上の段の値に寄った種牡馬ほど薄い）。色と形 = 走数の多い上位 4 つ（ほかは「その他」）。点を押すと下に詳しく出て、近い 10 頭と線で結ぶ。Shift を押しながら押すと、2 頭の比べ。</p>
 <h2 id="selname"></h2>

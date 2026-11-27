@@ -19,9 +19,8 @@ from sklearn.model_selection import GroupKFold
 
 from src.research.aptitude_group import common
 from src.research.aptitude_group.line_vectors import LINE_POS, build, long_frame, pedigree_links, zfix
-from src.research.aptitude_group.lines import line_labels
+from src.research.aptitude_group.lines import line_labels, line_of as line_of_shared
 from src.research.aptitude_group.sire_vectors import DIMS, K, MIN_RUNS, PED5, names, runs, shrink, stats, stats_base
-from src.research.aptitude_group.sire_vectors_html import line_of
 from src.research.pedigree_lab import data
 from src.research.pedigree_lab.aptitude import MAT_POS
 
@@ -55,12 +54,11 @@ def inbreeding(ped: dict[tuple[int, int], str]) -> float:
 class Inputs:
     """入力の作り（学習と推論で同じ）。A・B は z の 6 本の辞書、sire・bms は sire_vectors の z の 6 本の辞書。"""
 
-    def __init__(self, A: dict, B: dict, SIRE: dict, BMS: dict, lines: list[str], lab: dict[str, str], parent: dict[str, str]):
-        self.A, self.B, self.SIRE, self.BMS, self.lines, self.lab, self.parent = A, B, SIRE, BMS, lines, lab, parent
+    def __init__(self, B: dict, SIRE: dict, BMS: dict, lines: list[str], lab: dict[str, str], qual: set[str]):
+        self.B, self.SIRE, self.BMS, self.lines, self.lab, self.qual = B, SIRE, BMS, lines, lab, qual
 
     def row(self, h: str, father_a: np.ndarray | None = None) -> dict:
         ped = own_pedigree(h)
-        f = ped.get((1, 0))
         out = {}
         fa = father_a                                  # 父の (A) は呼ぶ側が一つ抜きで作って渡す（学習と推論で同じ・critic 5 回目）
         out |= {f"fa_{d}": (fa[i] if fa is not None else 0.0) for i, d in enumerate(M6)} | {"fa_miss": float(fa is None)}
@@ -76,7 +74,7 @@ class Inputs:
                     acc += 0.5 ** g * v
                     wsum += 0.5 ** g
         out |= {f"mb_{d}": (acc[i] / wsum if wsum else 0.0) for i, d in enumerate(M6)} | {"mb_miss": float(wsum == 0)}
-        ln = line_of(h, self.lab) or ""
+        ln = line_of_shared(h, self.lab, self.qual) or ""      # 地図と同じ札のたどり方（critic 6 回目）
         out |= {f"line_{x}": float(ln == x) for x in self.lines}
         out["inbreed"] = inbreeding(ped)
         out["no_ped"] = float(not ped)
@@ -100,6 +98,7 @@ def father_a_loo(h: str, f: str | None, L: pd.DataFrame, base: dict, Vfull: pd.D
         return {d: (S.loc[key, ("d", d)] + K * prior.get(d, 0.0)) / (S.loc[key, ("n", d)] + K) for d in DIMS}
     gf = parent.get(f)
     gff = parent.get(gf) if gf else None
+    # 父の父の父 gff の値は全体のまま（h の産駒は gff から見て 4 代目で (A) の外。h 自身の走りは重み 1/4 で残るが、目標〔産駒〕ではない）
     pg = {d: float(Vfull.loc[gff, d]) for d in DIMS} if gff in Vfull.index else {}
     vg = raw(gf, pg) if gf else None
     vf = raw(f, vg or {})
@@ -110,7 +109,8 @@ def father_a_loo(h: str, f: str | None, L: pd.DataFrame, base: dict, Vfull: pd.D
 
 def predict_vector(x_row: dict, model: dict) -> np.ndarray:
     """保存したモデル（predict.json の model）で、入力の行（Inputs.row の辞書）から 6 本を出す。"""
-    x = (np.array([x_row.get(c, 0.0) for c in model["cols"]], float) - np.array(model["mu"])) / np.array(model["sd"])
+    x = np.nan_to_num(np.array([x_row.get(c, 0.0) for c in model["cols"]], float))         # 学習の fillna(0) と同じ（critic 6 回目）
+    x = (x - np.array(model["mu"])) / np.maximum(np.array(model["sd"]), 1e-6)            # 丸めで sd が 0 になっても割らない
     return np.array([model["dims"][d]["intercept"] + float(np.dot(model["dims"][d]["coef"], x)) for d in M6])
 
 
@@ -140,15 +140,14 @@ def main() -> None:
     dims = sv["dims"]
     SIRE = {r["id"]: m6(dict(zip(dims, r["v"]))) for r in sv["sire"]["rows"]}
     BMS = {r["id"]: m6(dict(zip(dims, r["v"]))) for r in sv["bms"]["rows"]}
-    A = {h: m6(dict(zip(dims, x["v"]))) for h, x in lv["A"].items()}
     Bv = {h: m6(dict(zip(dims, x["v"]))) for h, x in lv["B"].items()}
     target = {r["id"]: r for r in sv["sire"]["rows"]}
     core = {r["id"] for r in sv["sire"]["rows"] if r.get("core", True)}
-    lab = line_labels(core)
+    lab = line_labels(core, with_ancestors=True)
     F = runs()
     P, parent = pedigree_links(set(F["horse_id"]))
-    lines = sorted({line_of(h, lab) or "" for h in target} - {""})
-    inp = Inputs(A, Bv, SIRE, BMS, lines, lab, parent)
+    lines = sorted({line_of_shared(h, lab, core) or "" for h in target} - {""})
+    inp = Inputs(Bv, SIRE, BMS, lines, lab, core)
     # 父の (A) の一つ抜き: S を通る直系（S 自身・S の産駒・S の孫）の行を抜いて、父の鍵だけで集計し直す
     Fa = F[["horse_id", "meeting", "gc", "surf", "venue", "distance", "going", "course_type", "direction", "early", "ts", "lx", "acc_z", "gain_r"]].copy()
     L = long_frame(Fa, P, LINE_POS)

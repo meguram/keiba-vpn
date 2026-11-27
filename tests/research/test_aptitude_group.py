@@ -122,6 +122,23 @@ def test_line_labels_use_ancestors_and_merge(tmp_path, monkeypatch):
     assert lines.short("Mr. Prospector系") == "ミスプロ"
 
 
+def test_line_of_unkeyed_sire_uses_fathers_own_label(tmp_path, monkeypatch):
+    """表に無い種牡馬は、父の「自分の札」から数える（鍵のある種牡馬の規則と同じ。1 代上にずれない・critic 6 回目）。"""
+    import json
+    from src.research.aptitude_group import lines
+    chain = {}
+    for i in range(9):                                     # 9 頭: 父 F（自分の札 C系）→ 父の父 G（D系）
+        chain[f"k{i}"] = {"chain": [[f"k{i}", "", "X系"], ["F", "", "C系"], ["G", "", "D系"]]}
+    p = tmp_path / "origin.json"
+    p.write_text(json.dumps(chain), encoding="utf-8")
+    monkeypatch.setattr(lines, "ORIGIN", p)
+    monkeypatch.setattr(lines, "_OWN", {})
+    monkeypatch.setattr(lines, "_PARENT", {"new": "F", "F": "G"})
+    lab = lines.line_labels(set(chain), with_ancestors=True)
+    assert lab["k0"] == "C系"                              # 鍵のある種牡馬: 父 F の札
+    assert lines.line_of("new", lab, set(chain)) == "C系"  # 父が F の新しい種牡馬も同じ札（lab["F"] = D系 にずれない）
+
+
 def test_contrast_is_condition_minus_outside():
     from src.research.aptitude_group import sire_vectors
     rng = np.random.default_rng(7)

@@ -55,6 +55,14 @@ def line_labels(qualified: set[str], with_ancestors: bool = False) -> dict[str, 
     # b 自身がさらに上へまとまるなら、a は b へまとめない（札の名前と中身がずれないように。1 回だけの決まりを保つ・critic 3 回目の 6）
     merge = {a: b for a, b in merge.items() if b not in merge}
     out = {h: merge.get(a, a) for h, a in first.items()}
+    if with_ancestors == "own":
+        # 鎖の中の各 id の「自分の札」（8 頭以上の札だけ・まとめも同じ）。line_of が父から上へたどるときに使う
+        own = {}
+        for v in O.values():
+            for x in v["chain"]:
+                if x[2] in big and x[0] not in own:
+                    own[x[0]] = merge.get(x[2], x[2])
+        return own
     if with_ancestors:
         # 鎖の中の祖先（日本の種牡馬でない古い祖先も）に、同じ規則で札を付ける: その祖先より上の鎖で最初の 8 頭以上の札（まとめも同じ）。
         # 母父・牝系 (B) の古い外国の祖先が「札なし」にならないように（11/27）。鍵のある種牡馬の札は変えない。
@@ -71,3 +79,38 @@ def line_labels(qualified: set[str], with_ancestors: bool = False) -> dict[str, 
     return out
 
 
+
+
+PARENT_PATH = Path("/home/jovyan/work/aptitude_group_out/parent_links.json")
+PED_PATH = Path("/home/jovyan/work/pedigree_lab_out/ped.parquet")
+_PARENT: dict[str, str] = {}
+_OWN: dict[str, str] = {}
+
+
+def parent_links() -> dict[str, str]:
+    """祖先の id → その父の id（5 代の血統の位置から）。血統の parquet が新しくなったら作り直す（critic 6 回目）。"""
+    if not _PARENT:
+        if not PARENT_PATH.exists() or PARENT_PATH.stat().st_mtime < PED_PATH.stat().st_mtime:
+            from src.research.aptitude_group.line_vectors import pedigree_links
+            PARENT_PATH.write_text(json.dumps(pedigree_links(set())[1]))
+        _PARENT.update(json.loads(PARENT_PATH.read_text()))
+    return _PARENT
+
+
+def line_of(h: str, lab: dict[str, str], qualified: set[str]) -> str | None:
+    """種牡馬 h の大系統。札の表に鍵があればその札（父から上の鎖で最初の 8 頭以上の札）。
+    無ければ、父 → 父の父 → … と上へたどり、最初に「自分の札」が 8 頭以上の札である祖先の札を使う
+    （鍵のある種牡馬の規則と同じ数え方。lab[父] を使うと 1 代上にずれる・critic 6 回目）。予測のモデルと地図で同じ関数を使う。"""
+    if h in lab:
+        return lab[h]
+    if not _OWN:
+        _OWN.update(line_labels(qualified, with_ancestors="own"))
+    par = parent_links()
+    x = h
+    for _ in range(10):
+        x = par.get(x)
+        if x is None:
+            return None
+        if x in _OWN:
+            return _OWN[x]
+    return None
