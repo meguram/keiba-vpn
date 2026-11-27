@@ -24,7 +24,14 @@ python -m src.scripts.data.pos_rules_eval            # → /tmp/pos_rules/report
   B6 = (n·M0 + k·B5)/(n + k)（n は走数。n=0 なら B5）。k は探す側で {0.5, 1, 2, 4, 8} から平均絶対誤差の最小で選ぶ。
   比べる相手 B0 = M0（n=0 は全体の as-of 平均）。確かめる側で B6 と B0 の差をブートストラップ（seed 7333）で出す。
   母の産駒は、軽い表に母の ID が無いので使わない。
-(C) 確かめる側でも M0 より良かった規則だけを、画面の説明の 1 文の型にする。
+(C) 確かめる側でも M0 より良かった規則だけを、画面の説明の 1 文の型にする（docs/ideas/past_position_late_start.md）。
+確かめる側の (A) のブートストラップの seed は 7334。
+
+初回の後の直し（2026-11-27・critic の指摘。規則・候補・k の候補は変えない）:
+- 表が 2016-01 から始まるため、それより前の走を数えられない馬が「走数が少ない」に混ざっていた。的は、表に初めて出たのが 2017 年以降の馬に限る（集団の平均と A3 の数は全頭で作る）。
+- A3 の先行馬の数は、山が 2 つの馬だけでなく、レースの全頭（履歴のある馬）で数える。
+- A2・A6 の前走は、障害・初角の無い走も含めた、本当の前走にする。
+- 寄せの効きが父・騎手などの情報によるのかを分けるため、対照 B7 = (n·M0 + k·全体の平均)/(n + k)（k は同じ探し方）を並べる。
 """
 
 from __future__ import annotations
@@ -59,7 +66,13 @@ def load() -> pd.DataFrame:
         df[c] = df[c].astype(str)
     df["date"] = df["date"].astype(str).str[:10]
     fp = pd.to_numeric(df["finish_position"], errors="coerce")
-    df = df[fp.notna() & (fp > 0) & ~df["surface"].astype(str).str.startswith("障")].drop(columns=["finish_position"])
+    df = df[fp.notna() & (fp > 0)].drop(columns=["finish_position"])
+    first_seen = df.groupby("horse_id")["date"].transform("min")
+    df = df.assign(young=first_seen >= "2017-01-01").sort_values(["horse_id", "date", "race_id"])   # 集団の平均は全頭で作り、的は young だけ
+    d0 = pd.to_numeric(df["distance"], errors="coerce")
+    df["prev_dist"] = d0.groupby(df["horse_id"]).shift(1)                   # 本当の前走（障害・初角の無い走も含む）
+    df["gap_days"] = pd.to_datetime(df["date"]).groupby(df["horse_id"]).diff().dt.days
+    df = df[~df["surface"].astype(str).str.startswith("障")]
     fs = pd.to_numeric(df["field_size"], errors="coerce")
     first = pd.to_numeric(df["passing_order"].astype("string").str.extract(r"^(\d+)")[0], errors="coerce")
     df = df.assign(fs=fs, r=first / fs, dist=pd.to_numeric(df["distance"], errors="coerce"),
@@ -95,8 +108,7 @@ def rows(df: pd.DataFrame) -> pd.DataFrame:
             rec = {"idx": g.index[t], "race_id": rid[t], "y": r[t], "n": len(first),
                    "M0": horse_position(first).value if first else np.nan, "pf": np.nan, "pb": np.nan, "pf_main": False,
                    "prev_r": first[0] if first else np.nan,
-                   "prev_dist": dist[t - 1] if t else np.nan,
-                   "gap_days": (pd.Timestamp(dt[t]) - pd.Timestamp(dt[t - 1])).days if t else np.nan}
+                   }
             if len(first) >= PE.MIN_RUNS:
                 pk = PE.kde_peaks(first)
                 if len(pk) > 1:
@@ -107,13 +119,12 @@ def rows(df: pd.DataFrame) -> pd.DataFrame:
     return df.join(R.drop(columns=["race_id"]))
 
 
-def signals(D: pd.DataFrame) -> pd.DataFrame:
+def signals(D: pd.DataFrame, others: pd.Series) -> pd.DataFrame:
+    """others は、レースの全頭で数えた「M0 ≤ 0.25 の他の馬」の数。"""
     s = pd.DataFrame(index=D.index)
     s["A1"] = np.where(D["num"] <= D["fs"] / 3, 1, np.where(D["num"] > D["fs"] * 2 / 3, -1, 0))
     dd = D["dist"] - D["prev_dist"]
     s["A2"] = np.where(dd <= -200, -1, np.where(dd >= 200, 1, 0))
-    front = (D["M0"] <= 0.25).astype(float)
-    others = front.groupby(D["race_id"]).transform("sum") - front
     s["A3"] = np.where(others >= 4, -1, np.where(others <= 1, 1, 0))
     jr = D["jockey_front"]
     s["A4"] = np.where(jr >= 0.35, 1, np.where(jr <= 0.20, -1, 0))
@@ -180,8 +191,10 @@ def main() -> int:
     rep: dict = {"rows": int(len(D))}
 
     # (A)
-    A = D[D["pf"].notna()].copy()
-    sig = signals(A)
+    front = (D["M0"] <= 0.25).astype(float)
+    others_all = front.groupby(D["race_id"]).transform("sum") - front
+    A = D[D["pf"].notna() & D["young"]].copy()
+    sig = signals(A, others_all.loc[A.index])
     a_s, a_v = A["side"] == 0, A["side"] == 1
     rep["A_rows"] = {"search": int(a_s.sum()), "verify": int(a_v.sum())}
     srch = rule_table(A[a_s], sig[a_s], RULES, 7332)
@@ -193,28 +206,32 @@ def main() -> int:
         rep["A_verify"] = rule_table(A[a_v], sig[a_v], passed + ["Astar"], 7334)
 
     # (B)
-    B = D[D["n"] <= 3].copy()
+    B = D[(D["n"] <= 3) & D["young"]].copy()
     B["B5"] = B[["B1", "B2", "B3", "B4"]].mean(axis=1).fillna(B["glob"])
     B["B0"] = B["M0"].where(B["n"] > 0, B["glob"])
+    B["B5g"] = B["glob"]
     B = B[B["B0"].notna() & B["B5"].notna()]
     bs, bv = B[B["side"] == 0], B[B["side"] == 1]
 
-    def b6(X: pd.DataFrame, k: float) -> pd.Series:
-        return ((X["n"] * X["M0"].fillna(0) + k * X["B5"]) / (X["n"] + k)).where(X["n"] > 0, X["B5"])
+    def b6(X: pd.DataFrame, k: float, prior: str = "B5") -> pd.Series:
+        return ((X["n"] * X["M0"].fillna(0) + k * X[prior]) / (X["n"] + k)).where(X["n"] > 0, X[prior])
 
     mae = lambda X, c: round(float((X[c] - X["y"]).abs().mean()), 5)  # noqa: E731
     k_mae = {k: round(float((b6(bs, k) - bs["y"]).abs().mean()), 5) for k in KS}
     kbest = min(KS, key=lambda k: k_mae[k])
-    rep["B_search_k"] = {"mae_by_k": k_mae, "k": kbest}
-    bv = bv.assign(B6=b6(bv, kbest))
-    bs = bs.assign(B6=b6(bs, kbest))
+    k7_mae = {k: round(float((b6(bs, k, "B5g") - bs["y"]).abs().mean()), 5) for k in KS}
+    k7 = min(KS, key=lambda k: k7_mae[k])
+    rep["B_search_k"] = {"mae_by_k": k_mae, "k": kbest, "B7_mae_by_k": k7_mae, "B7_k": k7}
+    bv = bv.assign(B6=b6(bv, kbest), B7=b6(bv, k7, "B5g"))
+    bs = bs.assign(B6=b6(bs, kbest), B7=b6(bs, k7, "B5g"))
     for name, X in (("B_search", bs), ("B_verify", bv)):
         sec = {}
         for n in (0, 1, 2, 3):
             Xn = X[X["n"] == n]
-            sec[f"n{n}"] = {c: mae(Xn, c) for c in ("B0", "B1", "B2", "B3", "B4", "B5", "B6") if Xn[c].notna().any()} | {"rows": int(len(Xn))}
-        sec["all"] = {c: mae(X, c) for c in ("B0", "B5", "B6")} | {"rows": int(len(X))}
+            sec[f"n{n}"] = {c: mae(Xn, c) for c in ("B0", "B1", "B2", "B3", "B4", "B5", "B6", "B7") if Xn[c].notna().any()} | {"rows": int(len(Xn))}
+        sec["all"] = {c: mae(X, c) for c in ("B0", "B5", "B6", "B7")} | {"rows": int(len(X))}
         rep[name] = sec
+    rep["B_verify_p_B6_vs_B7"] = round(boot_p(bv["y"].to_numpy(), bv["B6"].to_numpy(), bv["B7"].to_numpy(), bv["race_id"].str[:8].to_numpy(), 7335), 4)
     rep["B_verify_p_B6_vs_B0"] = round(boot_p(bv["y"].to_numpy(), bv["B6"].to_numpy(), bv["B0"].to_numpy(), bv["race_id"].str[:8].to_numpy(), 7333), 4)
     (OUT / "report.json").write_text(json.dumps(rep, ensure_ascii=False, indent=1, default=str))
     print(json.dumps(rep, ensure_ascii=False, indent=1, default=str))
