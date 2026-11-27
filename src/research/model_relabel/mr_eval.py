@@ -455,7 +455,7 @@ def dnf_sensitivity(res: dict, base: pd.DataFrame, target: str, years) -> dict:
             for t in years:
                 d0 = base[base["year"] == t].reset_index(drop=True)
                 p = pd.Series(res["years"][t][f]["_p"])
-                fill = p.groupby(d0["race_id"].to_numpy()).agg(how)
+                fill = p.groupby(d0["race_id"].to_numpy()).agg(how) if how != "none" else pd.Series(dtype=float)
                 add = dn[dn["year"] == t] if how != "none" else dn.iloc[0:0]
                 rid = np.concatenate([d0["race_id"].to_numpy(), add["race_id"].to_numpy()])
                 pp = np.concatenate([p.to_numpy(), add["race_id"].map(fill).to_numpy(float)])
