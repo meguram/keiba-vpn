@@ -458,3 +458,306 @@ def test_feed_rebuilt_after_eviction_changes_epoch(tmp_path: Path, monkeypatch):
     hub.feed(ids[1])  # 1 本目を捨てる
     again = hub.feed(ids[0])
     assert again is not first and again.created != first.created
+
+
+# ── 伏せ字（メール・IP） ──
+
+def test_mask_email_and_ip_inline():
+    out = cl.mask_secrets("連絡は someone@example.com へ。番地は 10.1.2.3、手元は 127.0.0.1。版は 1.2.3")
+    assert "someone@example.com" not in out and "10.1.2.3" not in out
+    assert "［メールを伏せた］" in out and "［IP を伏せた］" in out
+    assert "127.0.0.1" in out and "版は 1.2.3" in out  # 行ごとは伏せない
+    assert cl.safe_label("ops@example.org の担当") == "［メールを伏せた］ の担当"
+
+
+# ── 動いているセッションの一覧（claude agents --json） ──
+
+REPO = "/home/u/work/repo"
+ORCH = "dddddddd-0000-0000-0000-000000000001"
+WORK = "eeeeeeee-0000-0000-0000-000000000002"
+NONAME = "ffffffff-0000-0000-0000-000000000003"
+
+
+def _agents_json():
+    return [
+        {"id": "eeeeeeee", "sessionId": WORK, "cwd": f"{REPO}/.claude/worktrees/track-bias", "name": "track-bias",
+         "state": "working", "status": "idle", "startedAt": 1_000_000},
+        {"id": "dddddddd", "sessionId": ORCH, "cwd": REPO, "name": "claude-orchestrator-handover",
+         "state": "working", "status": "busy", "startedAt": 2_000_000},
+        {"id": "ffffffff", "sessionId": NONAME, "cwd": REPO, "state": "blocked", "startedAt": 3_000_000},
+        {"id": "99999999", "sessionId": "99999999-0000-0000-0000-000000000009", "cwd": "/home/u/other", "name": "x",
+         "state": "working"},  # このリポジトリの外は出さない
+        {"id": "zz", "sessionId": "not-a-uuid", "cwd": REPO},
+    ]
+
+
+def test_agent_row_keeps_repo_only_and_hides_cwd():
+    rows = [r for r in (cl.agent_row(x, REPO) for x in _agents_json()) if r]
+    assert [r["sid"] for r in rows] == [WORK, ORCH, NONAME]
+    assert rows[0]["place"] == "track-bias" and rows[1]["place"] == "本体"
+    assert rows[2]["name"] == "" and rows[2]["state"] == "blocked" and rows[2]["status"] == ""
+    assert all("cwd" not in r for r in rows) and rows[0]["started"] == 1000.0
+
+
+def test_agent_list_calls_at_most_every_30_sec_and_keeps_last_on_failure():
+    now = [100.0]
+    calls = []
+
+    def fn():
+        calls.append(now[0])
+        if len(calls) == 3:
+            raise RuntimeError("down")
+        return _agents_json()
+
+    al = cl.AgentList(fn, REPO, clock=lambda: now[0])
+    assert cl.AGENTS_SEC == 30.0 and al.interval == 30.0
+    rows, ok = al.get()
+    assert ok and len(rows) == 3 and len(calls) == 1
+    now[0] += 29.9
+    al.get()
+    al.get()
+    assert len(calls) == 1  # 30 秒の内は呼ばない
+    now[0] += 0.2
+    al.get()
+    assert len(calls) == 2
+    now[0] += 30
+    rows, ok = al.get()  # 失敗: 前の一覧を残す
+    assert not ok and len(rows) == 3 and len(calls) == 3
+    al.get()
+    assert len(calls) == 3  # 失敗も 30 秒は覚える
+
+
+def test_run_state_four_states():
+    now = 10_000.0
+    assert cl.run_state("done", "busy", now, now) == "done"
+    assert cl.run_state("blocked", "busy", now, now) == "blocked"
+    assert cl.run_state("working", "busy", 0, now) == "running"  # 長いコマンドの最中
+    assert cl.run_state("working", "idle", now - 10, now) == "waiting"  # idle と明かしていればそれを使う
+    assert cl.run_state("working", "", now - 179, now) == "running"  # status が無いときは直近 3 分の動き
+    assert cl.run_state("working", "", now - 181, now) == "waiting"
+    assert cl.run_state("working", "", 0, now) == "waiting"
+
+
+def _agents_hub(tmp_path: Path, fn=_agents_json):
+    base = tmp_path / "projects"
+    main_dir, wt_dir = base / "-repo", base / "-repo--claude-worktrees-track-bias"
+    talk = _a("2026-11-27T01:00:00Z", {"type": "text", "text": "作業中"})
+    _write(main_dir / f"{ORCH}.jsonl", [{"type": "agent-name", "agentName": "claude-orchestrator-handover"}, talk])
+    _write(main_dir / f"{NONAME}.jsonl", [talk])
+    old = wt_dir / f"{WORK}.jsonl"  # worktree のフォルダ・24 時間より古い記録
+    _write(old, [{"type": "agent-name", "agentName": "track-bias"}, talk])
+    t = time.time() - 3 * 86400
+    os.utime(old, (t, t))
+    # 載っていない会議（終わった）と、載っていない普通のセッション
+    _write(main_dir / "aaaaaaaa-0000-0000-0000-00000000000a.jsonl", [{"type": "agent-name", "agentName": "rules-council"}, talk])
+    _write(main_dir / "bbbbbbbb-0000-0000-0000-00000000000b.jsonl", [{"type": "agent-name", "agentName": "secret-work"}, talk])
+    al = cl.AgentList(fn, REPO)
+    return cl.CouncilHub(lambda: [main_dir, wt_dir], None, 24.0, al, None), al
+
+
+def test_hub_tabs_orchestrator_first_and_past_council_last(tmp_path: Path):
+    hub, al = _agents_hub(tmp_path)
+    tabs, ok = hub.tabs()
+    assert ok
+    assert [t["id"] for t in tabs] == [ORCH, WORK, NONAME, "aaaaaaaa-0000-0000-0000-00000000000a"]
+    by = {t["id"]: t for t in tabs}
+    assert by[NONAME]["name"] == "ffffffff" and by[NONAME]["state"] == "blocked"  # 名前の無いセッションは短い id
+    assert by[WORK]["found"] and by[WORK]["state"] == "waiting" and by[WORK]["place"] == "track-bias"
+    assert by[ORCH]["state"] == "running"
+    assert by["aaaaaaaa-0000-0000-0000-00000000000a"]["state"] == "past"
+    assert set(tabs[0]) == {"id", "short", "name", "state", "agent_state", "place", "started", "mtime", "members", "found"}
+    hub.tabs()
+    assert al.calls == 1  # 画面の問い合わせが重なっても 30 秒に 1 回
+
+
+def test_hub_feed_only_listed_or_council(tmp_path: Path):
+    hub, _ = _agents_hub(tmp_path)
+    hub.tabs()
+    f = hub.feed(WORK)  # worktree のフォルダの古い記録も、載っていれば読む
+    assert f is not None and f.since(0)[-1]["speaker"] == "担当 track-bias"
+    assert hub.feed("aaaaaaaa-0000-0000-0000-00000000000a") is not None  # 会議は今までどおり
+    assert hub.feed("bbbbbbbb-0000-0000-0000-00000000000b") is None  # 載っていない・会議でない → 出さない
+
+
+def test_hub_tabs_fall_back_to_council_when_agents_fail(tmp_path: Path):
+    def boom():
+        raise FileNotFoundError("claude")
+
+    hub, _ = _agents_hub(tmp_path, boom)
+    tabs, ok = hub.tabs()
+    assert not ok and [t["id"] for t in tabs] == ["aaaaaaaa-0000-0000-0000-00000000000a"]
+    assert hub.feed(ORCH) is None
+
+
+# ── ゴール（最初の利用者の文） ──
+
+def test_first_user_text_skips_meta_reminders_and_summaries(tmp_path: Path):
+    f = tmp_path / "s.jsonl"
+    _write(f, [
+        {"type": "custom-title", "customTitle": "x"},
+        {"type": "file-history-snapshot", "snapshot": {"user": "x"}},
+        {"type": "user", "isMeta": True, "message": {"content": "skill の本文"}},
+        _u("t1", "<command-name>/model</command-name>"),
+        _u("t2", "This session is being continued from a previous conversation."),
+        _u("t3", [{"type": "tool_result", "tool_use_id": "x", "content": "結果"}]),
+        _u("t4", "<system-reminder>規約</system-reminder>\nあなたは担当「x」です。連絡 a@b.example.com"),
+        _u("t5", "2 回目の指示"),
+    ])
+    goal = cl.first_user_text(f)
+    assert goal.startswith("あなたは担当「x」です。") and "a@b.example.com" not in goal and "規約" not in goal
+
+
+# ── 待っている理由（記録の末尾から作る規則） ──
+
+def _own(kind, text, **h):
+    return {"ts": "t", "speaker": "担当", "cls": "sc", "kind": kind, "text": text, **h}
+
+
+def _evs(*objs):
+    agents = cl.AgentDirectory()
+    out = []
+    for o in objs:
+        out.extend(cl.parse_main_line(o, agents, "担当"))
+    return out, agents
+
+
+def test_wait_reason_approval_screen_after_exit_plan_mode():
+    evs = [_own("text", "計画です"), _own("tool", "ExitPlanMode", tool="ExitPlanMode")]
+    assert cl.wait_reasons(evs, "blocked", "1ac8c069") == ["ユーザーの承認の画面で止まっている（claude attach 1ac8c069）"]
+    evs = [_own("text", "続けます"), _own("tool", "Bash: x", tool="Bash")]
+    assert cl.wait_reasons(evs, "blocked", "bad id; rm")[0] == "承認の画面などで止まっている可能性"  # 形の違う id は出さない
+
+
+def test_wait_reason_background_bash_from_record():
+    evs, agents = _evs(
+        _a("t1", {"type": "tool_use", "id": "b1", "name": "Bash",
+                  "input": {"command": "pytest -q", "description": "テストを流す", "run_in_background": True}}),
+        _u("t2", [{"type": "tool_result", "tool_use_id": "b1", "content": "running"}], {"backgroundTaskId": "bxyz1234"}),
+        _a("t3", {"type": "text", "text": "終わるまで待ちます。"}),
+    )
+    assert evs[0]["bg"] and agents.bg_tasks == {"bxyz1234": ("Bash: テストを流す", "t2")}
+    assert cl.wait_reasons(evs, "waiting") == ["背景の処理の終わりを待っている: Bash: テストを流す"]
+    done = evs + cl.parse_main_line(_u("t4", "<task-notification><task-id>bxyz1234</task-id><summary>done</summary></task-notification>"),
+                                    agents, "担当")
+    assert done[-1]["task"] == "bxyz1234" and evs[0]["task"] == "bxyz1234"
+    other = evs + cl.parse_main_line(_u("t4", "<task-notification><task-id>bother99</task-id><summary>x</summary></task-notification>"),
+                                     agents, "担当")
+    assert cl.wait_reasons(other, "waiting")[0].startswith("背景の処理の終わりを待っている")  # 別の番号の通知では解けない
+    assert cl.wait_reasons(done, "waiting") == [cl.NO_REASON]  # その番号の通知の後は待っていない
+
+
+def test_background_line_is_masked():
+    evs, agents = _evs(
+        _a("t1", {"type": "tool_use", "id": "b1", "name": "Bash",
+                  "input": {"command": "x", "description": "ops@example.com に送る token を確かめる", "run_in_background": True}}),
+        _u("t2", [{"type": "tool_result", "tool_use_id": "b1", "content": "r"}], {"backgroundTaskId": "bmask123"}),
+    )
+    line = agents.bg_tasks["bmask123"][0]
+    assert "example.com" not in line and "token" not in line and line == cl.MASKED
+
+
+def test_wait_reason_monitor_and_sleep_loop():
+    evs, _ = _evs(_a("t", {"type": "tool_use", "id": "m", "name": "Monitor", "input": {"description": "CI を待つ"}}))
+    assert cl.wait_reasons(evs, "waiting") == ["背景の処理の終わりを待っている: Monitor: CI を待つ"]
+    evs, _ = _evs(_a("t", {"type": "tool_use", "id": "s", "name": "Bash",
+                           "input": {"command": "until [ -f x ]; do sleep 5; done", "description": "印を待つ", "run_in_background": True}}))
+    assert evs[0]["wait"] and "Bash: 印を待つ" in cl.wait_reasons(evs, "waiting")[0]
+    assert "until" not in evs[0]["text"]  # 命令の中身は出さない
+    fg, _ = _evs(_a("t", {"type": "tool_use", "id": "f", "name": "Bash",
+                          "input": {"command": "ls | while read l; do echo $l; done", "description": "一覧"}}))
+    assert cl.wait_reasons(fg, "waiting") == [cl.NO_REASON]  # 前景の while は待ちにしない
+
+
+def test_wait_reason_live_process_wins():
+    bg = [{"task": "bq", "line": "Bash: 学習", "ts": "t", "pids": 2, "minutes": 12}]
+    assert cl.wait_reasons([_own("text", "流しました")], "waiting", "", bg) == ["背景の処理の終わりを待っている: Bash: 学習（12 分）"]
+
+
+def test_wait_reason_send_message_to_orchestrator():
+    evs, _ = _evs(_a("t", {"type": "text", "text": "報告します"},
+                     {"type": "tool_use", "id": "s", "name": "SendMessage", "input": {"to": "claude-orchestrator-handover", "summary": "完了"}}))
+    assert evs[-1]["text"] == "SendMessage: → claude-orchestrator-handover 完了"
+    assert cl.wait_reasons(evs, "waiting") == ["統括役の返事を待っている"]
+    reply = evs + [{"ts": "t2", "speaker": "統括役", "cls": "so", "kind": "text", "text": "了解"}]
+    assert cl.wait_reasons(reply, "waiting") == [cl.NO_REASON]
+    sub, _ = _evs(_a("t", {"type": "tool_use", "id": "s", "name": "SendMessage", "input": {"to": "a1234567", "summary": "続き"}}))
+    assert cl.wait_reasons(sub, "waiting") == ["a1234567 の返事を待っている"]
+    sub_reply = sub + [{"ts": "t2", "speaker": "critic", "cls": "sx", "kind": "text", "text": "直した"}]
+    assert cl.wait_reasons(sub_reply, "waiting") == [cl.NO_REASON]
+
+
+def test_wait_reason_asks_and_time():
+    evs = [_own("text", "直しました。\n承認をお願いします（返事が無ければ推奨の案で進めます）。12/1 以降に入れます")]
+    r = cl.wait_reasons(evs, "waiting")
+    assert r[0] == "統括役・ユーザーの返事を待っている: 承認をお願いします（返事が無ければ推奨の案で進めます）。"
+    assert r[1] == "時刻を待っている: 12/1 以降"
+    assert cl.wait_reasons([_own("text", "17:00 以降に流す")], "waiting") == ["時刻を待っている: 17:00 以降"]
+    assert cl.wait_reasons([_own("text", "直しました。")], "waiting") == [cl.NO_REASON]
+
+
+def test_wait_reason_subagent_call():
+    evs, _ = _evs(_a("t", {"type": "tool_use", "id": "c", "name": "Agent", "input": {"subagent_type": "critic", "description": "差分を見る"}}))
+    assert cl.wait_reasons(evs, "waiting") == ["サブエージェントの報告を待っている: 呼び出し → critic: 差分を見る"]
+
+
+# ── 背景の処理（/proc の fd/1 と記録の番号の照合） ──
+
+def test_proc_scanner_groups_by_task_and_reads_no_cmdline(tmp_path: Path):
+    proc = tmp_path / "proc"
+    proc.mkdir()
+    (proc / "stat").write_text("cpu 1\nbtime 1000\n")
+    for pid, task, start in ((11, "bq1234", 500), (12, "bq1234", 300), (13, None, 100)):
+        d = proc / str(pid)
+        (d / "fd").mkdir(parents=True)
+        target = f"/tmp/claude-1/-p/s/tasks/{task}.output" if task else "/dev/null"
+        (d / "fd" / "1").symlink_to(target)
+        (d / "stat").write_text(f"{pid} (py thon) S " + " ".join(["0"] * 18) + f" {start} 0 0\n")
+    (proc / "self").mkdir()
+    ps = cl.ProcScanner(proc, clock=lambda: 0.0)
+    hz = os.sysconf("SC_CLK_TCK")
+    found = ps.get()
+    assert set(found) == {"bq1234"} and found["bq1234"]["pids"] == 2
+    assert found["bq1234"]["started"] == pytest.approx(1000 + 300 / hz)
+    bg = cl.background_tasks({"bq1234": ("Bash: 学習", "t"), "gone": ("Bash: 終わった", "t")}, found, 1000 + 300 / hz + 600)
+    assert bg == [{"task": "bq1234", "line": "Bash: 学習", "ts": "t", "pids": 2, "minutes": 10}]
+
+
+# ── /live/api のタブと帯 ──
+
+def test_live_api_tabs_and_summary(tmp_path: Path):
+    pytest.importorskip("markdown")
+    from src.scripts.docs import council_viewer as cv
+
+    hub, _ = _agents_hub(tmp_path)
+    blocked = tmp_path / "projects" / "-repo" / f"{NONAME}.jsonl"
+    _write(blocked, [_u("t0", "ゴールは **画面** を作ること"),
+                     _a("t1", {"type": "text", "text": "計画です"}, {"type": "tool_use", "id": "p", "name": "ExitPlanMode", "input": {}})])
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), cv.make_handler(tmp_path, hub))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    port = srv.server_address[1]
+
+    def get(path: str):
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        c.request("GET", path)
+        r = c.getresponse()
+        body = r.read().decode("utf-8")
+        c.close()
+        return r, body
+
+    try:
+        d = json.loads(get("/live/api/sessions")[1])
+        assert d["agents_ok"] and d["sessions"][0]["id"] == ORCH
+        d = json.loads(get(f"/live/api/events?session={NONAME}&since=0&limit=20")[1])
+        s = d["summary"]
+        assert s["state"] == "blocked" and s["reasons"] == ["ユーザーの承認の画面で止まっている（claude attach ffffffff）"]
+        assert s["goal_head"] == "ゴールは **画面** を作ること" and s["goal_html"] == "<p>ゴールは <strong>画面</strong> を作ること</p>"
+        assert s["text"]["head"] == "計画です" and s["tool"]["text"] == "ExitPlanMode"
+        assert "tool" not in d["events"][-1] or "bg" not in d["events"][-1]  # 判定の手がかりは渡さない
+        assert all(set(e) <= set(cv.EVENT_FIELDS) | {"html", "text"} for e in d["events"])
+        assert get("/live/api/events?session=bbbbbbbb-0000-0000-0000-00000000000b&since=0")[0].status == 404
+        r, body = get("/live")
+        assert 'id="tabs"' in body and 'id="sum"' in body and "claude attach" in body
+        assert "http://" not in body and "https://" not in body
+    finally:
+        srv.shutdown()
+        srv.server_close()

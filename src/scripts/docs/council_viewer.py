@@ -4,16 +4,20 @@
     python -m src.scripts.docs.council_viewer --port 8090 --root /path/to/keiba-vpn
 
 - 要求のたびに ``docs/operations/roi_plus_council/`` の Markdown を読み、HTML にして返す（キャッシュしない。常に最新）。
-- 加えて ``docs/html/operations/final/`` と ``docs/html/operations/`` の直下の HTML（名前は英数字・``_``・``-`` だけ）をそのまま返す。
-- 読むのは上の 3 か所だけ。サブフォルダの HTML は出さない。``..``・絶対パス・シンボリックリンクで外に出る要求は 404。書き込みはしない。
+- 加えて ``docs/html/operations/final/``・``docs/html/operations/``・``docs/html/modeling/final/`` の直下の HTML
+  （名前は英数字・``_``・``-`` だけ）をそのまま返す。
+- 読むのは上の 4 か所だけ。サブフォルダの HTML は出さない。``..``・絶対パス・シンボリックリンクで外に出る要求は 404。書き込みはしない。
 - 認証が無いので、既定は 127.0.0.1 で待ち受ける（Cursor の Remote-SSH・ssh -L で手元へ転送して見る）。
-- ``/live`` は会議のライブ（吹き出し）。画面は ``/live/api/sessions``・``/live/api/events`` を 3 秒おきに取りに来る
-  （SSE は Cursor のポート転送でためられて届かないことがあったので、2026-11-26 に取りに行く形へ替えた）。中身は council_live.py。
+- ``/live`` は各セッションのライブ（吹き出し）。動いているセッション（``claude agents``）と最近の会議をタブで切り替え、
+  選んだタブの帯に状態・待っている理由・ゴール・今の作業・背景の処理を出す。画面は ``/live/api/sessions`` を 30 秒おき、
+  ``/live/api/events`` を 3 秒おきに取りに来る（SSE は Cursor のポート転送でためられて届かないことがあったので、
+  2026-11-26 に取りに行く形へ替えた）。中身は council_live.py。
 - GCS・外部の網は読まない（費用 0 円）。
 """
 from __future__ import annotations
 
 import argparse
+import functools
 import html
 import os
 import posixpath
@@ -35,7 +39,9 @@ HTML_PREFIX = "/html/operations/final/"
 HTML_OPS_REL = Path("docs/html/operations")
 HTML_OPS_PREFIX = "/html/operations/"
 # URL の接頭辞 → 置き場。長い接頭辞（final）を先に照らす
-HTML_DIRS = ((HTML_PREFIX, HTML_REL), (HTML_OPS_PREFIX, HTML_OPS_REL))
+HTML_MODEL_REL = Path("docs/html/modeling/final")
+HTML_MODEL_PREFIX = "/html/modeling/final/"
+HTML_DIRS = ((HTML_PREFIX, HTML_REL), (HTML_OPS_PREFIX, HTML_OPS_REL), (HTML_MODEL_PREFIX, HTML_MODEL_REL))
 HTML_NAME = re.compile(r"^[A-Za-z0-9_\-]+\.html$")
 # 目次の「関係の HTML」に出す、会議に関係する HTML
 HTML_FIXED = frozenset({"longshot_course_rules.html", "megu_cycles_50.html", "megu_why_below_100.html"})
@@ -336,7 +342,7 @@ def index_html(root: Path) -> str:
              f'<p class="nav"><a href="{COUNCIL_PREFIX}protocol.md">会議の進め方（protocol.md）</a> · '
              f'<a href="{COUNCIL_PREFIX}decisions.md">決定（decisions.md）</a> · '
              f'<a href="{COUNCIL_PREFIX}scoreboard.md">予想の成績表（scoreboard.md）</a> · '
-             '<a href="/live"><strong>ライブ（いまの議論）</strong></a></p>']
+             '<a href="/live"><strong>ライブ（各セッションのいまの作業・会議の議論）</strong></a></p>']
 
     easy = safe_resolve(council, EASY_SUMMARY)
     if easy:  # 小学生でもわかる説明を、リンクではなく本文のまま一番上に出す
@@ -458,7 +464,23 @@ main { max-width:980px; padding-top:0; }
 .bar strong { font-size:15px; }
 .bar select { font:inherit; color:var(--text); background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:3px 6px; max-width:100%; }
 .bar label { white-space:nowrap; }
-#sess { min-width:0; max-width:min(420px, 100%); }
+#tabs { display:flex; flex-wrap:wrap; gap:5px; width:100%; }
+.tab { font:inherit; font-size:12.5px; color:var(--text); background:var(--panel); border:1px solid var(--border); border-left:5px solid var(--c);
+  border-radius:8px; padding:2px 9px; cursor:pointer; display:inline-flex; gap:6px; align-items:center; max-width:100%; min-width:0; }
+.tab .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:16em; }
+.tab[aria-selected="true"] { background:color-mix(in srgb, var(--c) 16%, var(--panel)); border-color:var(--c); font-weight:700; }
+.chip { font-size:11px; line-height:1.6; padding:0 7px; border-radius:9px; background:var(--c); color:#fff; white-space:nowrap; font-weight:700; }
+.st-running { --c:var(--ok); } .st-waiting { --c:var(--accent); } .st-blocked { --c:var(--warn); } .st-done, .st-past, .st-other { --c:var(--muted); }
+.tab.st-past { border-style:dashed; }
+#sum { width:100%; font-size:13px; border:1px solid var(--border); border-left:5px solid var(--c); border-radius:10px; padding:6px 10px; background:var(--panel); }
+#sum .big { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:14px; }
+#sum .big .chip { font-size:13px; padding:1px 10px; }
+#sum .why { font-weight:700; color:var(--c); overflow-wrap:anywhere; }
+#sum .why2 { color:var(--c); font-size:12.5px; overflow-wrap:anywhere; }
+#sum .ln { overflow-wrap:anywhere; margin-top:2px; } #sum .k { color:var(--muted); margin-right:4px; }
+#sum details { margin-top:3px; } #sum summary { cursor:pointer; color:var(--accent); font-size:12.5px; }
+#sum .gl { max-height:40vh; overflow:auto; border-top:1px solid var(--border); margin-top:4px; padding-top:4px; }
+#sum code { font-size:12px; }
 #log { padding:10px 0 72px; }
 .row { display:flex; margin:10px 0; }
 .row.l { justify-content:flex-start; } .row.r { justify-content:flex-end; } .row.c { justify-content:center; }
@@ -492,14 +514,17 @@ main { max-width:980px; padding-top:0; }
 .empty { color:var(--muted); text-align:center; padding:40px 0; }
 .s1 { --c:var(--s1); } .s2 { --c:var(--s2); } .s3 { --c:var(--s3); } .p1 { --c:var(--p1); } .p2 { --c:var(--p2); }
 .sc { --c:var(--sc); } .so { --c:var(--so); } .sx { --c:var(--sx); } .sn { --c:var(--sn); }
-@media (max-width:600px) { .bub, .mini, .tlist { max-width:94%; } .bar { font-size:13px; } main { padding-left:10px; padding-right:10px; } }
+@media (max-width:600px) { .bub, .mini, .tlist { max-width:94%; } .bar { font-size:13px; } main { padding-left:10px; padding-right:10px; }
+  #tabs { flex-wrap:nowrap; overflow-x:auto; padding-bottom:3px; } .tab { flex:0 0 auto; } .tab .nm { max-width:10em; } #sum .gl { max-height:30vh; } }
 """
 LIVE_JS = r"""
 (function () {
   var POLL = %POLL%, LEFT = {s1:1, s2:1, s3:1, p1:1, p2:1, sx:1};
   var $ = function (id) { return document.getElementById(id); };
-  var log = $('log'), st = $('st'), news = $('news'), selS = $('sess'), selN = $('lim'), chkT = $('tools');
+  var log = $('log'), st = $('st'), news = $('news'), tabs = $('tabs'), sum = $('sum'), selN = $('lim'), chkT = $('tools');
   var sid = '', seq = 0, epoch = '', unread = 0, timer = 0, busy = false, lastTool = null, gen = 0, lastSig = null;
+  var tabRows = {}, lastSum = null, lastGoal = null, sumOpen = false;
+  var STATE = {running:'実行中', waiting:'待機中', blocked:'止まっている', done:'終わった', past:'記録だけ', other:'不明'};
   function load(k, d) { try { return localStorage.getItem('live.' + k) || d; } catch (e) { return d; } }
   function save(k, v) { try { localStorage.setItem('live.' + k, v); } catch (e) {} }
   selN.value = load('lim', '30'); if (!selN.value) selN.value = '30';
@@ -565,11 +590,40 @@ LIVE_JS = r"""
       if (talk > lim) { while (log.firstChild && log.firstChild !== rows[i].nextSibling) log.removeChild(log.firstChild); break; }
     }
   }
-  function status(t) { st.textContent = t; }
+  var agentsNote = '';
+  function status(t) { st.textContent = t + agentsNote; }
   function get(url, ok, ng) {
-    var x = new XMLHttpRequest(); x.open('GET', url); x.timeout = 15000;
-    x.onload = function () { if (x.status === 200) { try { ok(JSON.parse(x.responseText)); } catch (err) { ng(); } } else ng(); };
-    x.onerror = x.ontimeout = ng; x.send();
+    var x = new XMLHttpRequest(); x.open('GET', url); x.timeout = 25000;
+    x.onload = function () { if (x.status === 200) { try { ok(JSON.parse(x.responseText)); } catch (err) { ng(0); } } else ng(x.status); };
+    x.onerror = x.ontimeout = function () { ng(0); }; x.send();
+  }
+  function ago(sec) { if (!sec) return ''; var m = Math.max(0, Math.floor((Date.now() / 1000 - sec) / 60)); return m < 1 ? '1 分以内' : m + ' 分前'; }
+  function line(k, v, extra) { var d = el('div', 'ln'); d.appendChild(el('span', 'k', k)); d.appendChild(document.createTextNode(v + (extra ? '（' + extra + '）' : ''))); return d; }
+  /* 帯: 状態と待っている理由を一番上に。ゴール・統括役の指示は畳む（開いたままを覚える） */
+  function renderSum(s) {
+    var t = tabRows[sid] || {}, state = s.state || t.state || 'other';
+    var sig = JSON.stringify([s, t.name]) + Math.floor(Date.now() / 30000);
+    if (sig === lastSum) return; lastSum = sig;
+    var det = sum.querySelector('details'); if (det) sumOpen = det.open;
+    sum.textContent = ''; sum.hidden = false; sum.className = 'st-' + state;
+    var big = el('div', 'big'); big.appendChild(el('span', 'chip', STATE[state] || state));
+    big.appendChild(el('strong', '', t.name || sid.slice(0, 8)));
+    if (t.place) big.appendChild(el('span', 'mu', t.place));
+    if (s.last) big.appendChild(el('span', 'mu', '最後の動き ' + hhmm(s.last * 1000) + '・' + ago(s.last)));
+    sum.appendChild(big);
+    (s.reasons || []).forEach(function (r, i) { sum.appendChild(el('div', i ? 'why2' : 'why', (i ? '・' : '待っているもの: ') + r)); });
+    (s.bg || []).length && sum.appendChild(line('背景の処理', s.bg.map(function (b) { return b.line + '（' + b.minutes + ' 分・' + b.pids + ' 本）'; }).join(' / ')));
+    if (s.text) sum.appendChild(line('今の作業', s.text.head, hhmm(s.text.ts)));
+    if (s.tool) sum.appendChild(line('最新のツール', s.tool.text, hhmm(s.tool.ts)));
+    var d = el('details'); d.open = sumOpen;
+    d.appendChild(el('summary', '', 'ゴール: ' + (s.goal_head || '（最初の指示が記録の頭に見つからない）')));
+    var gl = el('div', 'gl');
+    if (s.goal_html) { var g = el('div', 'md'); g.innerHTML = s.goal_html; gl.appendChild(g); }  /* サーバで生の HTML を外して描いたもの */
+    if (s.orch) {
+      gl.appendChild(el('div', 'k', '最新の' + s.orch.speaker + 'の指示（' + hhmm(s.orch.ts) + '）'));
+      var o = el('div', 'md'); o.innerHTML = s.orch.html; gl.appendChild(o);
+    }
+    d.appendChild(gl); sum.appendChild(d);
   }
   function schedule(ms) { clearTimeout(timer); timer = setTimeout(poll, ms); }
   function reset() { gen += 1; seq = 0; epoch = ''; unread = 0; showNews(); lastTool = null; log.textContent = ''; }
@@ -584,6 +638,7 @@ LIVE_JS = r"""
         var had = epoch; epoch = d.epoch;
         if (had) { reset(); schedule(0); return; }
       }
+      if (d.summary) renderSum(d.summary);
       var follow = atBottom() || seq === 0, talk = 0, first = seq === 0;
       (d.events || []).forEach(function (e) { append(e); if (e.kind !== 'tool') talk += 1; seq = Math.max(seq, e.seq); });
       if (first && !log.firstChild) log.appendChild(el('div', 'empty', 'まだ発言がありません。'));
@@ -591,34 +646,50 @@ LIVE_JS = r"""
       if (follow) { trim(); toBottom(); } else if (talk) { unread += talk; showNews(); }
       status('更新 ' + new Date().toLocaleTimeString('ja-JP') + '（' + POLL / 1000 + ' 秒おき）');
       schedule(document.hidden ? POLL * 5 : POLL);
-    }, function () { busy = false; status('つながりません。再試行しています…'); schedule(g !== gen ? 0 : POLL * 2); });
+    }, function (code) {
+      busy = false;
+      if (code === 404 && g === gen) {
+        log.textContent = ''; log.appendChild(el('div', 'empty', 'このセッションの記録が見つかりません（またはこの画面では中身を出さないセッション）。'));
+        status('記録なし'); schedule(POLL * 5); return;
+      }
+      status('つながりません。再試行しています…'); schedule(g !== gen ? 0 : POLL * 2);
+    });
   }
   function label(s) {
     var mem = (s.members || []).map(function (m) { return m.replace('roi-plus-man-', '').replace('pedigree-', '血統'); }).join('・');
-    return s.name + '（' + hhmm(s.mtime * 1000) + (mem ? '・' + mem : '') + '）';
+    return s.name + (mem ? '（' + mem + '）' : '');
   }
-  function sessions(first) {
+  function select(id) { if (id === sid) return; sid = id; save('sid', sid); lastSum = null; sum.hidden = true; reset(); markTabs(); schedule(0); }
+  function markTabs() { Array.prototype.forEach.call(tabs.children, function (b) { b.setAttribute('aria-selected', b._id === sid ? 'true' : 'false'); }); }
+  function sessions() {
     get('/live/api/sessions', function (d) {
       var q = (location.search.match(/[?&]s=([0-9a-f-]+)/) || [])[1];
       var list = d.sessions || [], keep = sid || q || load('sid', ''), found = false;
-      var sig = list.map(function (s) { return s.id + label(s); }).join('|');
-      list.forEach(function (s) { if (s.id === keep) found = true; });
-      if (sig !== lastSig) {  /* 変わったときだけ作り直す（開いている選択肢を閉じない） */
-        lastSig = sig; selS.textContent = '';
-        list.forEach(function (s) { var o = el('option', '', label(s)); o.value = s.id; selS.appendChild(o); });
-        if (!list.length) { var o = el('option', '', '会議のセッションが見つかりません'); o.value = ''; selS.appendChild(o); }
+      var sig = list.map(function (s) { return s.id + label(s) + s.state + s.place; }).join('|');
+      tabRows = {}; list.forEach(function (s) { tabRows[s.id] = s; if (s.id === keep) found = true; });
+      if (sig !== lastSig) {  /* 変わったときだけ作り直す */
+        lastSig = sig; tabs.textContent = '';
+        list.forEach(function (s) {
+          var b = el('button', 'tab st-' + s.state); b.type = 'button'; b.setAttribute('role', 'tab'); b._id = s.id;
+          b.title = (s.place ? s.place + '・' : '') + (s.started ? '始まり ' + hhmm(s.started * 1000) + '・' : '') + s.short
+            + (s.state === 'blocked' ? '・承認待ちの可能性: claude attach ' + s.short : '');
+          b.appendChild(el('span', 'chip', STATE[s.state] || s.state)); b.appendChild(el('span', 'nm', label(s)));
+          b.addEventListener('click', function () { select(s.id); });
+          tabs.appendChild(b);
+        });
+        if (!list.length) tabs.appendChild(el('span', 'mu', 'セッションが見つかりません'));
       }
       var want = found ? keep : (list[0] ? list[0].id : '');
-      selS.value = want;
-      if (want !== sid) { sid = want; reset(); schedule(0); }
-      if (!list.length) { log.textContent = ''; log.appendChild(el('div', 'empty', '最近の会議のセッションがありません（' + d.hours + ' 時間以内）。')); }
+      if (want !== sid) { sid = want; lastSum = null; sum.hidden = true; reset(); schedule(0); }
+      markTabs();
+      agentsNote = d.agents_ok ? '' : '・claude agents を読めません（会議のセッションと前の一覧だけ）';
+      if (!list.length) { log.textContent = ''; log.appendChild(el('div', 'empty', '動いているセッション・最近の会議がありません（' + d.hours + ' 時間以内）。')); }
     }, function () { status('セッションの一覧を取れません。再試行しています…'); });
   }
-  selS.addEventListener('change', function () { sid = selS.value; save('sid', sid); reset(); schedule(0); });
   selN.addEventListener('change', function () { save('lim', selN.value); reset(); schedule(0); });
   chkT.addEventListener('change', function () { save('tools', chkT.checked ? '1' : '0'); reset(); schedule(0); });
   document.addEventListener('visibilitychange', function () { if (!document.hidden) schedule(0); });
-  sessions(true); setInterval(sessions, 30000);
+  sessions(); setInterval(sessions, 30000);
 })();
 """
 
@@ -626,15 +697,15 @@ LIVE_JS = r"""
 def live_page(nonce: str = "") -> str:
     opts = "".join(f'<option value="{n}">{n} 件</option>' for n in LIVE_LIMITS)
     body = (
-        '<div class="bar"><strong>会議のライブ</strong>'
-        '<select id="sess" aria-label="どの担当の会議か"><option>読み込み中…</option></select>'
+        '<div class="bar"><strong>ライブ</strong>'
         f'<label>直近 <select id="lim" aria-label="表示する件数">{opts}</select></label>'
         '<label><input type="checkbox" id="tools"> ツールの行</label>'
-        '<a href="/">目次へ</a><span id="st" class="mu">読み込み中…</span></div>'
+        '<a href="/">目次へ</a><span id="st" class="mu">読み込み中…</span>'
+        '<div id="tabs" role="tablist" aria-label="セッション"></div><section id="sum" hidden></section></div>'
         '<div id="log"></div><button id="news" hidden></button>'
         f"<style>{LIVE_CSS}</style><script nonce=\"{html.escape(nonce)}\">{LIVE_JS.replace('%POLL%', str(LIVE_POLL_MS))}</script>"
     )
-    return page("会議のライブ", body)
+    return page("セッションのライブ", body)
 
 
 EVENT_FIELDS = ("seq", "ts", "speaker", "cls", "kind", "stage", "topic", "decision")
@@ -650,6 +721,29 @@ def event_json(e: dict) -> dict:
         out["html"] = h
     else:
         out["text"] = e.get("text", "")
+    return out
+
+
+@functools.lru_cache(maxsize=64)
+def _md_cached(text: str) -> str:
+    return safe_md_to_html(text)
+
+
+def summary_json(s: dict) -> dict:
+    """帯に渡す形（本文は 1 行にするか、Markdown を安全に描いた html にする。生の出来事の手がかりは渡さない）。"""
+    from src.scripts.docs.council_live import one_line
+
+    goal = s.get("goal") or ""
+    out = {"state": s.get("state"), "reasons": list(s.get("reasons") or []), "last": s.get("last") or 0,
+           "goal_head": one_line(goal, 160) if goal else "", "goal_html": _md_cached(goal) if goal else "",
+           "bg": [{"line": b["line"], "minutes": b["minutes"], "pids": b["pids"]} for b in s.get("bg") or []]}
+    if s.get("text"):
+        out["text"] = {"ts": s["text"]["ts"], "head": one_line(s["text"]["text"], 300)}
+    if s.get("tool"):
+        out["tool"] = {"ts": s["tool"]["ts"], "text": s["tool"]["text"]}
+    if s.get("orch"):
+        o = event_json(s["orch"])
+        out["orch"] = {"ts": o["ts"], "speaker": o["speaker"], "html": o.get("html", "")}
     return out
 
 
@@ -671,7 +765,8 @@ def make_handler(root: Path, hub=None):
             """画面が数秒おきに取りに来る（SSE は Cursor の転送でためられて届かないことがあるので、取りに行く形にした）。"""
             q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             if path == "/live/api/sessions":
-                return self._json({"epoch": hub.epoch, "hours": round(hub.window_sec / 3600, 1), "sessions": hub.sessions()})
+                tabs, ok = hub.tabs()
+                return self._json({"epoch": hub.epoch, "hours": round(hub.window_sec / 3600, 1), "sessions": tabs, "agents_ok": ok})
             sid = (q.get("session") or [""])[0]
             since = (q.get("since") or ["0"])[0]
             limit = (q.get("limit") or ["30"])[0]
@@ -682,7 +777,7 @@ def make_handler(root: Path, hub=None):
                 return self._send(404, b'{"error":"no such council session"}', "application/json; charset=utf-8")
             evs = feed.since(seq, lim)
             return self._json({"epoch": f"{hub.epoch}-{feed.created:.3f}", "session": sid, "seq": feed.seq,
-                               "events": [event_json(e) for e in evs]})
+                               "events": [event_json(e) for e in evs], "summary": summary_json(hub.summary(sid, feed))})
 
         def _send(self, code: int, body: bytes, ctype: str = "text/html; charset=utf-8", csp: bool | str = False) -> None:
             self.send_response(code)
