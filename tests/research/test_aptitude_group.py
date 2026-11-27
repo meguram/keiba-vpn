@@ -176,6 +176,14 @@ def test_stats_subset_with_full_base_matches_full():
     assert abs(bad.loc["s2", ("d", "surf")]) < 1e-9 and abs(full.loc["s2", ("d", "surf")]) > 1e-6
 
 
+def test_page_js_has_no_code_after_line_comment():
+    """ページの JS で、// の注記の後ろに同じ行でコードが続く形が無い（後ろが黙って消える。11/27 に 2 回入れた誤り）。"""
+    import re
+    from src.research.aptitude_group import sire_vectors_html as h
+    bad = [ln for ln in h.JS.split("\n") if re.search(r"//[^\n]*?[;)}]\s*(const|let|var|if|for|return|function|\$\(|s \+=)", ln)]
+    assert not bad, bad[:3]
+
+
 def test_period_guard_refuses_2025():
     import pytest
     with pytest.raises(AssertionError):

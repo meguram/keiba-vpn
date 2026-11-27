@@ -255,7 +255,7 @@ function drawMap() {
   const show = R.map(r => !line || r.line === line);
   const keys = topKeys(R.filter((r, i) => show[i])); const col = k => { const i = keys.indexOf(k); return i < 0 ? 'var(--other)' : `var(--s${i + 1})`; };
   const extra = (side === 'sire' && D.pred && view === 'pc') ? [...(predMode === 'none' ? [] : D.pred.small.filter(p => !line || p.line === line).map(p => (predMode === 'blend' ? p.c_blend : p.c_pred)[space])), ...(sel && sel.oof ? [sel.oof[space]] : [])] : [];
-  const xs = C.map(c => c[0]).concat(extra.map(c => c[0])), ys = C.map(c => c[1]).concat(extra.map(c => c[1]));   // ◇ も範囲に入れる（critic 6 回目） const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const xs = C.map(c => c[0]).concat(extra.map(c => c[0])), ys = C.map(c => c[1]).concat(extra.map(c => c[1]));   /* ◇ も範囲に入れる（critic 6 回目） */ const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
   const W = 720, H = 520, pad = 34; const sx = x => pad + (x - x0) / ((x1 - x0) || 1) * (W - 2 * pad), sy = y => H - pad - (y - y0) / ((y1 - y0) || 1) * (H - 2 * pad);
   const maxr = Math.max(...R.map(r => r.runs));
   let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="種牡馬の 2 次元の地図"><defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--muted)"/></marker></defs><rect width="${W}" height="${H}" fill="var(--panel)" rx="8"/>`;
