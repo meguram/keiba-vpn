@@ -501,7 +501,7 @@ def raw_q3(race: np.ndarray, odds: np.ndarray) -> np.ndarray:
     return LM.norm_race_cap(race, q3, 3.0)
 
 
-def calibrated_market_q3(eval_years=(2019, 2020, 2021)) -> pd.DataFrame:
+def calibrated_market_q3(eval_years=(2018, 2019, 2020, 2021)) -> pd.DataFrame:
     """較正した市場の 3 着内の確率（再現 k ごと）。前の試み（longshot_model）の式: logit(q)・2 乗・logit(Harville q3)・
     頭数の帯・クラスの群のダミーと積のロジスティック回帰。年 t は t より前の年（2016〜）の全馬で当てる（la-2 の決定 5 (iii)）。
     当てる側の着順は 2016〜(max(eval_years)−1) 年だけ。結果は OUT/market_cq3.parquet（A/E の分母にも使う）。"""
@@ -638,22 +638,33 @@ def race_avg(vals: np.ndarray, sel: np.ndarray, ok: np.ndarray) -> np.ndarray:
     return np.where(n > 0, v.sum(0) / np.maximum(n, 1), np.nan)
 
 
-def select_frame(fs: str, star: str = "") -> pd.DataFrame:
-    """評価の行（runners の 2019〜21・重複を除く）に、予測・較正した市場の q3（再現 cq3_k・確定 fq3）・本物のラベル（y3）を結ぶ。
-    予測の無い馬（中止など）は y3 = 0 で、fin ≤ 0 であることを確かめる。"""
-    r = eval_frame(fs, star=star)
+SEL_YEARS = (2018, 2019, 2020, 2021)       # 2018 は Platt・2 段の当てはめ（t−1 年）にだけ使う。物差しは 2019〜21
+
+
+def select_frame(fs: str, star: str = "", dry: bool = False) -> pd.DataFrame:
+    """評価の行（runners の 2018〜21・重複を除く）に、予測・較正した市場の q3（再現 cq3_k・確定 fq3）・本物のラベル（y3）・
+    単勝と複勝の払戻（ret_tan・ret_fuku。1 円あたり）を結ぶ。予測の無い馬（中止など）は y3 = 0 で、fin ≤ 0 であることを確かめる。
+    dry=True は着順・払戻を読まず、y3 を Bernoulli(fq3)、払戻を作り物にする（道具の空運転）。"""
+    r = eval_frame(fs, years=SEL_YEARS, star=star)
     cq = calibrated_market_q3()
     r = r.merge(cq.drop(columns=["year"]), on=KEY, how="left")
-    lab = load_labels(2021)
-    r = r.merge(lab[KEY + ["y3"]], on=KEY, how="left")
-    fin = pd.read_parquet(RUNNERS, columns=KEY + ["fin"], filters=[("year", "in", [2019, 2020, 2021])])
-    fin["race_id"], fin["horse_id"] = fin["race_id"].astype(str), fin["horse_id"].astype(str)
-    r = r.merge(fin.drop_duplicates(KEY), on=KEY, how="left")
     nopred = r["p_L1"].isna() | r["p_C0"].isna()
-    bad = nopred & (pd.to_numeric(r["fin"], errors="coerce").fillna(0) > 0)
-    assert not bad.any(), f"予測が無いのに着順のある馬がいる: {int(bad.sum())}"
-    r["dnf"] = nopred.to_numpy()
-    r["y3"] = r["y3"].fillna(False).astype(bool) & ~r["dnf"]
+    if dry:
+        rng = np.random.default_rng(1)
+        r["y3"] = (rng.random(len(r)) < r["fq3"].to_numpy(float)) & ~nopred.to_numpy()
+        r["ret_tan"] = np.where(rng.random(len(r)) < r["fq3"].to_numpy(float) / 3, r["odds_final"].to_numpy(float), 0.0)
+        r["ret_fuku"] = np.where(r["y3"], r["odds_final"].to_numpy(float) / 4 + 1.0, 0.0)
+        r["dnf"] = nopred.to_numpy()
+    else:
+        lab = load_labels(2021)
+        r = r.merge(lab[KEY + ["y3"]], on=KEY, how="left")
+        fin = pd.read_parquet(RUNNERS, columns=KEY + ["fin", "ret_tan", "ret_fuku"], filters=[("year", "in", list(SEL_YEARS))])
+        fin["race_id"], fin["horse_id"] = fin["race_id"].astype(str), fin["horse_id"].astype(str)
+        r = r.merge(fin.drop_duplicates(KEY), on=KEY, how="left")
+        bad = nopred & (pd.to_numeric(r["fin"], errors="coerce").fillna(0) > 0)
+        assert not bad.any(), f"予測が無いのに着順のある馬がいる: {int(bad.sum())}"
+        r["dnf"] = nopred.to_numpy()
+        r["y3"] = r["y3"].fillna(False).astype(bool) & ~r["dnf"]
     assert r[[f"cq3_{k}" for k in range(N_PRE)] + ["fq3"]].notna().all().all(), "較正した q3 の欠け"
     return r.reset_index(drop=True)
 
@@ -750,6 +761,108 @@ def judge_select(m: dict, m_final: dict, m_v6: dict | None) -> dict:
     return {"i": bool(i), "ii": bool(ii), "iii": bool(iii), "iv": iv, "v": bool(v), "pass": bool(i and ii and iii and bool(iv) and v)}
 
 
+
+def _platt_fit(z: np.ndarray, y: np.ndarray):
+    from sklearn.linear_model import LogisticRegression
+    return LogisticRegression(C=1e6, max_iter=1000).fit(z.reshape(-1, 1) if z.ndim == 1 else z, y.astype(int))
+
+
+def _logit(p: np.ndarray) -> np.ndarray:
+    p = np.clip(np.asarray(p, float), 1e-6, 1 - 1e-6)
+    return np.log(p) - np.log1p(-p)
+
+
+def secondary_metrics(r_all: pd.DataFrame, n_boot: int = 2000) -> dict:
+    """副の物差し（prereg の secondary。判定に使わない）。母集団は確定 10 倍以上で予測のある馬（学習の母集団と同じ定義）。
+    - AI（★ の腕 p_L1）と C0 は、年 t を t−1 年の予測で当てた Platt で本物の 3 着内の確率に直す。市場は確定の較正した q3（fq3）。
+    - 対数損失・AUC（全体・レース内の平均）・ECE（十分位）・上位 10% の 3 着内率。
+    - Benter の 2 段: logit(AI の較正後) と logit(fq3) のロジスティック回帰（t−1 年で当てる）と、logit(fq3) だけの回帰の対数損失の差
+      （市場だけ − 2 段。正が上乗せ）。レース内の条件付きロジットではなく 2 値の回帰（母集団だけを学んだ AI に合わせた近似）。"""
+    from sklearn.metrics import roc_auc_score
+    yr = r_all["year"].to_numpy()
+    pop = population(r_all["odds_final"].to_numpy(float)) & ~r_all["dnf"].to_numpy()
+    y = r_all["y3"].to_numpy(int)
+    zA, zC, zM = _logit(r_all["p_L1"].fillna(0.5)), _logit(r_all["p_C0"].fillna(0.5)), _logit(r_all["fq3"])
+    pa, pc, b2, bm = (np.full(len(r_all), np.nan) for _ in range(4))
+    for t in (2019, 2020, 2021):
+        tr, te = pop & (yr == t - 1), pop & (yr == t)
+        pa[te] = _platt_fit(zA[tr], y[tr]).predict_proba(zA[te].reshape(-1, 1))[:, 1]
+        pc[te] = _platt_fit(zC[tr], y[tr]).predict_proba(zC[te].reshape(-1, 1))[:, 1]
+        zAc_tr = _logit(_platt_fit(zA[tr], y[tr]).predict_proba(zA[tr].reshape(-1, 1))[:, 1])
+        X2tr, X2te = np.column_stack([zAc_tr, zM[tr]]), np.column_stack([_logit(pa[te]), zM[te]])
+        b2[te] = _platt_fit(X2tr, y[tr]).predict_proba(X2te)[:, 1]
+        bm[te] = _platt_fit(zM[tr], y[tr]).predict_proba(zM[te].reshape(-1, 1))[:, 1]
+    ev = pop & np.isin(yr, (2019, 2020, 2021))
+    yy = y[ev]
+    race = r_all["race_id"].to_numpy()[ev]
+
+    def ll(p):
+        p = np.clip(p, 1e-6, 1 - 1e-6)
+        return -(yy * np.log(p) + (1 - yy) * np.log(1 - p))
+
+    def auc_in_race(p):
+        d = pd.DataFrame({"r": race, "y": yy, "p": p})
+        v = [roc_auc_score(g["y"], g["p"]) for _, g in d.groupby("r") if 0 < g["y"].sum() < len(g)]
+        return float(np.mean(v))
+
+    def ece(p):
+        q = pd.qcut(p, 10, labels=False, duplicates="drop")
+        d = pd.DataFrame({"q": q, "y": yy, "p": p}).groupby("q").agg(y=("y", "mean"), p=("p", "mean"), n=("y", "size"))
+        return float((d["n"] * (d["y"] - d["p"]).abs()).sum() / d["n"].sum()), d.round(4).to_dict("index")
+
+    out = {"pop": "確定 10 倍以上・予測のある馬（2019〜21）", "rows": int(ev.sum())}
+    for name, p in (("ai", pa[ev]), ("c0", pc[ev]), ("market", r_all["fq3"].to_numpy(float)[ev]), ("benter", b2[ev]), ("market_refit", bm[ev])):
+        e, tab = ece(p)
+        top = p >= np.quantile(p, 0.9)
+        out[name] = {"logloss": round(float(ll(p).mean()), 5), "auc": round(float(roc_auc_score(yy, p)), 4), "auc_in_race": round(auc_in_race(p), 4),
+                     "ece": round(e, 5), "top10_rate": round(float(yy[top].mean()), 4), "deciles": tab}
+    clus = cluster_of(r_all["race_id"][ev], r_all["date"][ev])
+    cnt = np.ones(int(ev.sum()))
+    gain = ll(bm[ev]) - ll(b2[ev])
+    ai_vs_mkt = ll(r_all["fq3"].to_numpy(float)[ev]) - ll(pa[ev])
+    b = cluster_boot(clus, {"benter_gain": gain, "ai_vs_market": ai_vs_mkt}, den={"benter_gain": cnt, "ai_vs_market": cnt}, n_boot=n_boot)
+    out["benter_gain_ll"] = b["benter_gain"]
+    out["ai_minus_market_ll"] = b["ai_vs_market"]
+    return out
+
+
+def layer_describe(r: pd.DataFrame, m: dict) -> dict:
+    """層の記述（会議の決定 3。判定に使わない）: 新馬（cls 0）・7 頭以下・未勝利（1）・条件戦（2〜5）・OP と重賞（6〜8）ごとの
+    ★ − C0 の差の平均と ★ の 3 着内率（主の母集団・中止の馬は外したまま）。"""
+    ri = m["_race_idx"]
+    R = int(ri.max() + 1)
+    cls = pd.Series(r["cls"].to_numpy()).groupby(ri).first().reindex(range(R)).to_numpy(float)
+    fld = pd.Series(r["field"].to_numpy()).groupby(ri).first().reindex(range(R)).to_numpy(float)
+    use = m["_use"]
+    out = {}
+    for name, mk in (("新馬", cls == 0), ("7 頭以下", fld <= 7), ("未勝利", cls == 1), ("条件戦", (cls >= 2) & (cls <= 5)),
+                     ("OP・重賞", cls >= 6)):
+        u = use & mk
+        out[name] = {"races": int(u.sum()), "d_star_c0": round(float(np.nanmean(m["_d_sc"][u])), 4) if u.any() else None,
+                     "rate_star": round(float(np.nanmean(m["_ys"][u])), 4) if u.any() else None}
+    return out
+
+
+def single_describe(r: pd.DataFrame, m: dict) -> dict:
+    """★・C0・市場・母集団の無作為の単勝・複勝の回収率（再現 0・確定の払戻・記述だけ）。束ねた区間と上位 5 件を除いた値。"""
+    P = m["_P"]
+    ri = m["_race_idx"]
+    R = int(ri.max() + 1)
+    pop0 = population(r["odds_pre0"].to_numpy(float)) & ~r["dnf"].to_numpy()
+    ok = m["_use"] & (P["star"][0] >= 0) & (P["c0"][0] >= 0) & (P["market"][0] >= 0)
+    out = {}
+    for col in ("ret_tan", "ret_fuku"):
+        v = r[col].to_numpy(float)
+        vals = {n: v[P[n][0][ok]] for n in ("star", "c0", "market")}
+        rnd = pd.Series(np.where(pop0, v, np.nan)).groupby(ri).mean().reindex(range(R)).to_numpy()
+        vals["random"] = rnd[ok]
+        b = cluster_boot(m["_clus"][ok], {f"roi_{n}": vals[n] for n in vals}, n_boot=2000)
+        top5 = {n: round(float(np.sort(vals[n])[:-5].sum() / (len(vals[n]) - 5)), 4) for n in vals}
+        out[col] = {"races": int(ok.sum()), "boot": b, "hit_rate": {n: round(float((vals[n] > 0).mean()), 4) for n in vals}, "roi_drop_top5": top5}
+    out["note"] = "記述だけ。再現 0。確定の払戻（runners の ret_tan・ret_fuku）"
+    return out
+
+
 def positive_control(m: dict, lift: float = 0.015, reps: int = 200, n_boot: int = 2000, seed: int = 20261128) -> dict:
     """正の対照（la-2 の決定 8）: 帰無を中心にした差に、平均で lift の ★ だけの上乗せを植え、(i) の下端が 0 を超える割合を数える。
 
@@ -803,7 +916,20 @@ def load_pair_payoffs(race_ids: set[str]) -> dict:
     return pay, miss
 
 
-def pair_describe(r: pd.DataFrame, m: dict, n_null: int = 1000, seed: int = 20261129) -> dict:
+def fake_pair_payoffs(r: pd.DataFrame) -> tuple[dict, list]:
+    """空運転の作り物の払戻（y3 の作り物の 3 着内の組に 500 円・1・2 着の組に 1,000 円）。"""
+    from src.scripts.data import bet_cycles as BC
+    pay = {}
+    for rid, g in r[r["y3"]].groupby("race_id"):
+        h = g.sort_values("fq3", ascending=False)["hn"].astype(int).tolist()[:3]
+        pay[rid] = {"wide": {BC.combo_key("wide", [a, b]): 500 for i, a in enumerate(h) for b in h[i + 1:]},
+                    "umaren": {BC.combo_key("umaren", h[:2]): 1000} if len(h) >= 2 else {}}
+    for rid in set(r["race_id"]) - set(pay):
+        pay[rid] = {"wide": {}, "umaren": {}}
+    return pay, []
+
+
+def pair_describe(r: pd.DataFrame, m: dict, n_null: int = 1000, seed: int = 20261129, dry: bool = False) -> dict:
     """組の記述（la-2 の決定 7 の型・買い方にしない）。物差しをそろえるため、すべて再現 0 の母集団と再現 0 の ★ で数える。
 
     - ★ を軸の片方、相手はめぐ（v5bag pr_win）のレースの 1 位（★ と同じ馬なら 2 位）の馬連・ワイド 1 点。
@@ -814,7 +940,7 @@ def pair_describe(r: pd.DataFrame, m: dict, n_null: int = 1000, seed: int = 2026
     race = r["race_id"].to_numpy()
     race_idx = m["_race_idx"]
     R = int(race_idx.max() + 1)
-    pay, miss = load_pair_payoffs(set(race))
+    pay, miss = fake_pair_payoffs(r) if dry else load_pair_payoffs(set(race))
     hn = r["hn"].to_numpy(int)
     mw = np.where(r["dnf"].to_numpy(), np.nan, r["megu_win"].to_numpy(float))       # 相手に中止の馬を選ばない
     order = np.lexsort((hn, -np.nan_to_num(mw, nan=-1.0), race_idx))
@@ -884,24 +1010,33 @@ def cmd_select(a) -> None:
     - 落ちうる準備（全部の評価の表）を合否の計算より前に済ませる。合否は json に書いた後にだけ表示する。
     - 区間は、1 回の select_metrics の中では全部の物差しで同じ引き直し。確定の母集団・v6・記述の腕は使うレースの集合が違うので
       別の引き直し（腕どうしの差の対の区間は出さない。記述の限界）。
-    - A/E は Σ（レースの再現の平均の y）÷ Σ（再現の平均の q3）で、「再現ごとの比の平均」の近似。"""
+    - A/E は Σ（レースの再現の平均の y）÷ Σ（再現の平均の q3）で、「再現ごとの比の平均」の近似。
+    - --dry は着順・払戻を読まない空運転（y3 と払戻は作り物。台帳を使わず select_dry.json に書く）。"""
+    from contextlib import nullcontext
+
     from src.ops import data_ledger as DL
     pr = prereg()
-    assert pr["version"] == "la-6", pr["version"]
-    dest = OUT / "select_main.json"
-    assert not dest.exists(), f"{dest} はもうある（決める段は 1 回だけ）"
+    assert pr["version"] == "la-7", pr["version"]
+    dest = OUT / ("select_dry.json" if a.dry else "select_main.json")
+    assert a.dry or not dest.exists(), f"{dest} はもうある（決める段は 1 回だけ）"
     describe = DESCRIBE_ARMS if not a.describe else [x for x in a.describe.split(",") if x]
     need = ["L1_v5", "C0_v5", "L1_v6", "C0_v6"] + describe + sorted({f"C0_{describe_fs(n)}" for n in describe})
     for n in need:
         assert (OUT / f"pred_{n}.parquet").exists(), f"pred_{n} が無い（開ける前に全部の腕を学ぶ）"
     calibrated_market_q3()                                   # 較正の表は guard の外で先に作る（作りが違えば例外で止まる）
-    with DL.guard(tool="src/research/longshot_ai/lsai.py:select", family="longshot_ai", version=pr["version"],
-                  period=("2016-01-01", "2021-12-31"), purpose="select", reads=("着順", "払戻"), frozen_paths=[PREREG, Path(__file__)],
-                  reason="穴馬 AI の決める段（2019〜21）を事前登録 la-6 のとおり 1 回だけ流す") as tok:
-        r = select_frame("v5")
-        r6 = select_frame("v6")
-        rd = {n: select_frame(describe_fs(n), star=n) for n in describe}
-        res = {"prereg": pr["version"], "main": "L1_v5", "cases": {}, "describe": {}}
+    t0 = time.time()
+    guard = nullcontext() if a.dry else DL.guard(
+        tool="src/research/longshot_ai/lsai.py:select", family="longshot_ai", version=pr["version"],
+        period=("2016-01-01", "2021-12-31"), purpose="select", reads=("着順", "払戻"), frozen_paths=[PREREG, Path(__file__)],
+        reason="穴馬 AI の決める段（2019〜21）を事前登録 la-7 のとおり 1 回だけ流す")
+    with guard as tok:
+        def ev(f):
+            return f[f["year"] >= 2019].reset_index(drop=True)
+        r_all = select_frame("v5", dry=a.dry)
+        r6_all = select_frame("v6", dry=a.dry)
+        rd_all = {n: select_frame(describe_fs(n), star=n, dry=a.dry) for n in describe}
+        r, r6 = ev(r_all), ev(r6_all)
+        res = {"prereg": pr["version"], "main": "L1_v5", "dry": bool(a.dry), "cases": {}, "describe": {}}
         for case in ("a_drop", "b_zero", "c_worst"):
             m = select_metrics(r, case)
             mf = select_metrics(r, case, odds_cols=["odds_final"])
@@ -912,12 +1047,17 @@ def cmd_select(a) -> None:
             out["judge"] = judge_select(m, mf, m6)
             if case == "a_drop":
                 out["positive_control"] = positive_control(m)
-                out["pairs"] = pair_describe(r, m)
+                out["pairs"] = pair_describe(r, m, dry=a.dry)
+                out["single"] = single_describe(r, m)
+                out["layers_race"] = layer_describe(r, m)
             res["cases"][case] = out
-        for n, f in rd.items():
-            md = select_metrics(f, "a_drop")
+            log(f"{case} を数えた（{time.time() - t0:.0f} 秒）")
+        res["secondary"] = {"L1_v5": secondary_metrics(r_all), "L1_v6": secondary_metrics(r6_all)}
+        for n, f in rd_all.items():
+            md = select_metrics(ev(f), "a_drop")
             res["describe"][n] = {"boot": md["boot"], "by_year": md["by_year"], "layers": md["layers"], "ae_by_band": md["ae_by_band"],
-                                  "agree_star_c0": md["agree_star_c0"], "races_used": md["races_used"]}
+                                  "agree_star_c0": md["agree_star_c0"], "races_used": md["races_used"], "secondary": secondary_metrics(f)}
+        log(f"記述の腕を数えた（{time.time() - t0:.0f} 秒）")
         res["pass"] = all(res["cases"][c]["judge"]["pass"] for c in res["cases"])
         only_i = all(all(res["cases"][c]["judge"][x] for x in ("ii", "iii", "iv", "v")) for c in res["cases"])
         pc = res["cases"]["a_drop"]["positive_control"]
@@ -927,9 +1067,14 @@ def cmd_select(a) -> None:
             res["verdict"] = "判定できない（(i) だけで落ち、物差しが鈍い）"
         else:
             res["verdict"] = "不合格（閉じる）"
+        res["sec"] = round(time.time() - t0)
         dest.write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
-        tok.finish(result_path=dest)
-    print(json.dumps({c: res["cases"][c]["judge"] for c in res["cases"]}, ensure_ascii=False), res["verdict"])
+        if tok is not None:
+            tok.finish(result_path=dest)
+    if a.dry:
+        print("空運転", dest, f"{res['sec']} 秒")                # 作り物の数は表示しない
+    else:
+        print(json.dumps({c: res["cases"][c]["judge"] for c in res["cases"]}, ensure_ascii=False), res["verdict"])
 
 
 def main() -> None:
@@ -946,6 +1091,7 @@ def main() -> None:
     sub.add_parser("corr")
     s_ = sub.add_parser("select")
     s_.add_argument("--describe", default="", help="記述の腕の pred の名前（カンマ区切り。例: L0_v5,LA_v5）")
+    s_.add_argument("--dry", action="store_true", help="着順・払戻を読まない空運転（作り物の y3・払戻）")
     c = sub.add_parser("census")
     c.add_argument("--fs", choices=["v5", "v6", "v7"], default="v5")
     c.add_argument("--star", default="", help="★ の腕（既定 L1_{fs}。例: L1_v5_rho50）")

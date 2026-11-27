@@ -89,7 +89,7 @@ def test_power_sim_all_same_has_no_power():
 
 def test_prereg_is_la2_and_main_arm_only():
     pr = la.prereg()
-    assert pr["version"] in ("la-2", "la-3", "la-4", "la-5", "la-6")
+    assert pr["version"] in ("la-2", "la-3", "la-4", "la-5", "la-6", "la-7")
     assert pr["main_arm"].startswith("L1_MF_xgb")
     assert pr["labels"]["train"] == "y_p1"
 
