@@ -1,0 +1,28 @@
+{
+ "note": "穴馬 AI（担当 longshot-ai、2026-11-27）。着順を開く前に固定する。変えるときは新しい版にして試した数に入れる。計画は docs/operations/longshot_ai/plan.md",
+ "version": "la-1",
+ "years": {"dev_first": 2016, "dev_last": 2024, "pred_years": [2018, 2024], "select": [2019, 2021], "confirm_once": [2022, 2024]},
+ "population": {"odds_threshold": 10.0, "train_main": "odds_final", "train_alt": "odds_pre0", "eval_main": "odds_pre0..4（5 通りの平均）", "eval_sub": "odds_final"},
+ "labels": {"source": "/home/jovyan/work/model_relabel_out/labels_convert_A.parquet", "source_sha256": "d6cf83c12677ea84a4702925b2f3e5374ea2ecab3f5cb1011f144e35827660d0",
+            "spec_commit": "origin/model-relabel 29741349（config/model_relabel/spec.json mr-3）", "train": "y_p1", "truth": "y3"},
+ "arms": {
+  "L1_MF_xgb": "主。母集団 10 倍以上（確定）・y_p1・市場と独立の列・XGBoost（megu_cycles の BAG_SETS × XGB_PARAMS × 800 本）・offset なし",
+  "L0_MF_xgb": "対照。ラベル y3",
+  "LA_MF_xgb": "副。全馬・y_p1 かつ確定 10 倍以上",
+  "LC_MF_xgb": "副。3 着内が全部 3 番人気以内（確定の人気）のレースを訓練から除く。較正と評価は全レース",
+  "L1_M_xgb": "対照。v5 の列のまま（市場に由来する列を外さない）",
+  "L1_MF_lgb": "副。LightGBM（megu_cycles の PARAMS・500 本）",
+  "L1_MF_off": "副。T-60 の再現の Harville q3 の logit を offset",
+  "L1T_MF_xgb": "副。母集団を T-60 の再現（odds_pre0）で 10 倍以上として学ぶ"
+ },
+ "n_trials": 8,
+ "send_to_confirm": "L1_MF_xgb だけ。他を送るなら Bonferroni（8 本、95% → 99.4%）",
+ "calibration": "Platt（logit の 1 次）。年 t は t−1 年の前向きの予測で当てる",
+ "primary_metric": "評価の母集団（T-60 の再現 10 倍以上）の中の予測 1 位（★ の候補）の本物の 3 着内率",
+ "judge": "2019〜21 で、L1_MF_xgb の候補の 3 着内率 − めぐ AI（v5bag pr_top3）の候補の 3 着内率の 95% 区間（開催日 × 場で束ねたブートストラップ 2,000 回）の下端が 0 より上、かつ 3 年のうち 2 年以上で正",
+ "baselines": ["無作為（母集団の平均）", "市場（母集団の中で T-60 の再現のオッズが最も低い馬）", "めぐ AI（v5bag の pr_top3 の 1 位）"],
+ "secondary": ["本物の 3 着内の対数損失・AUC（全体・レース内）・較正（十分位・ECE）・上位 10% の 3 着内率", "MF − M", "Benter の 2 段（t−1 年で当てる）", "正の対照（合成の列）"],
+ "roi": "記述だけ。単勝・複勝・★ を軸の片方にした馬連・ワイド（相手はめぐ AI の上位 1〜3）。買い方にしない",
+ "bootstrap_seed": 20261127,
+ "market_free_columns": "docs/operations/longshot_ai/market_free_columns.md（market と suspect を外す）"
+}
