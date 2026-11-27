@@ -413,6 +413,13 @@ def write(out_dir: Path) -> str:
         f"開催・仮柵の表（course_position）は {meta.get('course_info_to')} まで（名札を作った時点）。それより後の日は、開催の何日目・仮柵が「?」の群に入り、その群の過去の平均に寄る。",
         f"内外の主も、前後の主と日の z の相関が {calp[f'z_{Y.INNER_MAIN}'].corr(calp[f'z_{Y.FRONT_MAIN}']):.2f} ある（2017〜24）。逃げ・先行の馬が内に入りやすい分か、本当に内と前が同じ日に有利になるのかは、この作りでは分けられない。",
     ]))
+    b.append("<h2>画面での出し方</h2>" + bullets([
+        "確定したレースの結果の欄（週の予測・レース詳細・めぐ分析）に、その日・その場・その面の名札・このレースの S − E と日の z への寄与・1〜3 着の位置（通過順・序盤と 4 角の 番手/頭数）を出す。",
+        "出すのは会員だけ（レースレベルと同じ。結果の API は会員だけで、匿名には出さない）。速報（確定前）には付けない。",
+        "値は表示のときに計算しない。ホストが開催日の結果の後に <code>python -m src.pipeline.track_bias.serving build</code>（約 20 秒）で作り、"
+        "<code>data/page_reference/track_bias/</code>（年ごとの days・races と meta.json）に置く。Cloud Run は読むだけ。その日の作りの前は「算出前」と出す。",
+        "画面の注記: 「その日の結果の振り返り。1 日の値の大半は偶然のばらつきで、次のレースの予測ではない。」",
+    ]))
     b.append("<h2>作り方・再現</h2>" + bullets([
         "<code>nice -n 19 python -m src.research.track_bias calibrate</code>（2016〜24 だけで k と校正を決め、<code>config/track_bias/calibration.json</code> に書く）。",
         "<code>nice -n 19 python -m src.research.track_bias build-all</code>（全期間の名札。<code>data/local/research/track_bias/daily_labels.parquet</code>・年ごとの CSV）。開催日の夜に流し直すと新しい日が足される（30 秒ほど）。",
