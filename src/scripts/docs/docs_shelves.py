@@ -77,7 +77,7 @@ OVERRIDE: dict[str, str] = {
     # 血統
     "NOTE_APTITUDE_5GEN": "res-pedigree", "PEDIGREE_NOTE_APTITUDE": "res-pedigree", "PERFORMANCE_GENES": "res-pedigree",
     "sire_lines_all": "res-pedigree", "horse_pedigree_10gen_merge_design": "res-pedigree", "pedigree_position_cross": "res-pedigree",
-    "pedigree_roi": "res-pedigree", "pedigree_model": "res-pedigree", "pedigree_easy": "res-pedigree", "day_pedigree": "res-pedigree", "pedigree_side_cohit": "res-pedigree", "dam_age_firstfoal": "res-pedigree",
+    "pedigree_roi": "res-pedigree", "pedigree_model": "res-pedigree", "pedigree_easy": "res-pedigree", "day_pedigree": "res-pedigree", "aptitude_group": "res-pedigree", "pedigree_side_cohit": "res-pedigree", "dam_age_firstfoal": "res-pedigree",
     "weight_growth_performance": "res-pedigree",
     # 馬券と印（学習・実験の部にある馬券の記録）
     "bet_cycles": "res-bet", "latest_strategy_tables": "res-bet", "megu_why_below_100": "res-bet", "megu_cycles_50": "res-bet", "longshot_course_rules": "res-bet", "rules_council_summary": "res-bet", "rules_council_favorites": "res-bet", "rules_council_t60_band": "res-bet", "rules_council_daybias": "res-bet", "rules_council_debut": "res-bet", "bet_patterns_from_honmei": "res-bet", "pair_bets": "res-bet", "bet_optimization_story": "res-bet", "bet_r2_walkthrough": "res-bet", "rules_bet_opt": "res-bet", "odds_rank_accuracy": "res-bet",
@@ -196,7 +196,7 @@ GROUPS: dict[str, list[Group]] = {
     ],
     "res-pedigree": [
         Group("血統のまとめ", "結論は「いまのベスト分析 / 血統分析のまとめ」。",
-              ["pedigree_easy", "pedigree_model", "day_pedigree", "pedigree_roi", "pedigree_side_cohit", "pedigree_position_cross", "dam_age_firstfoal", "weight_growth_performance", "sire_lines_all",
+              ["pedigree_easy", "pedigree_model", "day_pedigree", "aptitude_group", "pedigree_roi", "pedigree_side_cohit", "pedigree_position_cross", "dam_age_firstfoal", "weight_growth_performance", "sire_lines_all",
                "PERFORMANCE_GENES", "PEDIGREE_NOTE_APTITUDE", "NOTE_APTITUDE_5GEN", "horse_pedigree_10gen_merge_design",
                "track_bias_pedigree_pipeline", "pedigree_stage_research_notes"],
               [E("docs/ideas/sire_dam_influence.md", "父と母の影響"), E("docs/ideas/euro_kick_sire_lines.md", "欧州型の瞬発力の系統")]),

@@ -28,6 +28,7 @@
   "tp_rules": "tp 系の凍結規則（tp48・tp56・tp59・tp62・tp72・tp74〜76）",
   "rules_council": "ルールの会議（src/research/rules_council/。3 体の会議で議題を決めるルールベースの探索）",
   "pedigree_lab": "血統だけの勝率・複勝率モデル（src/research/pedigree_lab/。担当 pedigree-lab・2 体の血統の専門家）",
+  "aptitude_group": "適性グループ（src/research/aptitude_group/。担当 aptitude-group。血統の適性の近さと組の馬券の結果の相関。開発の行 2016〜24 だけ）",
   "track_bias": "トラックバイアスの記述（src/research/track_bias/。担当 track-bias。その日・その場・芝ダの前後・内外の名札。eval_only・買い方に使わない）",
   "day_pedigree": "その日の血統の傾向（src/research/day_pedigree/。担当 day-pedigree。開発の行 2016〜24 だけ・select。30% は rules-council の許可の後だけ）"
  }

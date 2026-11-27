@@ -431,6 +431,9 @@ PARTS: list[Part] = [
         C("pedigree_easy", "血統の研究をやさしく（pedigree-lab の小学生でも分かる版）。血統だけでは回収率 100% を超えない理由、試したことの一覧（効いた・効かなかった・取り下げ）、当たり具合の比べ（でたらめ・血統・オッズ）、分かったこと、漏れの失敗と教訓、次の課題。", "結果",
           src="html/operations/final/pedigree_easy.html",
           see=[("pedigree_model", "血統だけの勝率・複勝率モデル（くわしい版）")]),
+        C("aptitude_group", "適性グループと組の馬券（aptitude-group）。血統の適性が近い馬は、特殊な条件で一緒に上位に来るか（組の馬券でだけ効く結果の相関）を、2・3 着の段の条件付きロジットで測った。血統の近さの上乗せは −0.014（区間 −0.03〜+0.004）で正の向きは無く、馬連の確定オッズに対する近い組の A/E も 0.996。段 1 で閉じた。組の相関の本体は脚質（血統ではない）。", "結果",
+          src="html/operations/final/aptitude_group.html",
+          see=[("pedigree_easy", "血統の研究をやさしく")]),   # 地図のページ（sire_vectors.html）は画面のスクリプトが要り大きいので本に入れず、この章の本文からリンクするだけ（STANDALONE_GLOBS）
         C("pedigree_model", "血統だけ（年齢・性・成績・オッズを使わない）の勝率・複勝率モデル（pedigree-lab）。5 代血統の as-of の産駒成績を縮小して作った約 170 列の LightGBM は、勝ちの対数損失で一様より 0.082 nats 良く、2025・26 年でも 0.077 と再現した（較正の傾き 1.04）。市場は約 0.69 で、血統が市場に足す分は 0.0002 nats。初ダートでは血統の傾きが約 8 倍に上がるが、単勝で市場の 1.2 倍にとどまり控除に届かず、血統のモデルだけで回収率 100% を超える買い方は無かった（門 0 で閉じた）。特徴量の一覧となぜ効くのか・覚え込み・帰無・第 5 版の比べ。", "結果",
           src="html/operations/final/pedigree_model.html",
           see=[("pedigree_roi", "血統の回収率とレース質（tp-60）"), ("rules_council_debut", "初出走の馬の目録に無い列（RC-4）"), ("rules_council_summary", "ルールの会議のまとめ")]),
@@ -515,7 +518,8 @@ STATUS = {"legacy": ("旧設計", "#fb923c"), "snapshot": ("時点の記録", "#
 
 # 本の章にしない単独のページの型（docs/ からの相対の glob）。ここに 1 か所だけ書く（tests/scripts/test_build_docs_book.py が見張る）。
 # - トラックバイアスの名札の年ごとのページ（1 枚約 1.1MB × 年の数。本の大きさを抑えるため、名札の一覧の章からリンクで飛ぶ）
-STANDALONE_GLOBS: tuple[str, ...] = ("html/operations/final/track_bias_labels_[0-9][0-9][0-9][0-9].html",)
+STANDALONE_GLOBS: tuple[str, ...] = ("html/operations/final/track_bias_labels_[0-9][0-9][0-9][0-9].html",
+                                     "html/operations/final/sire_vectors.html")   # 種牡馬の地図（画面のスクリプトが要り 3MB。aptitude_group の章からリンク）
 
 
 def standalone_files() -> set[Path]:
