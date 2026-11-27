@@ -164,6 +164,8 @@ def candidates(fs: str, target: str, sp: dict, base: pd.DataFrame) -> dict[str, 
     """族ごとに {候補名: 点数の列（全行）}。"""
     rounds = sp["select"]["rounds_v6e" if fs == "v6e" else "rounds_v5bag"]
     fam: dict[str, dict[str, np.ndarray]] = {"base": {}, "pw": {}, "pord": {}}
+    if target == "top3":
+        fam["pw1"], fam["pord1"] = {}, {}               # 複勝の 1 馬身の版（候補の名前は x1 で始めて、1/2 馬身の版と重ねない）
     b = load_pred(fs, target, "orig", base)
     for r in rounds:
         fam["base"][f"orig|r{r}"] = b[f"p_r{r}"].to_numpy(float)
@@ -176,7 +178,36 @@ def candidates(fs: str, target: str, sp: dict, base: pd.DataFrame) -> dict[str, 
     for k in sp["penalty"]["P_ord"]["kappa"]:
         for r in rounds:
             fam["pord"][f"k{k}|r{r}"] = _ord_score(e1[f"p_r{r}"].to_numpy(float), nb[f"p_r{r}"].to_numpy(float), k)
+    if target == "top3":
+        try:
+            ext1 = {w: load_pred(fs, target, f"ext1_w{w}", base) for w in sp["penalty"]["P_w"]["w"]}
+        except FileNotFoundError as err:          # 1 馬身の版が未完でも、ほかの族の評価は続ける
+            print("1 馬身の版の予測がまだ無いので pw1・pord1 を飛ばす", fs, err, flush=True)
+            del fam["pw1"], fam["pord1"]
+            return fam
+        for w in sp["penalty"]["P_w"]["w"]:
+            e = ext1[w]
+            for r in rounds:
+                fam["pw1"][f"x1w{w}|r{r}"] = e[f"p_r{r}"].to_numpy(float)
+        e1 = ext1[1]
+        for k in sp["penalty"]["P_ord"]["kappa"]:
+            for r in rounds:
+                fam["pord1"][f"x1k{k}|r{r}"] = _ord_score(e1[f"p_r{r}"].to_numpy(float), nb[f"p_r{r}"].to_numpy(float), k)
     return fam
+
+
+def variant_of(cname: str) -> tuple[str, float | None]:
+    """候補の名前から、読む予測の変種と κ（pord のとき）を返す。"""
+    head = cname.split("|")[0]
+    if head == "orig":
+        return "orig", None
+    if head.startswith("x1w"):
+        return f"ext1_w{head[3:]}", None
+    if head.startswith("x1k"):
+        return "ext1_w1", float(head[3:])
+    if head.startswith("w"):
+        return f"ext_w{head[1:]}", None
+    return "ext_w1", float(head[1:])
 
 
 # ---------------------------------------------------------------- 入れ子の選びと外側の物差し
@@ -236,6 +267,8 @@ def nested_time(fs: str, target: str, years, lams, sp: dict, base: pd.DataFrame)
     groups = dict(fam)
     for w in sp["penalty"]["P_w"]["w"]:
         groups[f"pw_fixed_w{w}"] = {k: v for k, v in fam["pw"].items() if k.startswith(f"w{w}|")}
+        if "pw1" in fam:
+            groups[f"pw1_fixed_w{w}"] = {k: v for k, v in fam["pw1"].items() if k.startswith(f"x1w{w}|")}
     res = {lam: {"years": {}} for lam in lams}
     for t in years:
         i2, i1, i0 = yr == t - 2, yr == t - 1, yr == t
@@ -348,7 +381,7 @@ def cmd(period: str) -> None:
             for lam, res in allres.items():
                 summ = summarize(res, years)
                 boots = {f"{a}-base": paired_boot(res, base, target, a, "base", years)
-                         for a in ("pw", "pord", *[f"pw_fixed_w{w}" for w in sp["penalty"]["P_w"]["w"]])}
+                         for a in res["years"][years[0]] if a != "base"}
                 per_year = {str(t): {f: {k: v for k, v in r.items() if k != "_p"} for f, r in res["years"][t].items()} for t in years}
                 report["results"][f"{fs}|{target}|lam{lam}"] = {"summary": summ, "boot": boots, "per_year": per_year}
                 print(f"{fs}|{target}|lam{lam}", json.dumps({f: {k: summ[f].get(k) for k in ("ll", "L_main", "winner_nlp", "race_auc", "benter_gain")}
@@ -359,7 +392,7 @@ def cmd(period: str) -> None:
             for lam in lams:
                 ra, rb = kept[("v5bag_ped", target)][lam], kept[("v5bag", target)][lam]
                 report["feature_axis"][f"{target}|lam{lam}"] = {f"{f}:ped-v5bag": paired_boot(ra, base, target, f, f, years, res_b=rb)
-                                                                for f in ("base", "pw", "pord")}
+                                                                for f in ra["years"][years[0]] if "_fixed_" not in f and f in rb["years"][years[0]]}
             print("feature_axis", target, json.dumps(report["feature_axis"].get(f"{target}|lam{lams[0]}"), ensure_ascii=False), flush=True)
     dest = DOCS / f"eval_{period}.json"
     dest.write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
@@ -371,7 +404,7 @@ def meeting_configs(sel: dict, fs: str, target: str, lam: float) -> dict:
     """開催単位の分けに使う設定: 時間の順の選び（λ 主・外側 2019〜21）で、族ごとに最も多く選ばれた (候補, 較正)。"""
     py = sel["results"][f"{fs}|{target}|lam{lam}"]["per_year"]
     out = {}
-    for fam in ("base", "pw", "pord"):
+    for fam in [f for f in next(iter(py.values())) if "_fixed_" not in f]:
         c = pd.Series([(py[t][fam]["chosen"], py[t][fam]["cal"]) for t in sorted(py)]).value_counts()
         out[fam] = c.index[0]
     return out
@@ -397,14 +430,13 @@ def cmd_meeting() -> None:
                 pooled = {}
                 for fam, (cname, cal) in cfg.items():
                     r = int(cname.split("|r")[1])
-                    if fam == "pord":
-                        k = float(cname.split("|")[0][1:])
-                        a = load_pred(fs, target, "ext_w1", base, "meeting")
+                    var, k = variant_of(cname)
+                    if k is not None:
+                        a = load_pred(fs, target, var, base, "meeting")
                         nb = load_pred(fs, "notbig", "orig", base, "meeting")
                         assert (a[["race_id", "horse_id", "fold"]].to_numpy() == nb[["race_id", "horse_id", "fold"]].to_numpy()).all()
                         a["s"] = _ord_score(a[f"p_r{r}"].to_numpy(float), nb[f"p_r{r}"].to_numpy(float), k)
                     else:
-                        var = "orig" if fam == "base" else f"ext_w{cname.split('|')[0][1:]}"
                         a = load_pred(fs, target, var, base, "meeting")
                         a["s"] = a[f"p_r{r}"].to_numpy(float)
                     outs = []
@@ -423,7 +455,7 @@ def cmd_meeting() -> None:
                 print("予測か時間の順の選びがまだ揃っていない", fs, target, e, flush=True)
                 continue
             boots = {}
-            for fam in ("pw", "pord"):
+            for fam in [f for f in pooled if f != "base"]:
                 a_, b_ = pooled[fam][0], pooled["base"][0]
                 mg = a_.merge(b_[["race_id", "horse_id", "p"]], on=["race_id", "horse_id"], suffixes=("", "_b"))
                 y = mg[yname].to_numpy(float)

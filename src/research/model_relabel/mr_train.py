@@ -4,7 +4,7 @@
   final_v6e16 の束の xgb_extras_ped の feature_cols（1,231 列）。木の設定は v5bag の BAG_SETS・XGB_PARAMS、
   v6e は xgb_extras_ped の params に固定する（選び直さない。config/model_relabel/spec.json）。
 - 目標: win（元 y1・拡張 y_w）・top3（元 y3・拡張 y_p）・notbig（P-ord の m_a = 大敗でない）。
-- 変種: orig（元のラベル）・ext_w1・ext_w2・ext_w4（拡張のラベル、大敗の負例の重み w）。
+- 変種: orig（元のラベル）・ext_w1・ext_w2・ext_w4（拡張のラベル、大敗の負例の重み w）・ext1_w1・ext1_w2・ext1_w4（複勝の 1 馬身の版 y_p1）。
 - 分け:
   - time: 年 t（2017〜24）は t より前の年で学ぶ。
   - meeting: 開催の 5 分割（docs/operations/model_relabel/meeting_folds.csv）。学びの側の calib_k=1 の開催は学びに入れず較正に回す。
@@ -109,13 +109,13 @@ def attach_labels(meta: pd.DataFrame, conv_key: str = "convert_A", max_year: int
     lab = pd.read_parquet(path, filters=[("year", "<=", max_year)]) if path.exists() else LB.labels_dev(conv_key)
     lab = lab[lab["year"] <= max_year].drop_duplicates(["race_id", "horse_id"])
     key = meta[["race_id", "horse_id"]].astype(str)
-    m = key.merge(lab[["race_id", "horse_id", "y1", "y3", "y_w", "y_p", "big", "ext_ok"]], on=["race_id", "horse_id"], how="left")
+    m = key.merge(lab[["race_id", "horse_id", "y1", "y3", "y_w", "y_p", "y_p1", "big", "ext_ok"]], on=["race_id", "horse_id"], how="left")
     assert len(m) == len(meta)
     miss = m["y1"].isna()
     fin = pd.to_numeric(meta["finish_position"], errors="coerce").to_numpy()
     # 結果表に無い行（取消など）は負例・大敗でない
     assert (fin[miss.to_numpy()] != 1).all(), "結果表に無い勝ち馬がいる"
-    for c in ("y1", "y3", "y_w", "y_p", "big"):
+    for c in ("y1", "y3", "y_w", "y_p", "y_p1", "big"):
         m[c] = m[c].fillna(False).astype(bool)
     m["ext_ok"] = m["ext_ok"].fillna(True).astype(bool)
     agree = (m["y1"].to_numpy() == (fin == 1)).mean()
@@ -131,6 +131,9 @@ def target_and_weight(lab: pd.DataFrame, target: str, variant: str) -> tuple[np.
         assert variant == "orig"
         return (~big).astype(np.float32), np.ones(len(lab), np.float32)
     col = {"win": ("y1", "y_w"), "top3": ("y3", "y_p")}[target]
+    if variant.startswith("ext1_"):                      # 複勝の 1 馬身の版（11/27 に追加）
+        assert target == "top3"
+        col = ("y3", "y_p1")
     if variant == "orig":
         return lab[col[0]].to_numpy(np.float32), np.ones(len(lab), np.float32)
     w = float(variant.split("_w")[1])
@@ -167,8 +170,14 @@ def _check_manifest(d: Path, fp: dict) -> None:
     m = d / "manifest.json"
     d.mkdir(parents=True, exist_ok=True)
     if m.exists():
+        def strip(x):          # 比べるのはラベルの md5・木の設定・本数。スレッドの数（11/27 に 4 → 2）と spec の版（記録だけ）は値に関わらない
+            x = json.loads(json.dumps(x))
+            x.pop("spec_version", None)
+            for st in x.get("sets", []):
+                st.pop("nthread", None)
+            return x
         old = json.loads(m.read_text(encoding="utf-8"))
-        if old != json.loads(json.dumps(fp)):
+        if strip(old) != strip(fp):
             raise SystemExit(f"部品の作りの印が違う（古い部品を混ぜない）: {d}")
     else:
         m.write_text(json.dumps(fp, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -274,12 +283,13 @@ def _assemble_meeting(fs, target, variant, conv, lab, units, n_bags, rounds) -> 
 
 
 JOBS = [f"{fs}:{t}:{v}" for fs in ("v5bag", "v6e", "v5bag_ped")
-        for t, vs in (("win", ("orig", "ext_w1", "ext_w2", "ext_w4")), ("top3", ("orig", "ext_w1", "ext_w2", "ext_w4")), ("notbig", ("orig",)))
+        for t, vs in (("win", ("orig", "ext_w1", "ext_w2", "ext_w4")),
+                      ("top3", ("orig", "ext_w1", "ext_w2", "ext_w4", "ext1_w1", "ext1_w2", "ext1_w4")), ("notbig", ("orig",)))
         for v in vs]
 
 
 def status() -> None:
-    """時間の順の全 27 本の済み・残り（部品の数）。止まっても続きから流せる（部品ごとに保存）。"""
+    """時間の順の全 36 本の済み・残り（部品の数）。止まっても続きから流せる（部品ごとに保存）。"""
     done, left = [], []
     for j in JOBS:
         fs, t, v = j.split(":")
@@ -308,7 +318,9 @@ def main() -> None:
         return status()
     if a.cmd == "labels":
         for k in ("convert_A", "convert_B_sensitivity"):
-            LB.labels_dev(k).to_parquet(OUT / f"labels_{k}.parquet", index=False)
+            tmp = OUT / f"labels_{k}.tmp.parquet"       # 学習が読んでいる最中に置き換えても壊れないように
+            LB.labels_dev(k).to_parquet(tmp, index=False)
+            os.replace(tmp, OUT / f"labels_{k}.parquet")
         print("labels saved")
         return
     run(a.fs, a.target, a.variant, a.split, a.conv, a.only_unit)

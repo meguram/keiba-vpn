@@ -169,3 +169,33 @@ def test_race_normalize_sum_and_cap():
     assert math.isclose(q[:4].sum(), 3.0, rel_tol=1e-4) and math.isclose(q[4:].sum(), 3.0, rel_tol=1e-3)
     w = race_normalize(p, rid, 1.0)
     assert math.isclose(w[:4].sum(), 1.0, rel_tol=1e-6)
+
+
+def test_place_one_length_version():
+    # 3 着の累積 0.35 から: 4 着 0.05・5 着 0.3・6 着 0.8（1 馬身以内）・7 着 大
+    d = _race("202001010113", [(1, "", 60.0), (2, "クビ", 60.0), (3, "アタマ", 60.1), (4, "ハナ", 60.1), (5, "クビ", 60.2),
+                               (6, "1/2", 60.3), (7, "大", 64.0)])
+    out = L.build_labels(d)
+    assert out["y_p"].tolist() == [True] * 5 + [False, False]
+    assert out["y_p1"].tolist() == [True] * 6 + [False]
+
+
+def test_variant_of_names():
+    from src.research.model_relabel.mr_eval import variant_of
+    assert variant_of("orig|r800") == ("orig", None)
+    assert variant_of("w2|r400") == ("ext_w2", None)
+    assert variant_of("k0.5|r200") == ("ext_w1", 0.5)
+    assert variant_of("x1w4|r600") == ("ext1_w4", None)
+    assert variant_of("x1k1.0|r800") == ("ext1_w1", 1.0)
+
+
+def test_target_and_weight_ext1_uses_y_p1():
+    from src.research.model_relabel.mr_train import target_and_weight
+    lab = pd.DataFrame({"y1": [1, 0, 0, 0], "y3": [1, 1, 0, 0], "y_w": [1, 1, 0, 0], "y_p": [1, 1, 0, 0],
+                        "y_p1": [1, 1, 1, 0], "big": [False, False, False, True]}).astype(bool)
+    y, wt = target_and_weight(lab, "top3", "ext1_w4")
+    assert y.tolist() == [1, 1, 1, 0] and wt.tolist() == [1, 1, 1, 4]
+    y, wt = target_and_weight(lab, "top3", "ext_w2")
+    assert y.tolist() == [1, 1, 0, 0] and wt.tolist() == [1, 1, 1, 2]
+    with pytest.raises(AssertionError):
+        target_and_weight(lab, "win", "ext1_w1")

@@ -1,7 +1,7 @@
 """拡張ラベル（担当 model-relabel）: 結果表の着差の文字列の累積から、勝ち・複勝の拡張ラベルと大敗の印を作る。
 
 - 着差（race_result_flat の margin）は直前の馬からの差。着順に並べて勝ち馬から累積する。換算は config/model_relabel/spec.json。
-- y_w: 1 着、または勝ち馬からの累積 ≤ 0.5 馬身。y_p: 3 着内、または（自分の累積 − 3 着馬の累積の最大）≤ 0.5 馬身。
+- y_w: 1 着、または勝ち馬からの累積 ≤ 0.5 馬身。y_p: 3 着内、または（自分の累積 − 3 着馬の累積の最大）≤ 0.5 馬身。y_p1: 同じ作りで ≤ 1.0 馬身（11/27 に追加）。
 - big（大敗）: 6 着以下かつ time_sec − 勝ち馬の time_sec ≥ 1.0 秒。
 - 拡張しないレース（元のラベルのまま）: 2 着以下に空の着差・1 着に着差・降着の印（finish_position_raw の「降」。2016〜19 年だけ列がある）・
   着順で後ろの馬の時計が前の馬より速い。2016〜19 年の降着 12 レースは、降着の印を除いた 3 つの決まりで全部拾えた（2020 年以降は印が無い）。
@@ -57,7 +57,7 @@ def margin_lengths(s, conv: dict) -> float:
 
 def build_labels(res: pd.DataFrame, spec: dict | None = None, conv_key: str = "convert_A") -> pd.DataFrame:
     """結果表（race_id・horse_id・finish_position・margin・time_sec、あれば finish_position_raw）から、
-    y1・y3・y_w・y_p・big・cum（勝ち馬からの累積）・dt（勝ち馬との時計の差）・ext_ok を返す（入力の行の順）。"""
+    y1・y3・y_w・y_p・y_p1・big・cum（勝ち馬からの累積）・dt（勝ち馬との時計の差）・ext_ok を返す（入力の行の順）。"""
     spec = spec or load_spec()
     conv = spec["margin"][conv_key]
     thr = float(spec["margin"]["within_lengths"])
@@ -93,12 +93,14 @@ def build_labels(res: pd.DataFrame, spec: dict | None = None, conv_key: str = "c
     yw = y1 | (ext_ok & (f["cum"].to_numpy() <= thr + EPS))
     c3v = f["cum3"].to_numpy()
     yp = y3 | (ext_ok & np.isfinite(c3v) & (c3v <= thr + EPS))
+    thr_p1 = float(spec["margin"].get("within_lengths_place_1", 1.0))
+    f["y_p1"] = y3 | (ext_ok & np.isfinite(c3v) & (c3v <= thr_p1 + EPS))
     big = (fp >= 6) & (f["dt"].to_numpy() >= 1.0 - EPS)
     f["y1"], f["y3"], f["y_w"], f["y_p"], f["big"], f["ext_ok"] = y1, y3, yw, yp, big, ext_ok
     out = d[["race_id", "horse_id", "finish_position", "_ord"]].copy()
-    cols = ["y1", "y3", "y_w", "y_p", "big", "ext_ok", "cum", "dt"]
+    cols = ["y1", "y3", "y_w", "y_p", "y_p1", "big", "ext_ok", "cum", "dt"]
     out = out.merge(f[["_ord"] + cols], on="_ord", how="left").sort_values("_ord")
-    for c in ("y1", "y3", "y_w", "y_p", "big"):
+    for c in ("y1", "y3", "y_w", "y_p", "y_p1", "big"):
         out[c] = out[c].fillna(False).astype(bool)
     race_ok = f.groupby("race_id")["ext_ok"].all()
     out["ext_ok"] = out["race_id"].map(race_ok).fillna(True).astype(bool)     # 中止の馬にもレースの値を引き継ぐ
@@ -143,7 +145,7 @@ def rate_table(lab: pd.DataFrame) -> dict:
 
     def agg(by):
         t = f.groupby(by, observed=True).agg(n=("y1", "size"), y1=("y1", "mean"), y_w=("y_w", "mean"), y3=("y3", "mean"),
-                                             y_p=("y_p", "mean"), big=("big", "mean"))
+                                             y_p=("y_p", "mean"), y_p1=("y_p1", "mean"), big=("big", "mean"))
         return {str(k): {c: (round(float(v), 4) if c != "n" else int(v)) for c, v in r.items()} for k, r in t.iterrows()}
 
     races = lab.drop_duplicates("race_id")
@@ -161,7 +163,9 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     if a.cmd == "save":
         for k in ("convert_A", "convert_B_sensitivity"):
-            labels_dev(k).to_parquet(OUT / f"labels_{k}.parquet", index=False)
+            tmp = OUT / f"labels_{k}.tmp.parquet"       # 学習が読んでいる最中に置き換えても壊れないように
+            labels_dev(k).to_parquet(tmp, index=False)
+            os.replace(tmp, OUT / f"labels_{k}.parquet")
         print("saved", OUT)
         return
     lab = labels_dev()
