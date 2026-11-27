@@ -116,8 +116,9 @@ def power_sim(p_true: np.ndarray, star: np.ndarray, ref: np.ndarray, cluster_r: 
     - p_true: 馬ごとの真の 3 着内の確率（較正した市場の q3 の 5 通りの平均）。
     - star・ref: (K, R) の馬の番号（行の位置）。再現 k・レース r の ★ と比べ先の 1 位。無いときは −1。
     - 判定の物差しと同じく、レースの差 d_r = 再現の平均の (y[★] − y[比べ先])。
-    - 上乗せ: 「どれかの再現で ★ で、その再現の比べ先と違う馬」に同じ L を足し、d の期待値の増分がちょうど target
-      （+1.0pt）になる L を解く（同じ馬のレースは差 0 なので、全馬に足すと真の差が target より小さくなる）。
+    - 上乗せ: 「どれかの再現で ★ で、その再現の比べ先と違う馬」に同じ L を足し、d の期待値（上乗せの前の差 base を含む）が
+      ちょうど target（+1.0pt）になる L を解く。市場を真とすると ★ はもともと比べ先より低いことがある（base < 0）ので、
+      増分だけを target にすると真の差が target より小さくなる（11/27 に直した。直す前の 0.063 は真の差 約 +0.13pt での値）。
     - 馬ごとの y は独立に引く（同じレースの 3 枠の取り合いの負の相関は入れない。差の分散を少し大きく見る向き）。
     - 区間は束ねた（開催日 × 場）正規の区間に小標本の補正 G/(G−1) を掛けたもの。判定のブートストラップ 2,000 回の近似。
     - レースごとに再現の平均をとってからレースで平均する（判定の「再現ごとの物差しの 5 通りの平均」とは、母集団 0 頭の
@@ -133,9 +134,11 @@ def power_sim(p_true: np.ndarray, star: np.ndarray, ref: np.ndarray, cluster_r: 
     st = np.where(ok, star, 0)
     rf = np.where(ok, ref, 0)
     inc = (np.where(ok, lift_set[st] - lift_set[rf], 0.0).sum(0)[use] / w[use]).mean()
+    # 上乗せの前の真の差（市場を真としたときの ★ − 比べ先）。真の差の全体が target になるように L を解く（la-2 の決定 7）
+    base = (np.where(ok, p_true[st] - p_true[rf], 0.0).sum(0)[use] / w[use]).mean()
     if inc <= 0:
-        return {"power": 0.0, "L": None, "agree": float((star == ref)[ok].mean()), "n_races": int(use.sum()), "n_sim": n_sim}
-    L = target / inc
+        return {"power": 0.0, "L": None, "base_diff": float(base), "agree": float((star == ref)[ok].mean()), "n_races": int(use.sum()), "n_sim": n_sim}
+    L = (target - base) / inc
     p = np.clip(p_true + L * lift_set, 0.0, 1.0)
     codes, cl = np.unique(cluster_r[use], return_inverse=True)
     G = len(codes)
@@ -149,7 +152,7 @@ def power_sim(p_true: np.ndarray, star: np.ndarray, ref: np.ndarray, cluster_r: 
         s_c = np.bincount(cl, weights=d, minlength=G)
         se = np.sqrt(((s_c - n_c * m) ** 2).sum() * G / max(G - 1, 1)) / n
         hit += (m - 1.96 * se) > 0
-    return {"power": hit / n_sim, "L": float(L), "agree": float((star == ref)[ok].mean()), "n_races": n, "n_clusters": int(G),
+    return {"power": hit / n_sim, "L": float(L), "base_diff": float(base), "agree": float((star == ref)[ok].mean()), "n_races": n, "n_clusters": int(G),
             "n_lifted": int(lift_set.sum()), "n_sim": n_sim, "target": target}
 
 

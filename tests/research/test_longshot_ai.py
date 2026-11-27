@@ -59,7 +59,18 @@ def test_power_sim_lift_hits_target_difference():
     res = la.power_sim(p, star, ref, cl, target=0.01, n_sim=10)
     # 上乗せ L × （差のあるレースの割合）＝ target になる
     differ = (star != ref).mean()
+    assert res["base_diff"] == pytest.approx(0.0)
     assert res["L"] * differ == pytest.approx(0.01, rel=1e-6)
+
+
+def test_power_sim_includes_base_difference():
+    p, star, ref, cl = _sim_case()
+    p = p.copy()
+    p[1::2] = 0.25                                 # 比べ先（行 2r+1）がもともと 5pt 高い
+    res = la.power_sim(p, star, ref, cl, target=0.01, n_sim=10)
+    differ = (star != ref).mean()
+    assert res["base_diff"] == pytest.approx(-0.05 * differ, rel=1e-6)
+    assert res["base_diff"] + res["L"] * differ == pytest.approx(0.01, rel=1e-6)
 
 
 def test_power_sim_null_is_about_alpha_and_large_is_high():
