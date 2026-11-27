@@ -84,10 +84,10 @@ def pair_probs(p: np.ndarray, lam) -> tuple[np.ndarray, np.ndarray]:
 
 
 def main() -> None:
-    from src.ops import data_ledger as DL
-    with DL.guard(tool="src/research/pair_bets/market.py", family="rules_council", version="pair_bets_stage1b", period=("2022-01-01", "2024-12-31"),
-                   purpose="select", reads=("確定オッズ", "AI の予測"),
-                   reason="組の市場と単勝からの組の確率・AI の組の期待値の分布。着順・払戻は読まない（critic の後に平場へ絞って流し直し）") as tok:
+    from src.research.pair_bets.pb_ledger import open_token
+    with open_token(tool="src/research/pair_bets/market.py", version="pair_bets_stage1b", period=("2022-01-01", "2024-12-31"),
+                    purpose="select", reads=("確定オッズ", "AI の予測"),
+                    reason="組の市場と単勝からの組の確率・AI の組の期待値の分布。着順・払戻は読まない（critic の後に平場へ絞って流し直し）") as tok:
         _run(tok)
 
 

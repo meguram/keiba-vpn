@@ -429,6 +429,7 @@ _GUARD_ENTRY = {
     "src/research/rules_council/results_table.py": {"main"},   # R0-07 説明の結果の表（select。研究の CLI・1 回だけ）
     "src/research/pedigree_lab/pl_ledger.py": {"open_token"},     # 血統だけのモデルの研究（select・confirm・eval_only。研究の CLI からだけ）
     "src/research/day_pedigree/day_ledger.py": {"open_token"},    # その日の血統の傾向（select・開発の行だけ。研究の CLI からだけ）
+    "src/research/pair_bets/pb_ledger.py": {"open_token"},        # 馬連・ワイドの段 1（着順・払戻なし。研究の CLI からだけ）
     "src/research/track_bias/tb_ledger.py": {"open_token"},       # トラックバイアスの記述（calibrate は select・build-all は eval_only。研究の CLI からだけ）
     "src/research/megu_cycles/mc_final.py": {"cmd_final", "cmd_drift"},     # めぐサイクルの最後の 1 回の確かめ・再現の楽観の測り（eval_only）   # めぐサイクルの 2022〜24 の確かめ（confirm）・割引きと最後の確かめ（eval_only）
 }

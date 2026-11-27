@@ -41,10 +41,14 @@ def frame(items, ty: str) -> pd.DataFrame:
 
 
 def main() -> None:
-    from src.ops import data_ledger as DL
-    tok = DL.guard(tool="src/research/pair_bets/sstar.py", family="rules_council", version="pair_bets_sstar", period=(FROM, "2026-11-27"),
-                   purpose="eval_only", reads=("組のオッズ（T-60・確定）",),
-                   reason="1 号の条件 8: 組の s* を門 0 の模擬の払戻の縮みにだけ使う。着順・払戻は結ばない（統括役の整理: 結果を見たことにならない）")
+    from src.research.pair_bets.pb_ledger import open_token
+    with open_token(tool="src/research/pair_bets/sstar.py", version="pair_bets_sstar", period=(FROM, "2026-11-27"),
+                    purpose="eval_only", reads=("組のオッズ（T-60・確定）",),
+                    reason="1 号の条件 8: 組の s* を門 0 の模擬の払戻の縮みにだけ使う。着順・払戻は結ばない（統括役の整理: 結果を見たことにならない）") as tok:
+        _run(tok)
+
+
+def _run(tok) -> None:
     d = pd.read_parquet(SRC, columns=["race_id", "phase", "snapshot_at", "snapshots", "umaren", "wide"])
     d = d[(d["phase"] == "final") & (d["snapshot_at"].astype(str) >= FROM)]
     res = {"from": FROM, "races_final": int(len(d)), "bands": [f"{lo}〜{hi}" if hi < 9999 else f"{lo}〜" for lo, hi in BANDS]}
