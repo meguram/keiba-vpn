@@ -532,6 +532,8 @@ def cmd(period: str, only: str | None = None) -> None:
                 summ = summarize(res, years)
                 boots = {f"{a}-base": paired_boot(res, base, target, a, "base", years)
                          for a in res["years"][years[0]] if a != "base"}
+                for a in [f for f in res["years"][years[0]] if f != "base"]:      # Benter の 2 段の上乗せの差（族 − base、同じ特徴量の版の中）
+                    boots[f"{a}-base:benter"] = paired_boot_benter(res, a, res, "base", years)
                 for a, b in (("pw_nc", "pw"), ("base_nc", "base")):          # 除きの効き目（同じ族どうし）
                     if a in res["years"][years[0]]:
                         boots[f"{a}-{b}"] = paired_boot(res, base, target, a, b, years)
