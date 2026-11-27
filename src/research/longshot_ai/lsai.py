@@ -1,13 +1,14 @@
 """穴馬 AI（担当 longshot-ai、2026-11-27）: 単勝 10 倍以上の馬だけで、1 馬身の拡張ラベル（y_p1）を市場と独立の列で学ぶ。
 
-- 計画: docs/operations/longshot_ai/plan.md。事前登録: config/longshot_ai/prereg.json（la-3）。会議の決定: roi_plus_council/decisions.md。
-- 列: めぐ AI の v5（megu_cycles の _rich_matrix）から追い切り評価の 3 列を外した MF 版（market_free_columns.md）。v6 は漏れの確かめ。
+- 計画: docs/operations/longshot_ai/plan.md。事前登録: config/longshot_ai/prereg.json（la-4）。会議の決定: roi_plus_council/decisions.md。
+- 列: めぐ AI の v5（megu_cycles の _rich_matrix）から追い切り評価の 3 列と course_type を外した MF 版（market_free_columns.md）。
+  v6 は FIT_END の族と s_* を外した漏れの確かめ、v7 は s_*（leave-one-year-out の上流）だけを外した版（相関で外す版の基準）。
 - ラベル: model-relabel の出力（labels_convert_A.parquet の y_p1・y3）を読むだけ。sha256 が事前登録と違えば止める。
 - 腕: L1（確定 10 倍以上の行・y_p1）と C0（全馬・y3。主の比べ先）。木は megu_cycles の BAG_SETS × XGB_PARAMS × 800 本。
 - 分け: 年 t は t より前の年で学ぶ。いまの段で予測するのは 2018〜2021 だけ（2022〜24 は確かめの 1 回の後）。
 - 2025 年以降の行は読み込みの直後に落とす。費用 0 円（手元のファイルだけ。GCS を読まない）。
-  重い学習: flock /tmp/claude-1000/heavy.lock nice -n 19 env KEIBA_SESSION=longshot-ai python -m src.research.longshot_ai.la train --arm L1 --fs v5
-  着順なしの表: python -m src.research.longshot_ai.la census
+  重い学習: flock /tmp/claude-1000/heavy.lock nice -n 19 env KEIBA_SESSION=longshot-ai python -m src.research.longshot_ai.lsai train --arm L1 --fs v5
+  着順なしの表: python -m src.research.longshot_ai.lsai census
 - 本番の推論の経路（src/pipeline/・src/api/）からは import しない。
 - 注意: megu_cycles の _rich_matrix は meta（cycles16_fix3/meta.parquet）を全列で読むので、2024 年までの finish_position が
   いったんメモリに載る。load_matrix で直後に捨て、使わない（他の担当の道具なので読む列は変えていない）。
@@ -36,7 +37,9 @@ YEAR_END = 2024
 N_PRE = 5
 THRESH = 10.0
 DROP_DIR = ROOT / "config/longshot_ai"                                   # 外す列の一覧（drop_rho50.json・drop_rho30.json。凍結）
-DROP_POLICY = ("oikiri_eval", "oikiri_eval_rank", "oikiri_eval_gap")      # 方針で外す（公開の専門家の意見）
+# 方針で外す列: 追い切り評価の 3 列（公開の専門家の意見）と course_type（推論の経路で 100% 空。点検役の指摘、11/27）
+DROP_POLICY = ("oikiri_eval", "oikiri_eval_rank", "oikiri_eval_gap", "course_type")
+DUP_RACES = ("202408060108",)      # 取り込みの誤りの写し（202408060101 と同じ馬が 7 頭）。runners から外す
 PRED_YEARS = (2018, 2019, 2020, 2021)                                    # いまの段の予測の年（2022〜24 は確かめの後）
 NTHREAD = int(os.environ.get("LONGSHOT_AI_NTHREAD") or 2)
 ODDS_BANDS = (10.0, 15.0, 30.0, 50.0, np.inf)
@@ -60,7 +63,7 @@ def sha256(p: Path) -> str:
 
 # ---------------------------------------------------------------- 純粋関数（テスト対象）
 def mf_columns(names: list[str]) -> list[str]:
-    """市場と独立の列（MF）: 方針で外す 3 列を除く。名前に市場の語が残っていないことも確かめる。"""
+    """市場と独立の列（MF）: 方針で外す 4 列（追い切り評価の 3 列・course_type）を除く。名前に市場の語が残っていないことも確かめる。"""
     import re
     out = [c for c in names if c not in DROP_POLICY]
     bad = [c for c in out if re.search(r"odds|pop|ninki|tansho|fukusho|payoff|market|ret_", c, re.IGNORECASE)]
@@ -168,6 +171,7 @@ def load_runners() -> pd.DataFrame:
     r = pd.read_parquet(RUNNERS, columns=cols, filters=[("year", "<=", YEAR_END)])
     assert r["year"].max() <= YEAR_END
     r["race_id"], r["horse_id"] = r["race_id"].astype(str), r["horse_id"].astype(str)
+    r = r[~r["race_id"].isin(DUP_RACES)]
     return r.drop_duplicates(KEY)
 
 
@@ -235,7 +239,7 @@ def cmd_train(a) -> None:
     assert max(years) <= 2021, "2022〜24 の予測は確かめの 1 回まで作らない"
     pr = prereg()
     label_max = max(years) - 1
-    with DL.guard(tool="src/research/longshot_ai/la.py:train", family="longshot_ai", version=pr["version"],
+    with DL.guard(tool="src/research/longshot_ai/lsai.py:train", family="longshot_ai", version=pr["version"],
                   period=("2016-01-01", f"{label_max}-12-31"), purpose="reproduce", reads=("着順",),
                   frozen_paths=[PREREG, Path(__file__)] + ([DROP_DIR / f"drop_{a.drop}.json"] if a.drop else []),
                   reason="学習の年の着順を教師に使うだけ。予測の年の成績は数えない") as tok:
@@ -467,7 +471,7 @@ def calibrated_market_q3(eval_years=(2019, 2020, 2021)) -> pd.DataFrame:
             return pd.read_parquet(dest)
         raise SystemExit(f"market_cq3 の作りが違う（{old} ≠ {stamp}）。消してから作り直す")
     last = max(eval_years) - 1
-    with DL.guard(tool="src/research/longshot_ai/la.py:calibrated_market_q3", family="longshot_ai", version=pr["version"],
+    with DL.guard(tool="src/research/longshot_ai/lsai.py:calibrated_market_q3", family="longshot_ai", version=pr["version"],
                   period=("2016-01-01", f"{last}-12-31"), purpose="fit", reads=("着順",), frozen_paths=[PREREG, Path(__file__)],
                   reason="市場の 3 着内の確率の較正（favourite-longshot の直し）を、評価の年より前の年の着順で当てるだけ。モデルの成績は数えない") as tok:
         r = load_runners()
@@ -539,15 +543,15 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     t = sub.add_parser("train")
     t.add_argument("--arm", choices=["L1", "C0"], required=True)
-    t.add_argument("--fs", choices=["v5", "v6"], default="v5")
+    t.add_argument("--fs", choices=["v5", "v6", "v7"], default="v5")
     t.add_argument("--years", default=",".join(str(y) for y in PRED_YEARS))
     t.add_argument("--drop", choices=["rho50", "rho30"], default=None, help="市場の logit と相関の高い列を外す（la-3）")
     sub.add_parser("corr")
     c = sub.add_parser("census")
-    c.add_argument("--fs", choices=["v5", "v6"], default="v5")
+    c.add_argument("--fs", choices=["v5", "v6", "v7"], default="v5")
     c.add_argument("--star", default="", help="★ の腕（既定 L1_{fs}。例: L1_v5_rho50）")
     p = sub.add_parser("power")
-    p.add_argument("--fs", choices=["v5", "v6"], default="v5")
+    p.add_argument("--fs", choices=["v5", "v6", "v7"], default="v5")
     p.add_argument("--star", default="")
     p.add_argument("--lift", type=float, default=0.01)
     p.add_argument("--n-sim", type=int, default=1000)

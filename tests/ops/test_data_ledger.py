@@ -420,6 +420,7 @@ _GUARD_ENTRY = {
     "src/research/course/megu_why.py": {"_collect_inner", "cmd_graded", "cmd_perm"},   # 100% を超えない理由の診断（eval_only・研究の CLI）
     "src/research/course/megu_oikiri.py": {"_select_inner", "_final_inner"},   # 追い切りの切り口の 1 回だけの評価（eval_only・研究の CLI）
     "src/research/megu_cycles/mc_data.py": {"cmd_build", "cmd_build_rich", "cmd_build_offset", "cmd_build_bag"},   # めぐサイクルの表（reproduce・研究の CLI）
+    "src/research/longshot_ai/lsai.py": {"cmd_train", "calibrated_market_q3"},   # 穴馬 AI（学習の教師・市場の較正。研究の CLI）
     "src/research/megu_cycles/mc_eval.py": {"confirm", "eval_only_guard"},
     "src/research/rules_council/rc_frame.py": {"build"},          # ルールの会議の全走の表（T-60 の再現のずれの元を読む。eval_only・研究の CLI）
     "src/research/rules_council/t60_check.py": {"main"},          # 本物の T-60 と再現の帯の確かめ（オッズだけ。eval_only）

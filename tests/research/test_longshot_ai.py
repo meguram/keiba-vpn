@@ -1,17 +1,17 @@
-"""穴馬 AI（src/research/longshot_ai/la.py）の純粋関数のテスト。データは読まない。"""
+"""穴馬 AI（src/research/longshot_ai/lsai.py）の純粋関数のテスト。データは読まない。"""
 
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from src.research.longshot_ai import la
+from src.research.longshot_ai import lsai as la
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_mf_columns_drops_policy_and_rejects_market_names():
-    assert la.mf_columns(["a", "oikiri_eval", "oikiri_eval_rank", "oikiri_eval_gap", "b"]) == ["a", "b"]
+    assert la.mf_columns(["a", "oikiri_eval", "oikiri_eval_rank", "oikiri_eval_gap", "course_type", "b"]) == ["a", "b"]
     with pytest.raises(AssertionError):
         la.mf_columns(["a", "lag1_popularity"])
 
@@ -78,7 +78,7 @@ def test_power_sim_all_same_has_no_power():
 
 def test_prereg_is_la2_and_main_arm_only():
     pr = la.prereg()
-    assert pr["version"] in ("la-2", "la-3")
+    assert pr["version"] in ("la-2", "la-3", "la-4")
     assert pr["main_arm"].startswith("L1_MF_xgb")
     assert pr["labels"]["train"] == "y_p1"
 

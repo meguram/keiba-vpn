@@ -1,6 +1,6 @@
 {
- "note": "穴馬 AI（担当 longshot-ai、2026-11-27）。着順を開く前に固定する。変えるときは新しい版にして試した数に入れる。計画は docs/operations/longshot_ai/plan.md。la-2 は会議の決定（docs/operations/roi_plus_council/decisions.md の「longshot-ai の la-2」、11/27・着順を開く前）。la-3（11/27 夕、ユーザーの追加の指定・統括役経由。数を見る前）: 市場の logit と順位相関の高い列を外した版を 2 本足した",
- "version": "la-3",
+ "note": "穴馬 AI（担当 longshot-ai、2026-11-27）。着順を開く前に固定する。変えるときは新しい版にして試した数に入れる。計画は docs/operations/longshot_ai/plan.md。la-2 は会議の決定（docs/operations/roi_plus_council/decisions.md の「longshot-ai の la-2」、11/27・着順を開く前）。la-3（11/27 夕、ユーザーの追加の指定・統括役経由。数を見る前）: 市場の logit と順位相関の高い列を外した版を 2 本足した。la-4（11/27 夜、独立の点検役の指摘・着順を開く前）: course_type を外す・s_* を外した v7 を相関の版の基準に足す・中止の馬の扱い・重複のレースを外す",
+ "version": "la-4",
  "years": {
   "dev_first": 2016,
   "dev_last": 2024,
@@ -41,10 +41,11 @@
   "L1_MF_lgb": "副。LightGBM（megu_cycles の PARAMS・500 本）",
   "L1_MF_off": "副。T-60 の再現の Harville q3 の logit を offset",
   "L1T_MF_xgb": "副。母集団を T-60 の再現（odds_pre0）で 10 倍以上として学ぶ",
-  "L1_MF_rho50": "副。L1_MF から |ρ| ≥ 0.5 の列を外す",
-  "L1_MF_rho30": "副。L1_MF から |ρ| ≥ 0.3 の列を外す"
+  "L1_MF_rho50": "副。v7 から |ρ| ≥ 0.5 の列を外す（s_* は v7 で既に外れている）",
+  "L1_MF_rho30": "副。v7 から |ρ| ≥ 0.3 の列を外す",
+  "L1_MF_v7": "対照。L1 を v7 の列で（相関で外す 2 本の基準。s_* の漏れと相関の効きを分ける）"
  },
- "n_trials": 10,
+ "n_trials": 11,
  "calibration": "Platt（logit の 1 次）。年 t は t−1 年の前向きの予測で当てる",
  "primary_metric": "★ の本物の 3 着内率（y3）",
  "judge": {
@@ -83,14 +84,16 @@
    "本番の ★ は較正後の期待値（市場のオッズを使う。src/utils/race_probabilities.py:445,488）で過去の行に再現できないため、v5bag の pr_win の 1 位で代える",
    "確定の複勝オッズの 1 位（判定に使わない）"
   ],
-  "v6_leak_check": "v6 の列（RICH_VERSIONS['v6'] − 追い切り評価の 3 列）で L1_MF と C0 を学び直す"
+  "v6_leak_check": "v6 の列（RICH_VERSIONS['v6'] − 追い切り評価の 3 列）で L1_MF と C0 を学び直す",
+  "C0_v7": "C0 を v7 の列で（v7 の版の ★ − C0 の比べ用）"
  },
  "features": {
-  "MF": "v5 の 1,083 列 − oikiri_eval・oikiri_eval_rank・oikiri_eval_gap（1,080 列）",
+  "MF": "v5 の 1,083 列 − 追い切り評価の 3 列 − course_type（推論で 100% 空）＝ 1,079 列",
   "M": "v5 のまま",
   "doc": "docs/operations/longshot_ai/market_free_columns.md",
-  "doc_sha256_16": "418d0053e9873cfb",
-  "audit_csv_sha256_16": "86c507b1bc0d2051"
+  "doc_sha256_16": "958dc51e7231c3e0",
+  "audit_csv_sha256_16": "35b2d883a0ca4f7c",
+  "v7": "MF − s_*（s_time_pred・s_time_gap・s_rank_pred。上流が leave-one-year-out で未来の年を含む。v6_stage.py:12）"
  },
  "mechanism": {
   "doc": "docs/operations/longshot_ai/mechanism.md",
@@ -169,6 +172,10 @@
   "years_note": "ρ は 2016〜21 年（予測の年 2019〜21 の確定オッズを含む）で 1 回決める。model-relabel の表（mr-6）とそろえるため。記述の腕なので判定は汚れないが「予測の年のオッズで列を選んだ」と記録する（1 号、11/27）",
   "no_feedback": "2 本の結果を見て market_free_columns.md や主の腕の列を直さない。直すなら新しい版として登録し、2019〜21 を開いた後なら閉じた扱い（1 号、11/27）",
   "source_all": "model-relabel の docs/operations/model_relabel/market_corr_2016_2021.csv を全馬の正とし、こちらは同じ定義で rho_pop を足す",
-  "frozen_lists": "config/longshot_ai/drop_rho50.json・drop_rho30.json（corr で作って凍結。train --drop はこれだけを読む）"
- }
+  "frozen_lists": "config/longshot_ai/drop_rho50.json・drop_rho30.json（corr で作って凍結。train --drop はこれだけを読む）",
+  "same_columns_note": "凍結の drop_rho50・drop_rho30 には s_* の 3 列がもともと入っている（v5 の s_ の列はこの 3 列だけ）。そのため --fs v5 --drop と --fs v7 --drop は同じ列。相関の効きと s_* の漏れを分けるのは、基準の L1_MF_v7（s_* だけ外す）との比べ"
+ },
+ "dnf": "着順の無い馬（中止・除外・失格。runners の fin ≤ 0、2016〜24 で 1,165 頭）は X に行が無い（layer_a_dataset.py:167 の finish_position > 0）。評価から外すのは結果で選ぶ漏れなので、model-relabel が作る『中止の馬の行を足した X』で予測を作り、3 着外（0）として評価に戻す。それまでの判定には使わず、感度として (a) 外したまま・(b) 0 として戻し ★ はその馬を選べない・(c) 母集団にその馬がいるレースは ★ がその馬を選んだ最悪の場合、の 3 つを添える。本番の扱いの決まり（特徴量が作れない馬を ★ にしない）は取り下げ（本番ではその馬にも特徴量がある）",
+ "dup_races": "202408060108（202408060101 の取り込みの誤りの写し）を runners から外す",
+ "t60_wording": "資料では『T-60 の母集団』ではなく『確定に雑音を足した母集団（T-60 の再現）』と書く（確定オッズ × exp(−2026 年の 1 レースから順位で借りたずれ)。mc_data.py:70-88）"
 }

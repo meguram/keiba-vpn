@@ -4,7 +4,8 @@
 
 - めぐ AI の v5 の 1,083 列に、市場（オッズ・人気）に由来する列は無かった。判定は作りのコードを読んで決めた（market 0・suspect 0）。
 - v5 は、名前の正規表現 `odds|pop|ninki|tansho|fukusho|payoff|market|ret_` で市場の列を既に外している（`src/research/megu_cycles/mc_data.py` の `_rich_matrix`）。それをすり抜けた列は無かった。
-- 主の MF 版は「v5 − 追い切り評価の 3 列（oikiri_eval・oikiri_eval_rank・oikiri_eval_gap）」とする。
+- 主の MF 版は「v5 − 追い切り評価の 3 列（oikiri_eval・oikiri_eval_rank・oikiri_eval_gap）− course_type」とする（1,079 列）。
+  - course_type は市場ではないが、推論の経路で 100% 空（独立の点検役の指摘、11/27。la-4）。
   - 追い切り評価は netkeiba の A〜D で、市場ではない。ただし公開の専門家の意見で、人気を通して市場と重なりうる。ユーザーの指定「市場のオッズを反映しそうな領域は確実に反映されないように」に合わせ、方針で外す。
 - MF − M（v5 のまま）の差は、この 3 列の分だけ。もともと小さい見込み。差が 0 でも「市場と独立」の主張が通ったとは読まない（v5 は既に名前で外している）。
 - 列ごとの判定は `market_audit.csv`（column・family・verdict・source_path_line・reason。1,083 行）。
@@ -30,6 +31,7 @@
 | `z*`・`pxc_*`・`pxe_*`・`pd_*`・`ped_*` | clean | 血統の列。目的は着順（tp38_ridge.py:114,119-133 ほか） |
 | `sr_`・`a_`・`b_`・`f2_`・`f5_`・`pc_` | clean | 時計・上がり・通過順・ラップと Elo（horse_history/common.py:22 の RUN_COLS に odds は無い） |
 | `oikiri_*` | 方針で外す | 公開の専門家の意見（上の結論） |
+| `course_type` | 方針で外す | 推論の経路で 100% 空（la-4） |
 
 - 確かめきれていない所（推測）: LAP のモデル本体は宣言と出力のスキーマだけで確かめた。`tl_*`（s_ の入力）の作りは読んでいない。どちらも判定は変わらない見込み。
 - v5 の外で市場に近いもの（v5 には入っていない）: tp30_volatility の `mk_*`（確定オッズの構造）・horse_ease.parquet の odds 列・X_xgb の v5 以外の 148 列（tl_・wc_・mtl_・rb_ など。対象外として調べていない）。

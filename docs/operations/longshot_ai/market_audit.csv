@@ -7,7 +7,7 @@ weather,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.p
 track_condition,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
 venue_code,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
 weight_rule,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
-course_type,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+course_type,条件・基本列 (layer_a),policy,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている（la-4: 推論の経路で 100% 空のため方針で外す）
 sex,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
 track_bias_cond_bucket,track_bias_/sire_/dam_sire_ (馬場傾向),clean,"src/pipeline/features/track_bias_pedigree.py:245,408,453-504; src/pipeline/features/serving_layer_a.py:140-180",勝ち馬の上がり 3F（当日前・前日）と父/母父の面別勝率。確定オッズの S−E を使う別の track bias とは別物
 track_bias_dist_band,track_bias_/sire_/dam_sire_ (馬場傾向),clean,"src/pipeline/features/track_bias_pedigree.py:245,408,453-504; src/pipeline/features/serving_layer_a.py:140-180",勝ち馬の上がり 3F（当日前・前日）と父/母父の面別勝率。確定オッズの S−E を使う別の track bias とは別物

@@ -22,6 +22,7 @@
   "rules_bet_opt": "◎ の買う／見送る（src/research/course/bet_opt.py・bet_opt_search.py）",
   "model": "親モデル（fit_final_v6.py・model_cycles_final.py・model_cycles_market.py・ptrain_test2025.py）",
   "longshot": "穴馬モデル（longshot_model.py）",
+  "longshot_ai": "穴馬 AI（src/research/longshot_ai/lsai.py。単勝 10 倍以上だけで 1 馬身の拡張ラベルを学ぶ。2026-11-27〜）",
   "frozen_tracking": "凍結規則の前向き追跡（src/scripts/data/frozen_tracking.py）",
   "columns": "めぐコラム（src/research/columns/）",
   "megu_cycles": "めぐサイクル（src/research/megu_cycles/。回収率 100% 超の買い方の 50 サイクル）",
