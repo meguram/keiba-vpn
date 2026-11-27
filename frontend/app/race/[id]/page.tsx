@@ -636,7 +636,7 @@ export default function RaceDetailPage() {
     <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>🏆 レース結果データがありません</div>
   ) : (
     <div style={{ overflowX: "auto" }}>
-      {!lock && <RaceLevelNote lv={raceLevel} />}
+      {!lock && <RaceLevelNote key={raceId} lv={raceLevel} />}
       {!lock && <TrackBiasNote key={raceId} tb={trackBias} />}
       <table data-no-sort style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
         <thead style={{ background: "var(--surface2)" }}>
