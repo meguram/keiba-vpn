@@ -178,7 +178,7 @@ MISSING: list[str] = []       # 予測が未完で飛ばした族（report に�
 def candidates(fs: str, target: str, sp: dict, base: pd.DataFrame) -> dict[str, dict[str, np.ndarray]]:
     """族ごとに {候補名: 点数の列（全行）}。"""
     rounds = sp["select"]["rounds_v6e" if fs == "v6e" else "rounds_v5bag"]
-    if fs in ("v5bag_mfc05", "v5bag_mfc03"):
+    if fs in ("v5bag_mfs", "v5bag_mfc05", "v5bag_mfc03"):
         # 市場と相関の高い列を外す版（spec の market_corr）: 元のラベルと、規則で決めた 1 つの w だけ（market_choice.json）
         w = json.loads((DOCS / "market_choice.json").read_text(encoding="utf-8"))[target]
         b, e = load_pred(fs, target, "orig", base), load_pred(fs, target, f"ext_w{w}", base)
@@ -336,7 +336,7 @@ def nested_time(fs: str, target: str, years, lams, sp: dict, base: pd.DataFrame)
     yr = base["year"].to_numpy()
     groups = dict(fam)
     for w in sp["penalty"]["P_w"]["w"]:
-        if any(k.startswith(f"w{w}|") for k in fam["pw"]) and not fs.startswith("v5bag_mfc"):     # mfc は w が 1 つなので固定の群を作らない
+        if any(k.startswith(f"w{w}|") for k in fam["pw"]) and fs not in ("v5bag_mfs", "v5bag_mfc05", "v5bag_mfc03"):     # w が 1 つの版は固定の群を作らない
             groups[f"pw_fixed_w{w}"] = {k: v for k, v in fam["pw"].items() if k.startswith(f"w{w}|")}
         if "pw1" in fam:
             groups[f"pw1_fixed_w{w}"] = {k: v for k, v in fam["pw1"].items() if k.startswith(f"x1w{w}|")}
@@ -423,6 +423,54 @@ def _boot(rows: pd.DataFrame, n_boot: int, seed: int) -> dict:
             "days": int(len(x))}
 
 
+_DNF: dict = {}
+
+
+def dnf_rows(base: pd.DataFrame) -> pd.DataFrame:
+    """学習の表 X に行の無い、評価のレースの中止・失格などの馬（runners にあり着順が無い馬。点検役の指摘 1・11/27）。ラベルは 0。"""
+    if "rows" not in _DNF:
+        mx = int(base["year"].max())
+        rn = pd.read_parquet(RUNNERS, columns=["race_id", "horse_id", "year", "fin", "odds_final"], filters=[("year", "<=", mx)])
+        rn["race_id"], rn["horse_id"] = rn["race_id"].astype(str), rn["horse_id"].astype(str)
+        meta = pd.read_parquet(META, columns=["race_id", "horse_id", "year"], filters=[("year", "<=", mx)])
+        k = set(zip(meta["race_id"].astype(str), meta["horse_id"].astype(str)))
+        notin = np.array([(a, b) not in k for a, b in zip(rn["race_id"], rn["horse_id"])])
+        x = rn[notin & rn["fin"].isna().to_numpy()]      # runners は出走した馬だけ（取消・除外は入っていない。確定オッズの欠けは 0 行）
+        _DNF["rows"] = x[x["race_id"].isin(set(base["race_id"]))].reset_index(drop=True)
+    return _DNF["rows"]
+
+
+def dnf_sensitivity(res: dict, base: pd.DataFrame, target: str, years) -> dict:
+    """感度: 評価のレースに、X に行の無い中止・失格の馬をラベル 0 で戻す。予測はレースの最小（min）と中央（median）の 2 通りで置き、
+    レース内で和をそろえ直して、勝ち馬の −log p（勝ち）・y3 の対数損失（複勝）を数える。族ごとの値と、族 − base の差。"""
+    yname = "y1" if target == "win" else "y3"
+    total = 1.0 if target == "win" else 3.0
+    dn = dnf_rows(base)
+    out = {"dnf_horses": int(dn["year"].isin(list(years)).sum())}
+    fams = [f for f in res["years"][years[0]] if "_fixed_" not in f]
+    for how in ("none", "min", "median"):           # none = 戻さない（同じ数え方の比べ先）
+        vals = {}
+        for f in fams:
+            per_year = []
+            for t in years:
+                d0 = base[base["year"] == t].reset_index(drop=True)
+                p = pd.Series(res["years"][t][f]["_p"])
+                fill = p.groupby(d0["race_id"].to_numpy()).agg(how)
+                add = dn[dn["year"] == t] if how != "none" else dn.iloc[0:0]
+                rid = np.concatenate([d0["race_id"].to_numpy(), add["race_id"].to_numpy()])
+                pp = np.concatenate([p.to_numpy(), add["race_id"].map(fill).to_numpy(float)])
+                y = np.concatenate([d0[yname].to_numpy(float), np.zeros(len(add))])
+                pp = race_normalize(pp, rid, total)
+                if target == "win":
+                    per_year.append(float(-np.log(np.clip(pp[y == 1], EPS, 1)).mean()))
+                else:
+                    per_year.append(float(ll(pp, y).mean()))
+            vals[f] = float(np.mean(per_year))          # summarize と同じく年ごとの平均の単純な平均
+        out[how] = {f: round(v, 6) for f, v in vals.items()}
+        out[f"{how}_minus_base"] = {f: round(v - vals["base"], 6) for f, v in vals.items() if f != "base"}
+    return out
+
+
 def summarize(res: dict, years) -> dict:
     """外側の年を通した単純な平均と、年ごとの選び。"""
     out = {}
@@ -451,7 +499,7 @@ def cmd(period: str, only: str | None = None) -> None:
     if only:          # 試しは select だけ（confirm の 1 回を使い切らない）。組の名前も確かめる
         assert period == "select", "--only は select だけ"
         fs_, tg_ = only.split("|")
-        assert fs_ in ("v5bag", "v5bag_ped", "v5bag_mf", "v5bag_mfc05", "v5bag_mfc03", "v6e") and tg_ in ("win", "top3"), only
+        assert fs_ in ("v5bag", "v5bag_ped", "v5bag_mf", "v5bag_mfs", "v5bag_mfc05", "v5bag_mfc03", "v6e") and tg_ in ("win", "top3"), only
     key = "outer_main" if period == "select" else "outer_confirm_once"
     years = range(sp["years"][key][0], sp["years"][key][1] + 1)
     tok = _ledger(period if not only else f"{period}-smoke", f"{min(years) - 2}-01-01", f"{max(years)}-12-31",
@@ -461,7 +509,7 @@ def cmd(period: str, only: str | None = None) -> None:
     lams = [sp["metric"]["lambda_main"]] + list(sp["metric"]["lambda_sensitivity"])
     report = {"spec_version": sp["version"], "period": period, "years": list(years), "results": {}, "feature_axis": {}}
     kept: dict = {}
-    for fs in ("v5bag", "v5bag_ped", "v5bag_mf", "v5bag_mfc05", "v5bag_mfc03", "v6e"):
+    for fs in ("v5bag", "v5bag_ped", "v5bag_mf", "v5bag_mfs", "v5bag_mfc05", "v5bag_mfc03", "v6e"):
         for target in ("win", "top3"):
             if only and f"{fs}|{target}" != only:
                 continue
@@ -485,19 +533,21 @@ def cmd(period: str, only: str | None = None) -> None:
                     if a in res["years"][years[0]]:
                         boots[f"{a}-{b}"] = paired_boot(res, base, target, a, b, years)
                 per_year = {str(t): {f: {k: v for k, v in r.items() if not k.startswith("_")} for f, r in res["years"][t].items()} for t in years}
-                report["results"][f"{fs}|{target}|lam{lam}"] = {"summary": summ, "boot": boots, "per_year": per_year}
+                report["results"][f"{fs}|{target}|lam{lam}"] = {"summary": summ, "boot": boots, "per_year": per_year,
+                                                                "dnf_sensitivity": dnf_sensitivity(res, base, target, years)}
                 print(f"{fs}|{target}|lam{lam}", json.dumps({f: {k: summ[f].get(k) for k in ("ll", "L_main", "winner_nlp", "race_auc", "benter_gain")}
                                                              for f in summ}, ensure_ascii=False), json.dumps(boots, ensure_ascii=False), flush=True)
     # 特徴量の軸: 同じ族の v5bag_ped − v5bag（spec の judge_feature・selection_caveat）と v5bag_mf − v5bag（judge_market_free）
     for target in ("win", "top3"):
-        for alt, ref in (("v5bag_ped", "v5bag"), ("v5bag_mf", "v5bag"), ("v5bag_mfc05", "v5bag_mf"), ("v5bag_mfc03", "v5bag_mf")):
+        for alt, ref in (("v5bag_ped", "v5bag"), ("v5bag_mf", "v5bag"), ("v5bag_mfs", "v5bag_mf"),
+                         ("v5bag_mfc05", "v5bag_mfs"), ("v5bag_mfc03", "v5bag_mfs")):     # mfc は s_* を外した mfs と比べる（漏れの列の効きを分ける。mr-8）
             if (ref, target) not in kept or (alt, target) not in kept:
                 continue
             for lam in lams:
                 ra, rb = kept[(alt, target)][lam], kept[(ref, target)][lam]
                 fams = [f for f in ra["years"][years[0]] if "_fixed_" not in f and f in rb["years"][years[0]]]
                 pairs = [(f, f) for f in fams]
-                if alt.startswith("v5bag_mfc"):     # mfc の pw は w を 1 つに決めた版なので、mf の側は同じ w の固定の群と対にする（同じラベルどうし）
+                if alt == "v5bag_mfs":     # mfs の pw は w を 1 つに決めた版なので、mf の側は同じ w の固定の群と対にする（同じラベルどうし）。mfc − mfs は族どうしのまま
                     w = json.loads((DOCS / "market_choice.json").read_text(encoding="utf-8"))[target]
                     pairs = [("base", "base"), ("pw", f"pw_fixed_w{w}")]
                 report["feature_axis"][f"{alt}|{target}|lam{lam}"] = {

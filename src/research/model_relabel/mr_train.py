@@ -10,7 +10,10 @@
   - time: 年 t（2017〜24）は t より前の年で学ぶ。
   - meeting: 開催の 5 分割（docs/operations/model_relabel/meeting_folds.csv）。学びの側の calib_k=1 の開催は学びに入れず較正に回す。
 - 途中の木の予測（spec の rounds）を全部保存する（打ち切りを L で選ぶため）。部品ごとに保存して再開できる。
-- v6e の代理の注意: 束の 1,231 列には、v5 で外した列が 148 列ある（rb_*・mtl_*・s_* は未来の年を含む上流の学習・集計、
+- 漏れの注意（点検役・11/27）: v5bag にも s_time_pred・s_time_gap・s_rank_pred（leave-one-year-out の上流の学習。後の年の着順が入る）と、
+  sr_・f3_・f2_・e_・pc_ の族（2021-12 までの全体の当てはめ）がある。ラベルどうしの比べ（同じ列）には効かないが、値の水準は楽観に寄る。
+  s_* だけ外した版が v5bag_mfs。
+- v6e の代理の注意: 束の 1,231 列には、v5 で外した列が 148 列ある（rb_*・mtl_* は未来の年を含む上流の学習・集計、
   tl_f_untimed_later はその走の後の値）。本番の列のまま比べるので外さないが、値の水準と Benter の改善分は汚れる。主の判定は v5bag で行う。
   乱数は 1 本（束は 5 本）、カテゴリの番号は X_xgb の cat.codes（束の cat_levels は当てない）。
 - 2025 年以降の行は読み込んだ直後に落とす。費用 0 円（手元の表だけ。GCS を読まない）。nice -n 19 で流す。
@@ -38,7 +41,9 @@ V6E_BUNDLE = Path(os.environ.get("MODEL_RELABEL_V6E_BUNDLE")
                   or "/home/jovyan/work/retrain_out/base_2016/final_v6e16/bundle_v6_2025/bundle.json")
 FOLDS_CSV = ROOT / "docs/operations/model_relabel/meeting_folds.csv"
 YEARS = range(2017, 2025)
-MARKET_POLICY_DROP = ("oikiri_eval", "oikiri_eval_rank", "oikiri_eval_gap")
+# v5bag_mf で外す列: 追い切り評価の 3 列（公開の意見で人気と重なりうる。mr-5）と course_type（推論で 100% 空・学習だけ値。mr-8 点検役）
+MARKET_POLICY_DROP = ("oikiri_eval", "oikiri_eval_rank", "oikiri_eval_gap", "course_type")
+LEAK_S_COLS = ("s_time_pred", "s_time_gap", "s_rank_pred")      # leave-one-year-out の上流の学習（後の年の着順が入る）。v5bag_mfs で外す（mr-8）
 MARKET_CORR = ROOT / "docs/operations/model_relabel/market_corr_2016_2021.csv"      # commit して凍結の照合に入れる
 MARKET_CHOICE = ROOT / "docs/operations/model_relabel/market_choice.json"
 NTHREAD = int(os.environ.get("MODEL_RELABEL_NTHREAD") or 4)
@@ -84,11 +89,16 @@ def load_matrix(fs: str):
             assert len(drop) == len(MARKET_POLICY_DROP), drop
             X = X.drop(columns=drop)
             names = [c for c in names if c not in MARKET_POLICY_DROP]
+        if fs == "v5bag_mfs":
+            drop = [c for c in names if c in LEAK_S_COLS]
+            assert len(drop) == len(LEAK_S_COLS), drop
+            X = X.drop(columns=drop)
+            names = [c for c in names if c not in LEAK_S_COLS]
         if fs in ("v5bag_mfc05", "v5bag_mfc03"):
             # 市場の logit と相関の高い列を外す版（spec の market_corr。2016〜21 で測った表 market_corr_2016_2021.csv）
             th = {"v5bag_mfc05": 0.5, "v5bag_mfc03": 0.3}[fs]
             t = pd.read_csv(MARKET_CORR)
-            assert set(t["column"]) == set(names), "相関の表の列が v5bag_mf と違う"
+            assert set(names) <= set(t["column"]), "相関の表に無い列がある"      # 表は mr-6 の v5bag_mf（course_type を含む 1,080 列）で測った
             drop = set(t.loc[t["abs_rho"] >= th, "column"])
             X = X.drop(columns=[c for c in names if c in drop])
             names = [c for c in names if c not in drop]
@@ -217,7 +227,8 @@ def run(fs: str, target: str, variant: str, split: str = "time", conv: str = "co
     t0 = time.time()
     tok = DL.guard(tool="src/research/model_relabel/mr_train.py:run", family="model_relabel", version=f"train-{split}-{fs}-{target}-{variant}-{conv}",
                    period=("2016-01-01", "2024-12-31"), purpose="reproduce", reads=("着順",),
-                   frozen_paths=[SPEC] + ([MARKET_CORR, MARKET_CHOICE] if fs.startswith("v5bag_mfc") else []),
+                   frozen_paths=[SPEC] + ([MARKET_CORR, MARKET_CHOICE] if fs.startswith("v5bag_mfc")
+                                          else [MARKET_CHOICE] if fs == "v5bag_mfs" and variant != "orig" else []),
                    reason="拡張ラベルの前へ進める学習の教師（着順・着差・時計）を読むだけ。成績は数えない")
     X, meta, names = load_matrix(fs)
     lab = attach_labels(meta, conv)
@@ -327,7 +338,7 @@ def mfc_jobs() -> list[str]:
     if not p.exists():
         return []
     ch = json.loads(p.read_text(encoding="utf-8"))
-    return [f"{fs}:{t}:{v}" for fs in ("v5bag_mfc05", "v5bag_mfc03") for t in ("win", "top3") for v in ("orig", f"ext_w{ch[t]}")]
+    return [f"{fs}:{t}:{v}" for fs in ("v5bag_mfs", "v5bag_mfc05", "v5bag_mfc03") for t in ("win", "top3") for v in ("orig", f"ext_w{ch[t]}")]
 
 
 def status() -> None:
@@ -348,7 +359,7 @@ def status() -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["run", "labels", "status"])
-    ap.add_argument("--fs", choices=["v5bag", "v5bag_ped", "v5bag_mf", "v5bag_mfc05", "v5bag_mfc03", "v6e"], default="v5bag")
+    ap.add_argument("--fs", choices=["v5bag", "v5bag_ped", "v5bag_mf", "v5bag_mfs", "v5bag_mfc05", "v5bag_mfc03", "v6e"], default="v5bag")
     ap.add_argument("--target", choices=["win", "top3", "notbig"], default="win")
     ap.add_argument("--variant", default="orig")
     ap.add_argument("--split", choices=["time", "meeting"], default="time")

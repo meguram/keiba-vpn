@@ -158,6 +158,16 @@ def main() -> None:
     lines += ["## 7. 中間物の sha256", "",
               f"- labels_convert_A.parquet: {hashlib.sha256(lp.read_bytes()).hexdigest()}（chalk_race の列を足した最後の版。これより後は上書きしない）",
               f"- spec.json: {hashlib.sha256(TR.SPEC.read_bytes()).hexdigest()}", ""]
+    # ---- longshot-ai の「特徴量の無い馬」との突き合わせ（runners にあって学習の表に行が無い馬）
+    rn = pd.read_parquet("/home/jovyan/work/megu_cycles_out/runners.parquet", columns=["race_id", "horse_id", "year", "fin"], filters=[("year", "<=", 2024)])
+    rn["race_id"], rn["horse_id"] = rn["race_id"].astype(str), rn["horse_id"].astype(str)
+    rn["in"] = [(a, b) in key_m for a, b in zip(rn["race_id"], rn["horse_id"])]
+    xo = rn[~rn["in"]]
+    lines += ["## 8. runners（平地・オッズのある全馬）にあって学習の表に行が無い馬（longshot-ai の「特徴量の無い馬」）", "",
+              f"- {len(xo)} 頭（{xo['race_id'].nunique()} レース）。うち着順が無い（中止・除外など）: {int(xo['fin'].isna().sum())}、"
+              f"着順がある: {int(xo['fin'].notna().sum())}（レース {', '.join(sorted(xo.loc[xo['fin'].notna(), 'race_id'].unique()))}）。",
+              f"- 着順がある馬のレースが §2 の写しのレースの中にあるか: "
+              f"{set(xo.loc[xo['fin'].notna(), 'race_id']) <= set(fin_ok['race_id'])}。", ""]
     DEST.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
 

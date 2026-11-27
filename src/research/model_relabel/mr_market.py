@@ -1,7 +1,8 @@
 """市場と相関の高い列（担当 model-relabel、11/27 夜のユーザーの指定）: 各列と市場の logit（確定の単勝の確率 q_final）の順位相関。
 
 - 学習の年（2016〜21）の行だけで測る。評価の年（2022〜24）の値で列を選ばない。
-- 列は v5bag_mf（v5bag − 追い切り評価の 3 列、1,080 列）。相関は Spearman の |ρ|（全行をまとめて。q の欠けた行は落とす）。
+- 列は mr-6 の v5bag_mf（v5bag − 追い切り評価の 3 列、1,080 列。course_type を含む）。mr-8 で v5bag_mf から course_type を外したが、
+  表は作り直さない（凍結。作り直しを止める確かめを main に入れた）。mfc の列の選びは、この表の |ρ| で決める。相関は Spearman の |ρ|（全行をまとめて。q の欠けた行は落とす）。
 - 閾値は数を見る前に固定（spec の market_corr: |ρ| ≥ 0.5 と ≥ 0.3 の 2 段）。外す列の一覧を docs に残し、longshot-ai と同じ表を使う。
 - 着順は使わない（load_matrix の meta に着順の列はあるが、相関には市場の q と特徴量だけを使う）。値が一定の列（例 fr_name_jump）は ρ=NaN で、どちらの版でも外れない。費用 0 円（手元の表だけ）。
   KEIBA_SESSION=model-relabel flock /tmp/claude-1000/heavy.lock nice -n 19 python -m src.research.model_relabel.mr_market corr
@@ -56,6 +57,8 @@ def main() -> None:
     tok = DL.guard(tool="src/research/model_relabel/mr_market.py:main", family="model_relabel", version="market-corr-2016-2021",
                    period=("2016-01-01", "2021-12-31"), purpose="select", reads=("オッズ",), frozen_paths=[TR.SPEC],
                    reason="列と確定の市場の logit の順位相関（着順は読まない）。閾値は spec で先に固定")
+    if TABLE.exists():
+        raise SystemExit(f"{TABLE} は凍結（mr-6）。作り直さない")
     t = corr_table()
     TABLE.parent.mkdir(parents=True, exist_ok=True)
     t.to_csv(TABLE, index=False, float_format="%.5f")
