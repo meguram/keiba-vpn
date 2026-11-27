@@ -38,17 +38,28 @@ def maps(X: np.ndarray) -> dict:
 
     def rho(Y):
         return round(float(spearmanr(D0, np.sqrt(((Y[:, None] - Y[None]) ** 2).sum(-1))[iu]).statistic), 3)
-    return {"pc": pc.round(3).tolist(), "ts": ts.round(3).tolist(), "load": Wt[:2].round(3).tolist(),
+    return {"pc": pc.round(3).tolist(), "ts": ts.round(3).tolist(), "load": Wt[:2].round(3).tolist(), "mean": X.mean(0).round(4).tolist(),
             "var": (S[:2] ** 2 / (S ** 2).sum()).round(3).tolist(), "rho_pc": rho(pc), "rho_ts": rho(ts)}
 
 
 PED5 = Path("/home/jovyan/work/keiba-vpn/data/local/horse_pedigree_5gen")
 
 
+PARENT: dict[str, str] = {}      # 祖先の id → その父の id（5 代の血統の位置から。build で読み込む）
+
+
 def line_of(h: str, lab: dict[str, str]) -> str | None:
-    """札の表（sire_line_origin）に無い種牡馬は、5 代の血統の父系の祖先を上へたどり、最初に札のある祖先の札を使う（critic 3 回目の 2）。"""
+    """札の表（sire_line_origin）に無い種牡馬は、父系の祖先を上へたどり、最初に札のある祖先の札を使う（critic 3 回目の 2）。
+    たどり方: 父の対応 PARENT（手元の血統の位置から作る。古い外国の祖先にも効く）→ 本人の 5 代の血統の JSON。"""
     if h in lab:
         return lab[h]
+    x = h
+    for _ in range(8):
+        x = PARENT.get(x)
+        if x is None:
+            break
+        if x in lab:
+            return lab[x]
     p = PED5 / h[:4] / f"{h}.json"
     if not p.exists():
         return None
@@ -81,7 +92,52 @@ def side_payload(rows: list[dict], dims: list[str], lab: dict[str, str], dl: dic
     Xn = X - mean.loc[L].to_numpy()
     for r, xn in zip(rows, Xn):
         r["n6"] = [round(float(x), 3) for x in xn]
-    return {"rows": rows, "common": maps(X), "noncommon": maps(Xn)}
+    return {"rows": rows, "common": maps(X), "noncommon": maps(Xn), "line_mean": {k: [round(float(x), 4) for x in v] for k, v in mean.iterrows()}}
+
+
+def ellipse(C: np.ndarray) -> list[float]:
+    """2 次元の共分散から 1σ の楕円（長軸・短軸・角度）。"""
+    ev, evec = np.linalg.eigh(C)
+    ev = np.maximum(ev, 0)
+    return [round(float(np.sqrt(ev[1])), 3), round(float(np.sqrt(ev[0])), 3), round(float(np.arctan2(evec[1, 1], evec[0, 1])), 3)]
+
+
+def add_predictions(ps: dict, pred: dict, names: dict[str, str], lab: dict[str, str]) -> dict:
+    """予測（50 走未満の種牡馬・白抜きの◇）と、実測のある種牡馬の交差検証の予測を、同じ PCA の軸に写す。予測の楕円は残りの共分散から。"""
+    cov = np.array(pred["resid_cov"])
+    proj = {}
+    for space in ("common", "noncommon"):
+        M = ps[space]
+        W, mu = np.array(M["load"]), np.array(M["mean"])
+        proj[space] = (W, mu)
+        M["pred_ell"] = ellipse(W @ cov @ W.T)
+
+    def coords(x, line):
+        out = {}
+        for space, (W, mu) in proj.items():
+            xs = x if space == "common" else x - np.array(ps["line_mean"].get(line, ps["line_mean"].get("札なし")))
+            out[space] = [round(float(v), 3) for v in (xs - mu) @ W.T]
+        return out
+    for r in ps["rows"]:
+        if r["id"] in pred["oof"]:
+            r["oof"] = coords(np.array(pred["oof"][r["id"]]), r["line"])
+    small = []
+    for h, v in pred["small"].items():
+        lo = line_of(h, lab)
+        line = short(lo) if lo else "札なし"
+        small.append({"id": h, "name": names.get(h, h), "runs": v["runs"], "line": line, "pred6": v["pred"], "blend6": v["blend"],
+                      "c_pred": coords(np.array(v["pred"]), line), "c_blend": coords(np.array(v["blend"]), line)})
+    return {"small": small, "corr": pred["corr"], "corr_line_only": pred["corr_line_only"], "n": pred["n"],
+            "inside_95": pred.get("inside_95"), "inside_95_line_only": pred.get("inside_95_line_only")}
+
+
+def line_rows(lv: dict, side: str) -> list[dict]:
+    """line_vectors.json の (A)・(B) を、sire_vectors の行の形にそろえる（表の非共通の列は無い）。"""
+    rows = []
+    for h, x in lv[side].items():
+        rows.append({"id": h, "name": lv["names"].get(h, h), "runs": int(round(x["runs"])), "core": x["core"], "unc": x["unc"], "v": x["v"],
+                     "best": "", "mid_name": "", "nm": None, "nt": None})
+    return rows
 
 
 def add_boot(payload_side: dict, ids: np.ndarray, B: np.ndarray) -> None:
@@ -179,7 +235,7 @@ JS = r"""
 const D = JSON.parse(document.getElementById('data').textContent);
 const LAB = JSON.parse(document.getElementById('lab').textContent);
 const M6 = ['dist', 'surf', 'wet', 'pos', 'ts', 'gear'];
-let side = 'sire', space = 'common', view = 'pc', colorBy = 'line', line = '', sel = null, cmp = null, ellMode = 'sel';
+let side = 'sire', space = 'common', view = 'pc', colorBy = 'line', line = '', sel = null, cmp = null, ellMode = 'sel', predMode = 'pred', selPred = null;
 const $ = s => document.querySelector(s); const tip = $('#tip');
 const S = () => D[side]; const rows = () => S().rows;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -191,6 +247,7 @@ function key(r) { return colorBy === 'dl' && r.dl ? r.dl : r.line; }
 function keyName(k) { const r = rows().find(x => key(x) === k); return r ? (colorBy === 'dl' && r.dl ? r.dl_name : r.line) : k; }
 function topKeys(P) { const m = new Map(); for (const r of P) m.set(key(r), (m.get(key(r)) || 0) + r.runs); return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(e => e[0]); }
 function lines() { const m = new Map(); for (const r of rows()) { const o = m.get(r.line) || {k: r.line, n: 0, runs: 0}; o.n++; o.runs += r.runs; m.set(r.line, o); } return [...m.values()].sort((a, b) => b.runs - a.runs); }
+function showPredBtns() { document.querySelectorAll('#preds').forEach(b => b.style.display = (side === 'sire' && D.pred) ? '' : 'none'); }
 function fillLines() { $('#line').innerHTML = '<option value="">全部（' + rows().length + ' 頭）</option>' + lines().map(o => `<option value="${esc(o.k)}">${esc(o.k)}（${o.n} 頭）</option>`).join(''); $('#line').value = line; }
 function mark(slot, x, y, r, fill, on, id) {
   const rr = rows().find(x => x.id === id); const op = rr ? (0.9 - 0.65 * uncRank(rr)).toFixed(2) : 0.8;
@@ -235,11 +292,31 @@ function drawMap() {
   for (const i of order) { const r = R[i]; const rad = 3.5 + 9 * Math.sqrt(r.runs / maxr);
     if (!show[i]) { s += `<circle cx="${sx(C[i][0]).toFixed(1)}" cy="${sy(C[i][1]).toFixed(1)}" r="${rad.toFixed(1)}" fill="var(--other)" fill-opacity="0.18" data-id="${esc(r.id)}"/>`; continue; }
     s += mark(keys.indexOf(key(r)), sx(C[i][0]), sy(C[i][1]), rad, col(key(r)), (sel && sel.id === r.id) || (cmp && cmp.id === r.id), r.id); }
+  if (side === 'sire' && D.pred && view === 'pc') {          // 予測の点（50 走未満の種牡馬・白抜きの◇）と、選んだ種牡馬の交差検証の予測
+    const dia = (x, y, r, stroke, id, on) => `<polygon points="${x.toFixed(1)},${(y - r).toFixed(1)} ${(x + r).toFixed(1)},${y.toFixed(1)} ${x.toFixed(1)},${(y + r).toFixed(1)} ${(x - r).toFixed(1)},${y.toFixed(1)}" fill="var(--panel)" fill-opacity="0.01" stroke="${stroke}" stroke-width="${on ? 2.6 : 1.4}" ${id ? `data-pid="${esc(id)}" style="cursor:pointer"` : ''}/>`;
+    if (predMode !== 'none') for (const p of D.pred.small) { if (line && p.line !== line) continue;
+      const c = (predMode === 'blend' ? p.c_blend : p.c_pred)[space]; const k = colorBy === 'dl' ? -1 : keys.indexOf(p.line);   // 群の色のときは、◇は群を持たないので「その他」の色（critic 5 回目）
+      s += dia(sx(c[0]), sy(c[1]), 4 + 4 * Math.sqrt(p.runs / 50), k < 0 ? 'var(--other)' : `var(--s${k + 1})`, p.id, selPred && selPred.id === p.id); }
+    if (selPred) { const c = (predMode === 'blend' ? selPred.c_blend : selPred.c_pred)[space], e = S()[space].pred_ell;
+      for (const [q, op] of [[1.52, 0.55], [2.45, 0.3]]) { let d = ''; for (let k = 0; k <= 36; k++) { const t = 2 * Math.PI * k / 36, ux = e[0] * q * Math.cos(t), uy = e[1] * q * Math.sin(t);
+        d += (k ? 'L' : 'M') + sx(c[0] + ux * Math.cos(e[2]) - uy * Math.sin(e[2])).toFixed(1) + ',' + sy(c[1] + ux * Math.sin(e[2]) + uy * Math.cos(e[2])).toFixed(1); }
+        s += `<path d="${d}Z" fill="none" stroke="var(--hl)" stroke-opacity="${op}" stroke-width="1.2" stroke-dasharray="2 3"/>`; }
+      s += `<text x="${(sx(c[0]) + 8).toFixed(1)}" y="${(sy(c[1]) - 6).toFixed(1)}">◇ ${esc(selPred.name)}</text>`; }
+    if (sel && sel.oof) { const i = R.indexOf(sel), c = sel.oof[space];
+      s += `<line x1="${sx(C[i][0]).toFixed(1)}" y1="${sy(C[i][1]).toFixed(1)}" x2="${sx(c[0]).toFixed(1)}" y2="${sy(c[1]).toFixed(1)}" stroke="var(--hl)" stroke-dasharray="3 3"/>` + dia(sx(c[0]), sy(c[1]), 7, 'var(--hl)', null, true); }
+  }
   const labs = new Set(order.filter(i => show[i]).slice(0, 8)); if (sel) labs.add(R.indexOf(sel)); if (cmp) labs.add(R.indexOf(cmp));
   for (const i of labs) s += `<text x="${(sx(C[i][0]) + 8).toFixed(1)}" y="${(sy(C[i][1]) - 6).toFixed(1)}">${esc(R[i].name)}</text>`;
   $('#map').innerHTML = s + '</svg>';
   $('#legend').innerHTML = keys.map((k, i) => `<span><span style="color:var(--s${i + 1})">${SHAPE[i]}</span> ${esc(keyName(k))}</span>`).join('') + '<span><span style="color:var(--other)">●</span> その他</span>';
   $('#distort').textContent = `この地図のゆがみ: 6 本の元の距離と、地図の上の距離の順位相関 ${(view === 'pc' ? M.rho_pc : M.rho_ts).toFixed(2)}（1 に近いほど、地図の遠近が元の近さに忠実）。` + (view === 'pc' ? `2 本の軸で 6 本の分散の ${((M.var[0] + M.var[1]) * 100).toFixed(0)}% を表す。` : 't-SNE は近い同士の並びを保ち、遠い同士の距離は当てにならない。');
+  $('#predacc').textContent = (side === 'sire' && D.pred) ? `予測（血統構成から。白抜きの◇）の当たり具合: 交差検証の相関 ` + M6.map(d => `${LAB[d]} ${D.pred.corr[d].toFixed(2)}`).join('・') + `（大系統の平均だけ: ` + M6.map(d => D.pred.corr_line_only[d].toFixed(2)).join('・') + `）。誤差は 1 標準偏差ほど残るので、◇の位置はおおよその見当。PCA の地図でだけ出す。` : '';
+  $('#map').querySelectorAll('[data-pid]').forEach(c => {
+    c.addEventListener('mousemove', e => { const p = D.pred.small.find(x => x.id === c.dataset.pid); tip.style.display = 'block'; tip.style.left = (e.clientX + 12) + 'px'; tip.style.top = (e.clientY + 12) + 'px';
+      tip.innerHTML = `<b>◇ ${esc(p.name)}</b>（${esc(p.line)}）<br>${predMode === 'blend' ? '予測と実測を走数で混ぜた値' : '血統構成からの予測'}・産駒の走数 ${p.runs}<br>` + M6.map((d, k) => `${LAB[d]} ${(predMode === 'blend' ? p.blend6 : p.pred6)[k].toFixed(2)}`).join('・'); });
+    c.addEventListener('mouseleave', () => tip.style.display = 'none');
+    c.addEventListener('click', () => pickPred(c.dataset.pid));
+  });
   $('#map').querySelectorAll('[data-id]').forEach(c => {
     c.addEventListener('mousemove', e => { const r = R.find(x => x.id === c.dataset.id); tip.style.display = 'block'; tip.style.left = (e.clientX + 12) + 'px'; tip.style.top = (e.clientY + 12) + 'px';
       tip.innerHTML = `<b>${esc(r.name)}</b>（${esc(r.line)}${r.dl_name ? '・' + esc(r.dl_name) : ''}）<br>走数 ${r.runs.toLocaleString()}${r.core ? '' : '（300 未満・値はぶれやすい）'}・不確かさ ${r.unc.toFixed(2)}・得意な距離帯 ${esc(r.best)}<br>` + M6.map((d, k) => `${LAB[d]} ${vec(r)[k].toFixed(2)}`).join('・'); });
@@ -249,12 +326,15 @@ function drawMap() {
 }
 function radar(r) {
   const n = 6, W = 340, H = 300, cx = 170, cy = 150, R = 105, lim = 2.5;
-  const mates = rows().filter(x => r.line === '札なし' ? true : x.line === r.line);   // 札なしは全体の平均（critic 4 回目） const wt = x => x.core ? x.runs : 0; const mean = M6.map((_, k) => mates.reduce((a, x) => a + x.m6[k] * wt(x), 0) / (mates.reduce((a, x) => a + wt(x), 0) || 1));
+  const mates = rows().filter(x => r.line === '札なし' ? true : x.line === r.line);   /* 札なしは全体の平均（critic 4 回目） */ const wt = x => x.core ? x.runs : 0; const mean = M6.map((_, k) => mates.reduce((a, x) => a + x.m6[k] * wt(x), 0) / (mates.reduce((a, x) => a + wt(x), 0) || 1));
   const pt = (v, k) => { const t = -Math.PI / 2 + 2 * Math.PI * k / n, rr = R * (Math.max(-lim, Math.min(lim, v)) + lim) / (2 * lim); return [cx + rr * Math.cos(t), cy + rr * Math.sin(t)]; };
   let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="レーダー図">`;
   for (const g of [-2, -1, 0, 1, 2]) s += `<polygon points="${M6.map((_, k) => pt(g, k).join(',')).join(' ')}" fill="none" stroke="var(--grid)" stroke-width="${g === 0 ? 1.5 : 1}"/>`;
   M6.forEach((a, k) => { const [x, y] = pt(lim + 0.95, k); s += `<text x="${x.toFixed(0)}" y="${(y + 4).toFixed(0)}" text-anchor="middle" class="mut">${esc(LAB[a])}</text>`; });
   s += `<polygon points="${mean.map((v, k) => pt(v, k).join(',')).join(' ')}" fill="var(--s2)" fill-opacity="0.1" stroke="var(--s2)" stroke-width="2" stroke-dasharray="5 4"/>`;
+  for (const [sd, colr, dash] of [['A', 'var(--s3)', '2 3'], ['B', 'var(--s4)', '6 3 2 3']]) {   // 同じ種牡馬の (A) サイアーライン・(B) 牝系を重ねる
+    if (side === sd || !D[sd]) continue; const o = D[sd].rows.find(x => x.id === r.id); if (!o) continue;
+    s += `<polygon points="${o.m6.map((v, k) => pt(v, k).join(',')).join(' ')}" fill="none" stroke="${colr}" stroke-width="2" stroke-dasharray="${dash}"><title>${sd === 'A' ? 'サイアーライン (A)' : '牝系 (B)'}</title></polygon>`; }
   s += `<polygon points="${r.m6.map((v, k) => pt(v, k).join(',')).join(' ')}" fill="var(--s1)" fill-opacity="0.18" stroke="var(--s1)" stroke-width="2"/>`;
   r.m6.forEach((v, k) => { const [x, y] = pt(v, k); s += `<circle cx="${x}" cy="${y}" r="4" fill="var(--s1)" stroke="var(--panel)" stroke-width="2"><title>${esc(LAB[M6[k]])} ${v.toFixed(2)}</title></circle>`; });
   return s + '</svg>';
@@ -266,6 +346,12 @@ function hbars(names, vals, W = 340) {
     s += `<text x="${v >= 0 ? x0 + w + 4 : x0 - w - 4}" y="${y + 5}" text-anchor="${v >= 0 ? 'start' : 'end'}">${raw.toFixed(2)}</text>`; });
   return s + '</svg>';
 }
+function pickPred(id) {
+  selPred = D.pred.small.find(x => x.id === id); if (!selPred) return; const p = selPred; const v = predMode === 'blend' ? p.blend6 : p.pred6;
+  $('#predsel').innerHTML = `<b>◇ ${esc(p.name)}</b>（${esc(p.line)}・産駒の走数 ${p.runs}）: ${predMode === 'blend' ? '予測と実測を走数で混ぜた値' : '血統構成からの予測'}<br>` + M6.map((d, k) => `${LAB[d]} ${v[k].toFixed(2)}`).join('・') +
+    '<br>近い種牡馬（実測・主の 6 本）: ' + rows().map(x => [x, dist(v, x.m6)]).sort((a, b) => a[1] - b[1]).slice(0, 10).map(([x, d]) => `${esc(x.name)}（${d.toFixed(2)}）`).join('、');
+  drawMap();
+}
 function pick(id) {
   sel = rows().find(x => x.id === id); if (!sel) return; const r = sel;
   if (cmp && cmp.id === r.id) cmp = null;
@@ -273,8 +359,8 @@ function pick(id) {
   $('#radar').innerHTML = radar(r);
   const ci = ['steep', 'small', 'straight', 'left', 'yoshiba', 'kyoto'].map(k => D.dims.indexOf(k));
   $('#bars').innerHTML = hbars(ci.map(i => LAB[D.dims[i]]), ci.map(i => r.v[i]));
-  const up = side === 'sire' ? ['父の父の系統との差', '4 代上の系統との差'] : ['母父の父の系統との差', '母父の 3 代上の系統との差'];   // critic 3 回目の 7
-  $('#dimtab').innerHTML = `<tr><th>次元</th><th>値（z）</th><th>${up[0]}</th><th>${up[1]}</th></tr>` + D.dims.map((d, i) => `<tr><td>${esc(LAB[d])}</td><td class="n">${r.v[i].toFixed(2)}</td><td class="n">${r.nm[i].toFixed(2)}</td><td class="n">${r.nt[i].toFixed(2)}</td></tr>`).join('');
+  const up = side === 'sire' ? ['父の父の系統との差', '4 代上の系統との差'] : side === 'bms' ? ['母父の父の系統との差', '母父の 3 代上の系統との差'] : ['—', '—'];   // critic 3 回目の 7
+  $('#dimtab').innerHTML = `<tr><th>次元</th><th>値（z）</th><th>${up[0]}</th><th>${up[1]}</th></tr>` + D.dims.map((d, i) => `<tr><td>${esc(LAB[d])}</td><td class="n">${r.v[i].toFixed(2)}</td><td class="n">${r.nm ? r.nm[i].toFixed(2) : '—'}</td><td class="n">${r.nt ? r.nt[i].toFixed(2) : '—'}</td></tr>`).join('');
   const tb = L => '<tr><th>順</th><th>種牡馬</th><th>大系統</th><th>距離</th><th>引き直しの幅（95%）</th><th>コサイン</th></tr>' + L.map(([x, d, c], k) => `<tr class="click" data-id="${esc(x.id)}"><td class="n">${k + 1}</td><td>${esc(x.name)}</td><td>${esc(x.line)}</td><td class="n">${d.toFixed(2)}</td><td class="n">${fmtCI(distCI(r, x))}</td><td class="n">${c.toFixed(2)}</td></tr>`).join('');
   $('#nearall').innerHTML = tb(near(r, rows())); $('#nearline').innerHTML = r.line === '札なし' ? '<tr><td>大系統の札が無い種牡馬（全体の表を見る）</td></tr>' : tb(near(r, rows().filter(x => x.line === r.line)));
   document.querySelectorAll('#nearall tr.click, #nearline tr.click').forEach(t => t.addEventListener('click', e => { if (e.shiftKey) { cmp = rows().find(x => x.id === t.dataset.id); compare(); drawMap(); } else pick(t.dataset.id); }));
@@ -307,15 +393,18 @@ document.querySelectorAll('#views button').forEach(b => b.addEventListener('clic
 document.querySelectorAll('#spaces button').forEach(b => b.addEventListener('click', () => { space = b.dataset.v; setBtn('#spaces', space); if (sel) pick(sel.id); else drawMap(); }));
 document.querySelectorAll('#ells button').forEach(b => b.addEventListener('click', () => { ellMode = b.dataset.v; setBtn('#ells', ellMode); drawMap(); }));
 document.querySelectorAll('#colors button').forEach(b => b.addEventListener('click', () => { colorBy = b.dataset.v; setBtn('#colors', colorBy); drawMap(); }));
-$('#side').addEventListener('change', e => { side = e.target.value; line = ''; sel = null; cmp = null; fillLines(); start(); });
+document.querySelectorAll('#preds button').forEach(b => b.addEventListener('click', () => { predMode = b.dataset.v; setBtn('#preds', predMode); if (selPred) pickPred(selPred.id); else drawMap(); }));
+$('#side').addEventListener('change', e => { side = e.target.value; line = ''; sel = null; cmp = null; selPred = null; $('#predsel').innerHTML = ''; uncSide = null; showPredBtns(); fillLines(); start(); });
 $('#line').addEventListener('change', e => { line = e.target.value; heat(); drawMap(); });
 function find(q) { q = q.trim(); return q ? rows().find(x => x.name.includes(q)) : null; }
-$('#q').addEventListener('change', e => { const r = find(e.target.value); if (r) { line = ''; fillLines(); pick(r.id); } });
+$('#q').addEventListener('change', e => { const q = e.target.value.trim(); const r = find(q); if (r) { line = ''; fillLines(); pick(r.id); return; }
+  const p = side === 'sire' && D.pred && q ? D.pred.small.find(x => x.name.includes(q)) : null; if (p) pickPred(p.id); });
 $('#q2').addEventListener('change', e => { const r = find(e.target.value); if (r && sel) { cmp = r; compare(); drawMap(); } });
 function start() { const f = rows().slice().sort((a, b) => b.runs - a.runs)[0]; if (f) pick(f.id); }
 if (!D.has_dl) document.querySelectorAll('#colors button[data-v="dl"]').forEach(b => b.style.display = 'none');
 if (!D.n_boot) document.querySelectorAll('#ells').forEach(b => b.style.display = 'none');
-fillLines(); setBtn('#ells', ellMode); setBtn('#views', view); setBtn('#spaces', space); setBtn('#colors', colorBy); start();
+showPredBtns();
+fillLines(); setBtn('#preds', predMode); setBtn('#ells', ellMode); setBtn('#views', view); setBtn('#spaces', space); setBtn('#colors', colorBy); start();
 """
 
 
@@ -352,10 +441,25 @@ def summary_html(info: dict) -> str:
 def build() -> None:
     d = json.loads((common.OUT / "sire_vectors.json").read_text())
     dl, info = detailed()
+    pp_ = common.OUT / "parent_links.json"
+    if not pp_.exists():                              # 父の対応は 1 回だけ作って置く（血統の全馬の位置を読むので少し重い）
+        from src.research.aptitude_group.line_vectors import pedigree_links
+        pp_.write_text(json.dumps(pedigree_links(set())[1]))
+    PARENT.update(json.loads(pp_.read_text()))
     qualified = {r["id"] for r in d["sire"]["rows"] if r.get("core", True)}   # 札は中核（300 走以上）で数える（lines・detailed と同じ・critic 3 回目の 5）
-    lab = line_labels(qualified)
+    lab = line_labels(qualified, with_ancestors=True)     # 鎖の中の古い祖先にも札（母父・(B) の札なしを減らす）
     payload = {"dims": d["dims"], "sire": side_payload(d["sire"]["rows"], d["dims"], lab, dl),
                "bms": side_payload(d["bms"]["rows"], d["dims"], lab, {}), "has_dl": bool(dl)}
+    lvp = common.OUT / "line_vectors.json"
+    if lvp.exists():
+        lv = json.loads(lvp.read_text())
+        payload["A"] = side_payload(line_rows(lv, "A"), d["dims"], lab, {})
+        payload["B"] = side_payload(line_rows(lv, "B"), d["dims"], lab, {})
+    pp = common.OUT / "predict.json"
+    if pp.exists():
+        pred = json.loads(pp.read_text())
+        sn = common.OUT / "small_names.json"
+        payload["pred"] = add_predictions(payload["sire"], pred, json.loads(sn.read_text()) if sn.exists() else {}, lab)
     bp = common.OUT / "sire_vectors_boot.npz"
     if bp.exists():
         z = np.load(bp, allow_pickle=False)
@@ -365,6 +469,7 @@ def build() -> None:
     js_data = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")      # < をすべて逃がす（critic 2 回目の 16）
     lab_js = json.dumps(LABEL, ensure_ascii=False).replace("<", "\\u003c")
     ps, pb = payload["sire"], payload["bms"]
+    side_opts = "".join(f'<option value="{k}">{lbl}（{len(payload[k]["rows"])} 頭）</option>' for k, lbl in (("A", "サイアーライン (A)"), ("B", "牝系 (B)")) if k in payload)
     body = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>種牡馬の血統ベクトル</title><style>{CSS}</style></head><body><main>
 <h1>種牡馬の血統ベクトル</h1>
@@ -374,25 +479,28 @@ def build() -> None:
 <p><b>何を見る図か</b>: 種牡馬ごとに、産駒（または母父としての孫）の走りから適性を作り、ベクトルとして並べた。地図は主の 6 本（距離・ダート寄り・道悪・前の位置・トップスピード・ギアチェンジ）で作る。</p>
 <ul>
 <li>対象は産駒の走数 {d.get('show_runs', 50)} 以上の種牡馬。尺度（0 = 平均・±1 = 1 標準偏差）と系統の平均は、走数 {d['min_runs']} 以上の種牡馬（中核）で作った。走数が少ないほど、4 代上 → 父の父 → 種牡馬の順に上の段へ寄せた（擬似件数 {d['k']:.0f}）。</li>
+<li>見る側: 父として（産駒の走り）・母父として（母父に持つ馬の走り）・サイアーライン (A)（父 1・父の父 1/2・父の父の父 1/4 の重みで、父系の直系に入る馬の走り）・牝系 (B)（母の側の 5 代以内の牡の位置に入る馬の走りを、血量 2^−代 の重みで）。</li>
+<li>予測の◇: 産駒の成績を使わず、血統構成（父の (A)・母父の値・母の側の祖先の (B)・大系統・近交）から当てた位置。50 走未満の種牡馬に出す。確かめは父の単位の 5 分割で、父の (A) は本人を通る直系の走りを抜いて作った。</li>
 <li>非共通の地図 = 6 本 − 同じ大系統（netkeiba の「○○系」を父から上へたどった札）の平均。系統の中での個性。</li>
 <li>ギアチェンジは、終いのラップが速いレースで、4 角の位置を除いて入線までに上げた度合い（レースのラップで近似）。</li>
 <li>限界: 産駒の走りには、母の質・厩舎・使われ方が混ざる。値は「産駒がその条件でふだんよりどれだけ走ったか」で、遺伝だけの値ではない。</li>
 </ul></div>
 <h2>全種牡馬の 2 次元の地図</h2>
-<div class="row"><label>見る側 <select id="side"><option value="sire">父として（{len(ps['rows'])} 頭）</option><option value="bms">母父として（{len(pb['rows'])} 頭）</option></select></label>
+<div class="row"><label>見る側 <select id="side"><option value="sire">父として（{len(ps['rows'])} 頭）</option><option value="bms">母父として（{len(pb['rows'])} 頭）</option>{side_opts}</select></label>
 <label>大系統で絞る <select id="line"></select></label><label>名前で探す <input id="q" placeholder="例: ディープ"></label></div>
 <div class="row"><span class="sub">地図</span><span id="views"><button data-v="pc">PCA（軸の意味の矢印つき）</button> <button data-v="ts">t-SNE</button></span>
 <span class="sub">ベクトル</span><span id="spaces"><button data-v="common">そのまま（共通の部分）</button> <button data-v="noncommon">系統の平均を引いた個性</button></span>
 <span id="ells"><span class="sub">誤差の楕円</span> <button data-v="sel">選んだ馬と系統</button> <button data-v="all">全頭</button> <button data-v="none">なし</button></span>
+<span id="preds"><span class="sub">予測の◇（50 走未満）</span> <button data-v="pred">予測</button> <button data-v="blend">実測と混ぜた値</button> <button data-v="none">なし</button></span>
 <span class="sub">色</span><span id="colors"><button data-v="line">大系統</button> <button data-v="dl">群</button></span></div>
-<p class="sub" id="distort"></p>
+<p class="sub" id="distort"></p><p class="sub" id="predacc"></p><div class="sub" id="predsel"></div>
 <div class="legend" id="legend"></div>
 <div id="map"></div>
 <p class="sub">誤差の楕円（PCA の地図だけ）: 産駒の走りを開催の単位で引き直したブートストラップの各回のベクトルを、同じ軸に写した広がり。実線 = 68%、破線 = 95%。走数の少ない種牡馬ほど楕円が大きい。t-SNE は写しが回ごとに変わるので、楕円は出さず、点の濃さで見せる。</p>
 <p class="sub">距離の「引き直しの幅」: ブートストラップの各回の 2 頭の距離の 2.5〜97.5%。測りの雑音で距離は上ぶれするので、幅は本当の距離より上に寄る（近い組ほど強い）。</p>
 <p class="sub">点の大きさ = 走数。点の濃さ = 値の確かさの順位（同じ側の中で、走数が少なく上の段の値に寄った種牡馬ほど薄い）。色と形 = 走数の多い上位 4 つ（ほかは「その他」）。点を押すと下に詳しく出て、近い 10 頭と線で結ぶ。Shift を押しながら押すと、2 頭の比べ。</p>
 <h2 id="selname"></h2>
-<div class="grid2"><div class="box"><b>主の 6 本</b>（実線 = この種牡馬・破線 = 同じ大系統〔札が無ければ全体〕の中核の走数の重み付き平均）<div id="radar"></div></div>
+<div class="grid2"><div class="box"><b>主の 6 本</b>（実線 = この種牡馬・橙の破線 = 同じ大系統〔札が無ければ全体〕の中核の走数の重み付き平均・緑の点線 = 同じ種牡馬のサイアーライン (A)・黄の一点鎖線 = 牝系 (B)）<div id="radar"></div></div>
 <div class="box"><b>コースの 6 本</b>（右 = 得意・左 = 苦手）<div id="bars"></div></div></div>
 <h2>2 頭の近さ</h2><div class="row"><label>比べる種牡馬 <input id="q2" placeholder="名前"></label></div><div class="box" id="cmp"></div>
 <h2>近い種牡馬（主の 6 本の距離）</h2>

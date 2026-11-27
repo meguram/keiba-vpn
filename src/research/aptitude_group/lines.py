@@ -19,7 +19,7 @@ def short(label: str) -> str:
     return ABBR.get(s, s[:6])
 
 
-def line_labels(qualified: set[str]) -> dict[str, str]:
+def line_labels(qualified: set[str], with_ancestors: bool = False) -> dict[str, str]:
     """鎖のある全種牡馬の大系統（数えるのは走数 300 以上の種牡馬だけ。新しい種牡馬にも同じ札が付く）。
     v2: 札 a のすぐ上の 8 頭以上の札 b に、b を最初の札に持つ種牡馬が 8 頭以上あるときだけ、a を b へまとめる（1 回だけ）。"""
     O = json.loads(ORIGIN.read_text(encoding="utf-8"))
@@ -54,6 +54,20 @@ def line_labels(qualified: set[str]) -> dict[str, str]:
             merge[a] = b
     # b 自身がさらに上へまとまるなら、a は b へまとめない（札の名前と中身がずれないように。1 回だけの決まりを保つ・critic 3 回目の 6）
     merge = {a: b for a, b in merge.items() if b not in merge}
-    return {h: merge.get(a, a) for h, a in first.items()}
+    out = {h: merge.get(a, a) for h, a in first.items()}
+    if with_ancestors:
+        # 鎖の中の祖先（日本の種牡馬でない古い祖先も）に、同じ規則で札を付ける: その祖先より上の鎖で最初の 8 頭以上の札（まとめも同じ）。
+        # 母父・牝系 (B) の古い外国の祖先が「札なし」にならないように（11/27）。鍵のある種牡馬の札は変えない。
+        for v in O.values():
+            ch = v["chain"]
+            for j in range(1, len(ch)):
+                i = ch[j][0]
+                if i in out:
+                    continue
+                for x in ch[j + 1:]:
+                    if x[2] in big:
+                        out[i] = merge.get(x[2], x[2])
+                        break
+    return out
 
 

@@ -121,9 +121,12 @@ def flags(F: pd.DataFrame) -> dict[str, np.ndarray]:
             "wet_D": (s == "D") & np.isin(g, ["S", "W"])}
 
 
-def stats(F: pd.DataFrame, key: str) -> pd.DataFrame:
+def stats(F: pd.DataFrame, key: str, base: dict | None = None) -> pd.DataFrame:
     """鍵（父・中系統・大系統など）ごとの、縮める前のずれの和と件数（次元ごとに ("d", 次元)・("n", 次元)）。
-    F に列 w があれば、行の重み（サイアーライン・牝系のベクトルの血量の重み）として使う。無ければ 1。"""
+    F に列 w があれば、行の重み（サイアーライン・牝系のベクトルの血量の重み）として使う。無ければ 1。
+    base を渡すと、全体の基準（条件の対比の全体の差 d0・前の位置と TS の全体の平均・距離の分散）を F から作らずに使う
+    （一部の行だけで集計し直す一つ抜きで、基準がその行だけで決まって差が 0 になるのを防ぐ・critic 5 回目）。base は stats_base で作る。"""
+    base = base or stats_base(F)
     fl = flags(F)
     gc = F["gc"].to_numpy(float)
     wt = F["w"].to_numpy(float) if "w" in F.columns else np.ones(len(F))
@@ -134,28 +137,26 @@ def stats(F: pd.DataFrame, key: str) -> pd.DataFrame:
     def wsum(x, by):
         return pd.Series(x).groupby(by).sum()
 
-    def contrast(A: np.ndarray, by_surf: bool):
+    def contrast(A: np.ndarray, by_surf: bool, nm_: str):
         """「その条件の平均 − 条件の外の平均」（芝ダの中で）− 全体での同じ差。件数は調和の件数 nA·nB/(nA+nB)（critic 2 回目の 2）。"""
         cell = surf if by_surf else np.full(len(F), "all")
         T = pd.DataFrame({"k": k, "c": cell, "A": A, "gw": gc * wt, "w": wt})
         g = T.groupby(["k", "c", "A"])[["gw", "w"]].sum().unstack("A", fill_value=0)
         g = g.reindex(columns=pd.MultiIndex.from_product([["gw", "w"], [False, True]]), fill_value=0)   # 条件の行が無いときも列をそろえる
         nA, nB, sA, sB = g[("w", True)], g[("w", False)], g[("gw", True)], g[("gw", False)]
-        P = T.groupby(["c", "A"])[["gw", "w"]].sum()
-        P = (P["gw"] / P["w"]).unstack("A").reindex(columns=[False, True])
-        d0 = (P[True] - P[False]).fillna(0).reindex(g.index.get_level_values("c")).to_numpy()
+        d0 = base["d0"][nm_].reindex(g.index.get_level_values("c")).fillna(0).to_numpy()
         ne = (nA * nB / (nA + nB).replace(0, np.nan)).fillna(0)
         diff = (sA / nA.replace(0, np.nan) - sB / nB.replace(0, np.nan)).fillna(0) - d0
         dd = (ne * diff).groupby(level="k").sum()
         return dd, ne.groupby(level="k").sum()
     for nm in COURSE + ["wet_T", "wet_D"]:
-        out[("d", nm)], out[("n", nm)] = contrast(fl[nm], True)
-    out[("d", "surf")], out[("n", "surf")] = contrast(surf == "D", False)
+        out[("d", nm)], out[("n", nm)] = contrast(fl[nm], True, nm)
+    out[("d", "surf")], out[("n", "surf")] = contrast(surf == "D", False, "surf")
     # 前の位置・TS（水準）
     for nm, col, sign in (("pos", "early", -1.0), ("ts", "ts", 1.0)):
         x = sign * F[col].to_numpy(float)
         ok = np.isfinite(x)
-        mu = np.average(x[ok], weights=wt[ok])
+        mu = base["mu"][nm]
         out[("d", nm)] = wsum(np.where(ok, (x - mu) * wt, 0.0), k)
         out[("n", nm)] = wsum(ok * wt, k)
     # 距離の傾き: 鍵 × 芝ダの中で中心化した log 距離への gc の傾き（critic 2 回目の 7）。件数は Σw·x² ÷ 全体（芝ダの中）の x の分散
@@ -164,9 +165,7 @@ def stats(F: pd.DataFrame, key: str) -> pd.DataFrame:
     sw = pd.Series(wt).groupby(ks).transform("sum").to_numpy()
     xc = lx - pd.Series(lx * wt).groupby(ks).transform("sum").to_numpy() / sw
     gcc = gc - pd.Series(gc * wt).groupby(ks).transform("sum").to_numpy() / sw
-    sws = pd.Series(wt).groupby(surf).transform("sum").to_numpy()
-    xs = lx - pd.Series(lx * wt).groupby(surf).transform("sum").to_numpy() / sws
-    vx = float(np.average(xs ** 2, weights=wt))          # 重み付き（w が無いときは前と同じ・critic 4 回目）
+    vx = base["vx"]
     out[("d", "dist")] = wsum(xc * gcc * wt, k) / vx
     out[("n", "dist")] = wsum(xc * xc * wt, k) / vx
     # ギア: 後半の加速（as-of の z）への、4 角の位置を除いた上がり方の傾き。どちらも鍵の中で中心化（critic 2 回目の 8）
@@ -183,6 +182,30 @@ def stats(F: pd.DataFrame, key: str) -> pd.DataFrame:
     S = pd.DataFrame(out)
     S["runs"] = wsum(wt, k)
     return S.drop(index="", errors="ignore")
+
+
+def stats_base(F: pd.DataFrame) -> dict:
+    """stats の全体の基準（F の全行から）。"""
+    fl = flags(F)
+    gc = F["gc"].to_numpy(float)
+    wt = F["w"].to_numpy(float) if "w" in F.columns else np.ones(len(F))
+    surf = F["surf"].to_numpy()
+    d0 = {}
+    for nm, A, by in [(n, fl[n], True) for n in COURSE + ["wet_T", "wet_D"]] + [("surf", surf == "D", False)]:
+        cell = surf if by else np.full(len(F), "all")
+        T = pd.DataFrame({"c": cell, "A": A, "gw": gc * wt, "w": wt})
+        P = T.groupby(["c", "A"])[["gw", "w"]].sum()
+        P = (P["gw"] / P["w"]).unstack("A").reindex(columns=[False, True])
+        d0[nm] = (P[True] - P[False]).fillna(0)
+    mu = {}
+    for nm, col, sign in (("pos", "early", -1.0), ("ts", "ts", 1.0)):
+        x = sign * F[col].to_numpy(float)
+        ok = np.isfinite(x)
+        mu[nm] = float(np.average(x[ok], weights=wt[ok]))
+    lx = F["lx"].to_numpy(float)
+    sws = pd.Series(wt).groupby(surf).transform("sum").to_numpy()
+    xs = lx - pd.Series(lx * wt).groupby(surf).transform("sum").to_numpy() / sws
+    return {"d0": d0, "mu": mu, "vx": float(np.average(xs ** 2, weights=wt))}
 
 
 def shrink(F: pd.DataFrame, k_sire: str, k_mid: str, k_top: str) -> tuple[pd.DataFrame, pd.DataFrame]:

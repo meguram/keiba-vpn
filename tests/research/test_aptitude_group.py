@@ -141,6 +141,24 @@ def test_contrast_is_condition_minus_outside():
     assert abs(v2[("d", "kyoto")]["s1"] / v2[("n", "kyoto")]["s1"] - v["s1"]) < 0.03
 
 
+def test_stats_subset_with_full_base_matches_full():
+    """一つ抜きの集計: 鍵の行だけで集計し直しても、全体の基準を渡せば全体の集計のその鍵の値と同じ（critic 5 回目）。"""
+    from src.research.aptitude_group import sire_vectors
+    rng = np.random.default_rng(11)
+    n = 3000
+    F = pd.DataFrame({"sire": rng.choice(["s1", "s2", "s3"], n), "surf": np.where(rng.random(n) < 0.5, "T", "D"),
+                      "venue": rng.choice(["東京", "中山", "京都", "札幌"], n), "distance": rng.choice([1200, 1600, 2400], n), "going": rng.choice(["G", "W"], n),
+                      "course_type": "", "direction": rng.choice(["右", "左"], n), "early": rng.random(n), "ts": rng.random(n) - 0.5,
+                      "acc_z": rng.normal(size=n), "gain_r": rng.normal(size=n), "gc": rng.normal(0, 0.3, n)})
+    F["lx"] = np.log(F["distance"])
+    full = sire_vectors.stats(F, "sire")
+    sub = F[F["sire"] == "s2"].reset_index(drop=True)
+    part = sire_vectors.stats(sub, "sire", base=sire_vectors.stats_base(F))
+    assert np.allclose(full.loc["s2"].to_numpy(float), part.loc["s2"].to_numpy(float))
+    bad = sire_vectors.stats(sub, "sire")                       # 基準を渡さないと、芝ダの差は 0 になる（直す前の誤り）
+    assert abs(bad.loc["s2", ("d", "surf")]) < 1e-9 and abs(full.loc["s2", ("d", "surf")]) > 1e-6
+
+
 def test_period_guard_refuses_2025():
     import pytest
     with pytest.raises(AssertionError):
