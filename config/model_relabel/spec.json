@@ -1,0 +1,44 @@
+{
+ "note": "拡張ラベルのめぐ AI（担当 model-relabel、2026-11-27）。モデルの成績を見る前に固定する。変えるときは新しい版にして trials.json に数える。",
+ "version": "mr-1",
+ "years": {"dev_first": 2016, "dev_last": 2024, "outer_main": [2019, 2021], "outer_confirm_once": [2022, 2024], "pred_first": 2017},
+ "margin": {
+  "primary": "string_cumsum",
+  "convert_A": {"ハナ": 0.05, "アタマ": 0.1, "クビ": 0.25, "同着": 0.0, "大": 99.0},
+  "convert_B_sensitivity": {"ハナ": 0.1, "アタマ": 0.2, "クビ": 0.3, "同着": 0.0, "大": 99.0},
+  "within_lengths": 0.5,
+  "secondary_time_sec": 0.1,
+  "secondary_use": "表だけ（学習に使わない）"
+ },
+ "labels": {
+  "y_w": "1 着、または勝ち馬からの累積の着差 ≤ 0.5 馬身",
+  "y_p": "3 着内、または（自分の累積 − 3 着馬の累積の最大）≤ 0.5 馬身",
+  "big": "6 着以下、かつ time_sec − 勝ち馬の time_sec ≥ 1.0",
+  "not_finished": "finish_position ≤ 0 は負例・big にしない",
+  "no_extend_races": "2 着以下に空の着差・1 着に着差・降着の印（finish_position_raw の「降」、2016〜19 年だけ）・着順で後ろの馬の時計が前の馬より速い、のどれかがあるレースは拡張しない（元のラベル）",
+  "tie_order": "同着の組の中は着差が「同着」の行を後ろに並べてから累積する",
+  "y_p_base": "3 着内の馬の累積の最大（3 着の同着・2 着の同着で 3 着が無いときも同じ式）"
+ },
+ "penalty": {
+  "P_w": {"w": [1, 2, 4], "note": "大敗の負例のサンプルの重み。−log(1−p) の項を足す案と同じ式"},
+  "P_ord": {"kappa": [0.5, 1.0], "note": "s = logit(m_b) + κ·log(m_a)。m_a = P(大敗でない)・m_b = P(拡張の正)"}
+ },
+ "metric": {
+  "L": "LL_true(p̂) + λ · mean_{big}(−log(1 − p̂))。p̂ は較正の後の本物の確率",
+  "lambda_main": 0.5,
+  "lambda_sensitivity": [1.5, 0.0],
+  "lambda_reason": "大敗は全体の約半分なので、大敗の 1 頭の重みはふつうの負例の約 1+2λ 倍（0.5 → 約 2 倍、1.5 → 約 4 倍）"
+ },
+ "select": {
+  "rounds_v5bag": [200, 400, 600, 800],
+  "rounds_v6e": [200, 400, 600, 777],
+  "calibration": ["isotonic", "platt"],
+  "normalize": "勝ちはレース内で和 1、複勝は和 3（上限 1、反復で合わせる）",
+  "tree_params": "v5bag の BAG_SETS・XGB_PARAMS、v6e の xgb_extras_ped の params に固定（選び直さない）",
+  "inner": "外側の年 t の選びは t−1 年の前向きの予測（t−2 年で当てた較正）で L を数える。年 t の較正は t−1 年で当てる"
+ },
+ "meeting_split": {"unit": "race_id[:8]", "k": 5, "seed": 20261128, "inner_calib_frac": 0.2, "note": "rules-council 1 号が条件付きで了承（11/27、decisions.md）。報告だけ。買い方の入力・版の選び・設定の選び直しに使わない。折の一覧は meeting_folds.csv（着順を開く前に commit）"},
+ "judge": "外側 2019〜21 で、勝ち馬の −log p の差（拡張 − 基準、開催日で束ねた対のブートストラップ 2,000 回）の 95% 区間が 0 より下、かつ Benter の 2 段の改善分（市場だけとの差）が基準より大きいとき「良い」。複勝は 3 着内の馬ごとの対数損失で同じ判定",
+ "metrics": ["馬ごとの二値の対数損失（本物のラベル）", "L_0.5・L_1.5", "勝ち馬の −log p（レース内で和 1 の後）", "AUC（全体・レース内の平均）", "較正（十分位の表・ECE）", "1 番手の勝率・3 着内率", "上位 3 頭の 3 着内率", "大敗の馬に付けた確率の平均", "Benter の 2 段（確定の市場 q と組んだ勝ち馬の −log p、a・b）"],
+ "roi": "計算しない（rules-council 1 号の条件。物差しはラベルの当てはまりだけ。Benter の 2 段は確定の市場 q との組み合わせの対数損失で、回収率ではない）"
+}
