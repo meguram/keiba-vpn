@@ -62,7 +62,7 @@ OLD_STATUS = {"legacy", "snapshot", "history"}
 # 既定と違う棚に置く章（slug → 棚）
 OVERRIDE: dict[str, str] = {
     # 本番の仕様（モデル・規則・運用の正）
-    "model_versions": "spec", "retrain_order": "spec", "upstream_model_outputs": "spec",
+    "model_versions": "spec", "retrain_order": "spec", "upstream_model_outputs": "spec", "ensemble_architecture": "spec",
     "training_pipeline_decisions": "spec", "race_performance_rating_system": "spec", "megu_index_v3a": "spec",
     "exotic_bet_probabilities": "spec", "final_odds_model": "spec", "ev_calibration_adopt": "spec",
     "feature_serving_low_memory": "spec", "data_terms_and_public_policy": "spec", "local_dataset_endpoints": "spec",
@@ -142,7 +142,7 @@ GROUPS: dict[str, list[Group]] = {
               ["DATASET_CATALOG", "DATASOURCES", "data_scraping_storage_reference", "database_schemas", "data_features_reference", "data_flow_schedule",
                "local_dataset_endpoints", "data_terms_and_public_policy"]),
         Group("モデルと規則（今、本番で動く版）", "どの版が本番かの正は model_versions（モデルの版と採用状況）。確定事項の正は training_pipeline_decisions（決定ログ）。",
-              ["model_versions", "retrain_order", "upstream_model_outputs", "training_pipeline_decisions", "race_performance_rating_system", "megu_index_v3a",
+              ["model_versions", "retrain_order", "upstream_model_outputs", "ensemble_architecture", "training_pipeline_decisions", "race_performance_rating_system", "megu_index_v3a",
                "final_odds_model", "exotic_bet_probabilities", "ev_calibration_adopt", "feature_serving_low_memory"]),
     ],
     "ops": [

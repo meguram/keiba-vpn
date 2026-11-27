@@ -1,0 +1,396 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>アンサンブルの構成図 — keiba-vpn docs</title>
+<style>
+:root {
+  --bg:#f7f8fb; --panel:#ffffff; --panel2:#eef2fa; --border:#cfd6e4; --text:#1b2333; --muted:#5b6780; --accent:#2f5fd0; --warn:#a15c00; --code:#eef1f6;
+  --line:#7b879f; --main:#2f5fd0; --shadow:#8a5a00; --c-train:#c9d8f5; --c-valid:#f3d9a6; --c-weight:#cfe8cf; --c-test:#f2c4c4; --c-serve:#e2d6f3;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --warn:#fbbf24; --code:#0b1428;
+    --line:#8796b8; --main:#7aa9ff; --shadow:#e0a84a; --c-train:#26406e; --c-valid:#5a4520; --c-weight:#244a30; --c-test:#5a2a2a; --c-serve:#3d2f5c;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --warn:#fbbf24; --code:#0b1428;
+  --line:#8796b8; --main:#7aa9ff; --shadow:#e0a84a; --c-train:#26406e; --c-valid:#5a4520; --c-weight:#244a30; --c-test:#5a2a2a; --c-serve:#3d2f5c;
+}
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1100px; margin:0 auto; padding:32px 16px 80px; }
+h1 { font-size:25px; margin:0 0 6px; } h2 { font-size:19px; margin:40px 0 6px; padding-top:16px; border-top:1px solid var(--border); }
+.muted { color:var(--muted); font-size:13px; } .sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+.box ol, .box ul { margin:4px 0; padding-left:1.3em; }
+.warn { color:var(--warn); }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 5px; border-radius:5px; font-size:12px; overflow-wrap:anywhere; }
+.tbl { overflow-x:auto; margin:8px 0 14px; }
+table { border-collapse:collapse; width:100%; font-size:13px; }
+th,td { border:1px solid var(--border); padding:5px 8px; text-align:left; vertical-align:top; }
+th { background:var(--panel2); color:var(--muted); font-weight:600; white-space:nowrap; }
+td.num { text-align:right; white-space:nowrap; }
+td:first-child code { white-space:nowrap; overflow-wrap:normal; }
+.fig { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:8px; margin:10px 0 6px; overflow-x:auto; }
+.fig svg { display:block; width:100%; min-width:600px; height:auto; }
+.cap { color:var(--muted); font-size:13px; margin:2px 0 14px; }
+/* 図の部品（明るい・暗いの両方で色はトークンから取る） */
+.fig .n { fill:var(--panel2); stroke:var(--line); stroke-width:1.2; }
+.fig .nm { fill:var(--panel2); stroke:var(--main); stroke-width:1.8; }
+.fig .ns { fill:var(--panel2); stroke:var(--shadow); stroke-width:1.6; stroke-dasharray:6 4; }
+.fig .grp { fill:none; stroke:var(--line); stroke-width:1; stroke-dasharray:4 4; }
+.fig .ar { stroke:var(--line); stroke-width:1.6; fill:none; }
+.fig .ah { fill:var(--line); }
+.fig text { fill:var(--text); font-size:12px; font-family:"Noto Sans JP",system-ui,sans-serif; }
+.fig text.b { font-weight:700; font-size:13px; }
+.fig text.m { fill:var(--muted); font-size:11.5px; }
+.fig text.c { text-anchor:middle; }
+.fig .yr { fill:var(--muted); font-size:11px; text-anchor:middle; }
+.fig .grid { stroke:var(--border); stroke-width:1; }
+.fig .tr { fill:var(--c-train); } .fig .va { fill:var(--c-valid); } .fig .we { fill:var(--c-weight); } .fig .te { fill:var(--c-test); } .fig .se { fill:var(--c-serve); }
+.legend span { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-1px; margin:0 4px 0 10px; border:1px solid var(--border); }
+details { margin:8px 0; } summary { cursor:pointer; color:var(--accent); }
+</style>
+</head><body><main>
+
+<h1>アンサンブルの構成図</h1>
+<p class="muted">作成: 2026-11-27。本番の親モデル v6e と、試行中の候補・第 2 段・想定オッズ（§77）・めぐの AI（v5bag）の作りを、コードと手元の設定ファイル（<code>bundle.json</code>・<code>meta.json</code>・<code>ens/v6.json</code>）から読んで図にした。読めなかった値は「未確認」と書く。</p>
+
+<h2>1. 結論</h2>
+<div class="box">
+<ol>
+<li><b>本番 v6e は 2 段。</b>前段 S3B（LightGBM の回帰 2 本）が 3 列を作り、それを含む特徴量で 7 部品を学ぶ。</li>
+<li><b>7 部品は LightGBM 3・XGBoost 1・NN 3。</b>部品ごとに 5 seed（乱数の種）で学んだ確率を平均する。</li>
+<li><b>合わせ方は目的ごとに違う。</b>勝率は logit（確率 p を log(p/(1−p)) に直した値）の重み付き和、2 着内・3 着内は前進選択の重みの平均。最後にレース内で合計 1・2・3 にそろえる。</li>
+</ol>
+<p class="sub">市場のオッズを土台にした第 2 段（XGBoost 9 本）は、本番 v6e の後ろには付いていない。試行中の影の候補（r04）の特徴量を入力にして、未勝利・新馬のサンプル買い目だけに使う（図 2）。</p>
+</div>
+
+<h2>2. 全体の図</h2>
+<h3 style="font-size:16px;margin:16px 0 4px">図 1. 本番 v6e（画面・集計・推奨の親モデル）</h3>
+<div class="fig">
+<svg viewBox="0 0 760 850" role="img" aria-label="本番 v6e の構成図。入力の特徴量から前段 S3B、7 部品、重み付きの合成、確率、印と推奨馬券へ">
+  <!-- 入力 -->
+  <rect class="n" x="20" y="10" width="720" height="88" rx="10"/>
+  <text class="b c" x="380" y="34">入力の特徴量（1 頭 1 行。7 部品の和集合は 1,231 列）</text>
+  <text class="c" x="380" y="56">履歴・LayerA・レース内の相対化・追い切り（tl_ 50 列）</text>
+  <text class="c" x="380" y="76">指数の履歴（rb_ 16 列）・補助ヘッドの予測（mtl_ 27 列）・血統など。オッズ・人気は入れない</text>
+  <!-- 入力 → S3B・列の群 -->
+  <line class="ar" x1="200" y1="98" x2="200" y2="117"/><polygon class="ah" points="195,116 205,116 200,124"/>
+  <line class="ar" x1="570" y1="98" x2="570" y2="117"/><polygon class="ah" points="565,116 575,116 570,124"/>
+  <!-- 前段 S3B -->
+  <rect class="nm" x="20" y="124" width="360" height="96" rx="10"/>
+  <text class="b" x="36" y="146">前段 S3B（変種 e）</text>
+  <text x="36" y="166">LightGBM の回帰 2 本・入力 275 列</text>
+  <text x="36" y="186">s_time_pred（走破タイム差の予測）</text>
+  <text x="36" y="206">s_rank_pred（正規化着順）・s_time_gap</text>
+  <line class="ar" x1="380" y1="172" x2="393" y2="172"/><polygon class="ah" points="392,167 392,177 400,172"/>
+  <!-- 列の群 -->
+  <rect class="n" x="400" y="124" width="340" height="96" rx="10"/>
+  <text class="b" x="416" y="146">部品ごとの入力の列</text>
+  <text x="416" y="166">共通 1,200 列（S3B の 3 列を含む）</text>
+  <text x="416" y="186">＋追加 7 列（コメント・追い切り評価）</text>
+  <text x="416" y="206">＋血統 24 列（ped_）。NN は絞った列</text>
+  <line class="ar" x1="570" y1="220" x2="570" y2="235"/><polygon class="ah" points="565,234 575,234 570,242"/>
+  <!-- 第 1 段のグループ -->
+  <rect class="grp" x="10" y="242" width="740" height="292" rx="12"/>
+  <text class="m" x="24" y="262">7 部品（それぞれ 5 seed の平均。勝ち・2 着内・3 着内の確率を出す）。重みは 勝率 ／ 2 着内 ／ 3 着内</text>
+  <!-- 行 A -->
+  <rect class="n" x="20" y="274" width="165" height="118" rx="9"/>
+  <text class="b" x="30" y="296">lgb_extras_ped</text><text x="30" y="318">LightGBM 二値 ×3</text><text x="30" y="338">1,231 列（全部）</text>
+  <text x="30" y="360">勝 0.2422</text><text class="m" x="30" y="380">2着 0 ／ 3着 0.125</text>
+  <rect class="n" x="205" y="274" width="165" height="118" rx="9"/>
+  <text class="b" x="215" y="296">xgb_extras_ped</text><text x="215" y="318">XGBoost 二値 ×3</text><text x="215" y="338">1,231 列（全部）</text>
+  <text x="215" y="360">勝 0.0561</text><text class="m" x="215" y="380">2着 0.2857 ／ 3着 0.375</text>
+  <rect class="n" x="390" y="274" width="165" height="118" rx="9"/>
+  <text class="b" x="400" y="296">lgb_extras</text><text x="400" y="318">LightGBM 二値 ×3</text><text x="400" y="338">1,207 列（血統なし）</text>
+  <text x="400" y="360">勝 0.0488</text><text class="m" x="400" y="380">2着 0.1429 ／ 3着 0</text>
+  <rect class="n" x="575" y="274" width="165" height="118" rx="9"/>
+  <text class="b" x="585" y="296">lgb_softmax</text><text x="585" y="318">LightGBM softmax</text><text x="585" y="338">1,200 列・Harville</text>
+  <text x="585" y="360">勝 0.2301</text><text class="m" x="585" y="380">2着 0.1429 ／ 3着 0.125</text>
+  <!-- 行 B -->
+  <rect class="n" x="112" y="406" width="165" height="118" rx="9"/>
+  <text class="b" x="122" y="428">linear</text><text x="122" y="450">隠れ層なしの NN</text><text x="122" y="470">1,200 列</text>
+  <text x="122" y="492">勝 0.2348</text><text class="m" x="122" y="512">2着 0.1429 ／ 3着 0.125</text>
+  <rect class="n" x="297" y="406" width="165" height="118" rx="9"/>
+  <text class="b" x="307" y="428">mtl_nn_extras_ped</text><text x="307" y="450">NN（隠れ層 128）</text><text x="307" y="470">401 列・補助損失</text>
+  <text x="307" y="492">勝 0.1121</text><text class="m" x="307" y="512">2着 0.1429 ／ 3着 0.125</text>
+  <rect class="n" x="482" y="406" width="165" height="118" rx="9"/>
+  <text class="b" x="492" y="428">mtl_nn_s</text><text x="492" y="450">NN（128・64）</text><text x="492" y="470">370 列・補助損失</text>
+  <text x="492" y="492">勝 0.0759</text><text class="m" x="492" y="512">2着 0.1429 ／ 3着 0.125</text>
+  <!-- 合成 -->
+  <line class="ar" x1="380" y1="534" x2="380" y2="551"/><polygon class="ah" points="375,550 385,550 380,558"/>
+  <rect class="nm" x="20" y="558" width="720" height="96" rx="10"/>
+  <text class="b c" x="380" y="580">重み付きの合成（ensemble.apply_spec）</text>
+  <text class="c" x="380" y="602">勝率: 7 部品の logit に重みを掛けて足し、確率に戻す（重みは 0 以上・合計 1）</text>
+  <text class="c" x="380" y="622">2 着内・3 着内: 前進選択で選ばれた回数の割合を重みにした、確率の平均</text>
+  <text class="c m" x="380" y="642">そのあと、レース内で合計 1（勝率）・2（2 着内）・3（3 着内）にそろえる</text>
+  <!-- 出力 -->
+  <line class="ar" x1="380" y1="654" x2="380" y2="671"/><polygon class="ah" points="375,670 385,670 380,678"/>
+  <rect class="n" x="190" y="678" width="380" height="50" rx="10"/>
+  <text class="b c" x="380" y="700">p_win・p_top2・p_top3</text>
+  <text class="c m" x="380" y="719">当日の予測は predictions_v6/&lt;日&gt;/&lt;race_id&gt;.parquet</text>
+  <!-- 印 -->
+  <line class="ar" x1="380" y1="728" x2="380" y2="745"/><polygon class="ah" points="375,744 385,744 380,752"/>
+  <rect class="n" x="20" y="752" width="720" height="86" rx="10"/>
+  <text class="b c" x="380" y="774">印と推奨馬券（画面）</text>
+  <text class="c" x="380" y="796">印 ◎○▲★△: 確率と、単勝・複勝のオッズ（実オッズか §77 の想定オッズ）の期待値から付ける</text>
+  <text class="c m" x="380" y="818">assign_mece_marks。推奨馬券は既定の方策 target。未勝利・新馬のサンプル買い目は図 2</text>
+</svg>
+</div>
+<p class="cap">太い枠は本番の経路の中心（前段と合成）。部品の箱の「×3」は、勝ち・2 着内・3 着内を別々の二値の木で学ぶこと。重みは <code>final_v6e/bundle_v6_2025/bundle.json</code> の spec の値。</p>
+
+<h3 style="font-size:16px;margin:16px 0 4px">図 2. 試行中の影の候補 r04 と第 2 段（市場とのずれ）</h3>
+<div class="fig">
+<svg viewBox="0 0 760 500" role="img" aria-label="影の候補 r04 の特徴量から、第 1 段の 5 部品と、市場の logit を土台にした第 2 段の XGBoost 9 本へ分かれ、サンプル買い目へ">
+  <rect class="ns" x="20" y="10" width="440" height="74" rx="10"/>
+  <text class="b" x="36" y="34">候補 r04 の特徴量 X（1,193 列）</text>
+  <text x="36" y="56">履歴は 2016 年起点。同じ V3Serving で作る</text>
+  <text class="m" x="36" y="74">オッズ・人気は入れない（列名で検査）</text>
+  <rect class="n" x="480" y="10" width="260" height="74" rx="10"/>
+  <text class="b" x="496" y="34">T-60 の単勝オッズ</text>
+  <text x="496" y="56">q = 1/オッズ を合計 1 に</text>
+  <text class="m" x="496" y="74">発走 60 分前に取った値</text>
+  <line class="ar" x1="130" y1="84" x2="130" y2="103"/><polygon class="ah" points="125,102 135,102 130,110"/>
+  <line class="ar" x1="430" y1="84" x2="430" y2="103"/><polygon class="ah" points="425,102 435,102 430,110"/>
+  <line class="ar" x1="610" y1="84" x2="610" y2="103"/><polygon class="ah" points="605,102 615,102 610,110"/>
+  <text class="m" x="618" y="100">logit(q) を土台に</text>
+  <!-- 第 1 段 -->
+  <rect class="ns" x="20" y="110" width="360" height="176" rx="10"/>
+  <text class="b" x="36" y="132">第 1 段: 候補 r04（5 部品 × 3 seed）</text>
+  <text x="36" y="154">xgb_extras_ped</text><text x="250" y="154">勝 0.2774</text>
+  <text x="36" y="174">lgb_softmax</text><text x="250" y="174">勝 0.2125</text>
+  <text x="36" y="194">linear</text><text x="250" y="194">勝 0.2009</text>
+  <text x="36" y="214">mtl_nn_extras_ped</text><text x="250" y="214">勝 0.1486</text>
+  <text x="36" y="234">mtl_nn_s</text><text x="250" y="234">勝 0.1606</text>
+  <text class="m" x="36" y="256">2着: xgb 0.5・linear 0.25・mtl_nn_s 0.25</text>
+  <text class="m" x="36" y="274">3着: xgb 0.6・linear 0.2・mtl_nn_s 0.2</text>
+  <!-- 第 2 段 -->
+  <rect class="ns" x="400" y="110" width="340" height="176" rx="10"/>
+  <text class="b" x="416" y="132">第 2 段: XGBoost 9 本</text>
+  <text x="416" y="154">勝ち・2 着内・3 着内 × 3 seed</text>
+  <text x="416" y="174">base_margin（土台）= 市場の logit</text>
+  <text x="416" y="194">木は市場からのずれだけを学ぶ</text>
+  <text x="416" y="214">学習の土台に雑音（sd 0.54）</text>
+  <text x="416" y="234">1,193 列・2016〜2025 年で学習</text>
+  <text class="m" x="416" y="256">第 1 段の p は入力にしない</text>
+  <text class="m" x="416" y="274">2・3 着内の土台は q の Harville</text>
+  <line class="ar" x1="200" y1="286" x2="200" y2="303"/><polygon class="ah" points="195,302 205,302 200,310"/>
+  <line class="ar" x1="570" y1="286" x2="570" y2="303"/><polygon class="ah" points="565,302 575,302 570,310"/>
+  <rect class="n" x="20" y="310" width="360" height="56" rx="10"/>
+  <text class="b" x="36" y="333">p（画面の候補の欄・試行中）</text>
+  <text class="m" x="36" y="353">predictions_v6c。出すかは目印で決める</text>
+  <rect class="n" x="400" y="310" width="340" height="56" rx="10"/>
+  <text class="b" x="416" y="333">p_win・p_top2・p_top3</text>
+  <text x="416" y="353">r = log(p_win ÷ q)（市場とのずれ）</text>
+  <line class="ar" x1="570" y1="366" x2="570" y2="385"/><polygon class="ah" points="565,384 575,384 570,392"/>
+  <rect class="nm" x="20" y="392" width="720" height="96" rx="10"/>
+  <text class="b c" x="380" y="414">サンプル買い目（凍結の買い方 70ba29fa7b55・試行中）</text>
+  <text class="c" x="380" y="436">未勝利・新馬で、2 番人気以下・勝率 5% 以上の馬の r の最大が 0.4917 以上のレースだけ</text>
+  <text class="c" x="380" y="456">その馬の単勝を 100 円買う。ほかのレースは見送り（理由つき）</text>
+  <text class="c m" x="380" y="476">重賞・条件戦は今の target のまま。実オッズ由来の値は開発者の画面だけ</text>
+</svg>
+</div>
+<p class="cap">破線の箱は試行中（影のランナー <code>candidate_runner.py</code>）。第 2 段は第 1 段の後ろに積む作りではなく、同じ X を別に読む。2 つの束はどちらも名前が <code>bundle_v6_2025</code> なので、置き場で見分ける（本番は <code>final_v6e/</code>、候補は <code>cycles16_fix3/final/</code>。画面の版名は <code>bundle_v6_2025_r04</code>）。</p>
+
+<h2>3. 部品の表（本番 v6e）</h2>
+<div class="tbl"><table>
+<thead><tr><th>部品</th><th>学習器</th><th>目的</th><th>入力の列</th><th>推論の仕方</th></tr></thead>
+<tbody>
+<tr><td><code>lgb_extras_ped</code></td><td>LightGBM（葉 17・789 回）</td><td>二値 3 本（勝ち・2 着内・3 着内）</td><td>1,231 列＝共通 1,200＋追加 7＋血統 24</td><td>確率 → レース内で合計 1・2・3</td></tr>
+<tr><td><code>xgb_extras_ped</code></td><td>XGBoost（深さ 9・777 本）</td><td>二値 3 本</td><td>1,231 列（上と同じ）</td><td>同上</td></tr>
+<tr><td><code>lgb_extras</code></td><td>LightGBM（上と同じ設定）</td><td>二値 3 本</td><td>1,207 列（血統 24 を除く）</td><td>同上</td></tr>
+<tr><td><code>lgb_softmax</code></td><td>LightGBM</td><td>レース内の softmax（1 着だけ）</td><td>1,200 列（共通）</td><td>勝率から Harville（勝率から 2・3 着の確率を順に割り当てる式）。割り引きは γ 0.8・0.7</td></tr>
+<tr><td><code>linear</code></td><td>隠れ層なしの NN（14 周）</td><td>勝ちはレース内 softmax、2・3 着内は二値</td><td>1,200 列（共通）</td><td>勝ちは softmax、2・3 着内は sigmoid</td></tr>
+<tr><td><code>mtl_nn_extras_ped</code></td><td>NN（隠れ層 128・11 周）</td><td>上と同じ＋補助の目的 9 個（重み 0.5）</td><td>401 列（追加列は上位 100 に絞る）</td><td>同上</td></tr>
+<tr><td><code>mtl_nn_s</code></td><td>NN（128・64・14 周）</td><td>上と同じ</td><td>370 列（401 列から追加 7・血統 24 を除く）</td><td>同上</td></tr>
+</tbody></table></div>
+<ul class="sub">
+<li>どの部品も 5 seed で学び、seed ごとの確率をレース内でそろえてから平均する（<code>ensemble_bundle.py:84</code>）。</li>
+<li>共通 1,200 列には、上流の補助ヘッドの予測 <code>mtl_</code> 27 列と指数の履歴 <code>rb_</code> 16 列が入る。NN 2 本はこの 2 つを持たない。</li>
+<li>補助の目的 9 個は <code>t_pos_early</code>・<code>t_pos_late</code>・<code>t_l3f_dev</code>・<code>t_time_dev</code>・<code>t_rank_norm</code>・<code>ten_rel_actual</code>・<code>c1_rel_actual</code>・<code>r_pace_bal</code>・<code>r_rpci</code>。学習の時だけ使う。</li>
+</ul>
+
+<h3 style="font-size:16px;margin:16px 0 4px">合成の重み</h3>
+<div class="tbl"><table>
+<thead><tr><th>部品</th><th>勝率</th><th>2 着内</th><th>3 着内</th><th>候補 r04 の勝率</th></tr></thead>
+<tbody>
+<tr><td><code>lgb_extras_ped</code></td><td class="num">0.2422</td><td class="num">0</td><td class="num">0.125</td><td class="num">（部品なし）</td></tr>
+<tr><td><code>xgb_extras_ped</code></td><td class="num">0.0561</td><td class="num">0.2857</td><td class="num">0.375</td><td class="num">0.2774</td></tr>
+<tr><td><code>lgb_extras</code></td><td class="num">0.0488</td><td class="num">0.1429</td><td class="num">0</td><td class="num">（部品なし）</td></tr>
+<tr><td><code>lgb_softmax</code></td><td class="num">0.2301</td><td class="num">0.1429</td><td class="num">0.125</td><td class="num">0.2125</td></tr>
+<tr><td><code>linear</code></td><td class="num">0.2348</td><td class="num">0.1429</td><td class="num">0.125</td><td class="num">0.2009</td></tr>
+<tr><td><code>mtl_nn_extras_ped</code></td><td class="num">0.1121</td><td class="num">0.1429</td><td class="num">0.125</td><td class="num">0.1486</td></tr>
+<tr><td><code>mtl_nn_s</code></td><td class="num">0.0759</td><td class="num">0.1429</td><td class="num">0.125</td><td class="num">0.1606</td></tr>
+<tr><td>合わせ方</td><td>logit の重み付き和</td><td>前進選択</td><td>前進選択</td><td>logit の重み付き和</td></tr>
+</tbody></table></div>
+<ul class="sub">
+<li>前進選択（Caruana の方法）は、平均に足すと LogLoss が下がる部品を重複ありで選び、選んだ回数の割合を重みにする。2 着内は 7 回（xgb が 2 回）、3 着内は 8 回（xgb が 3 回）選んだ形。</li>
+<li>重みが 0 の所は、その目的では使わない部品（2 着内の <code>lgb_extras_ped</code>、3 着内の <code>lgb_extras</code>）。</li>
+<li>重みの出どころは <code>training_pipeline_v4/tp27_v6e/ens/v6.json</code>。束の値と一致する。同じ名前の <code>tp27_v6/ens/v6.json</code> は値が違い、本番の束とは合わない。</li>
+<li><code>fit_info.json</code> の <code>ens_source</code> は「tp27_v5 ens v6」と書かれている。これは読み先の変数 <code>f5.TP27_V5</code> を v6 の場所へ付け替えた名残で、実際に読んだのは上の v6e の場所（<code>fit_final_v6.py:36</code>・<code>:37</code>）。</li>
+</ul>
+
+<h2>4. 予測オッズ（§77）</h2>
+<div class="fig">
+<svg viewBox="0 0 760 360" role="img" aria-label="§77 の想定オッズ。v6e と同じ X から LightGBM 2 本、較正の直線、正規化を経て想定単勝と想定複勝へ">
+  <rect class="n" x="20" y="10" width="720" height="58" rx="10"/>
+  <text class="b c" x="380" y="34">v6e と同じ特徴量 X（V3Serving の features）から 1,119 列</text>
+  <text class="c m" x="380" y="54">オッズ・人気・市場の列は除く。2020〜2025 年で学習（283,660 行）。2026 年は使わない</text>
+  <line class="ar" x1="195" y1="68" x2="195" y2="85"/><polygon class="ah" points="190,84 200,84 195,92"/>
+  <line class="ar" x1="565" y1="68" x2="565" y2="85"/><polygon class="ah" points="560,84 570,84 565,92"/>
+  <rect class="nm" x="20" y="92" width="350" height="70" rx="10"/>
+  <text class="b" x="36" y="114">LightGBM 回帰 ①（木 1,626 本）</text>
+  <text x="36" y="134">目的 = log（市場の勝率のシェア）</text>
+  <text class="m" x="36" y="152">share_model.txt</text>
+  <rect class="nm" x="390" y="92" width="350" height="70" rx="10"/>
+  <text class="b" x="406" y="114">LightGBM 回帰 ②（木 1,650 本）</text>
+  <text x="406" y="134">目的 = log（複勝オッズの中央）</text>
+  <text class="m" x="406" y="152">place_model.txt</text>
+  <line class="ar" x1="195" y1="162" x2="195" y2="179"/><polygon class="ah" points="190,178 200,178 195,186"/>
+  <line class="ar" x1="565" y1="162" x2="565" y2="179"/><polygon class="ah" points="560,178 570,178 565,186"/>
+  <rect class="n" x="20" y="186" width="350" height="56" rx="10"/>
+  <text class="b" x="36" y="208">較正の直線</text>
+  <text x="36" y="228">0.0221 + 1.0149 × 出力</text>
+  <rect class="n" x="390" y="186" width="350" height="56" rx="10"/>
+  <text class="b" x="406" y="208">較正の直線</text>
+  <text x="406" y="228">−0.0033 + 1.0094 × 出力</text>
+  <line class="ar" x1="195" y1="242" x2="195" y2="259"/><polygon class="ah" points="190,258 200,258 195,266"/>
+  <line class="ar" x1="565" y1="242" x2="565" y2="259"/><polygon class="ah" points="560,258 570,258 565,266"/>
+  <rect class="n" x="20" y="266" width="350" height="80" rx="10"/>
+  <text class="b" x="36" y="288">レース内で正規化 → 想定単勝</text>
+  <text x="36" y="308">exp をとって合計 1 のシェアにする</text>
+  <text x="36" y="328">想定単勝 = 0.797 ÷ シェア（1.0 以上）</text>
+  <rect class="n" x="390" y="266" width="350" height="80" rx="10"/>
+  <text class="b" x="406" y="288">想定複勝</text>
+  <text x="406" y="308">中央 = exp（直線）（1.05 以上）</text>
+  <text x="406" y="328">下限・上限 = 中央 × (1 ∓ 0.2282)</text>
+</svg>
+</div>
+<ul class="sub">
+<li>X は本番 v6e と共有する。<code>odds_sec77_fit.py</code> は v6 の束の列と重なる列だけを使い、推論は同じ <code>features()</code> の戻り値を読む。そのため、v6e の X のずれは §77 にもそのまま入る（7 節）。</li>
+<li>較正の直線は、2022〜2025 年の OOF（学習に使わなかった行への予測）の生の出力を、市場の値に当てはめたもの。0.797 は単勝の払戻率。</li>
+<li>保存先は <code>data/local/modeling/odds_pred/serving/</code>。<code>KEIBA_ODDS_T6=1</code> でモデルが揃うときは、再学習の版（試行 6）で作る。本番でこれが有効かは未確認。</li>
+</ul>
+
+<h2>5. めぐの AI（v5bag、研究用）</h2>
+<div class="fig">
+<svg viewBox="0 0 760 290" role="img" aria-label="めぐの AI v5bag。除外の規則を当てた X から XGBoost 3 本を学び、勝率を単純平均する">
+  <rect class="ns" x="20" y="10" width="720" height="58" rx="10"/>
+  <text class="b c" x="380" y="34">cycles16_fix3/X_xgb.parquet の列から、除外の規則 v5 と市場の列を外す</text>
+  <text class="c m" x="380" y="54">外す列: tl_・wc_・rb_・comment_・mtl_・fr_class_level ほか（年で記録の取れ方が変わる列）</text>
+  <line class="ar" x1="130" y1="68" x2="130" y2="85"/><polygon class="ah" points="125,84 135,84 130,92"/>
+  <line class="ar" x1="380" y1="68" x2="380" y2="85"/><polygon class="ah" points="375,84 385,84 380,92"/>
+  <line class="ar" x1="630" y1="68" x2="630" y2="85"/><polygon class="ah" points="625,84 635,84 630,92"/>
+  <rect class="n" x="20" y="92" width="220" height="86" rx="10"/>
+  <text class="b" x="34" y="114">XGBoost ①</text><text x="34" y="134">深さ 8・列の抽出 0.3</text><text x="34" y="154">行の抽出 0.7・seed 1</text><text class="m" x="34" y="171">800 回</text>
+  <rect class="n" x="270" y="92" width="220" height="86" rx="10"/>
+  <text class="b" x="284" y="114">XGBoost ②</text><text x="284" y="134">深さ 6・列の抽出 0.5</text><text x="284" y="154">行の抽出 0.8・seed 2</text><text class="m" x="284" y="171">800 回</text>
+  <rect class="n" x="520" y="92" width="220" height="86" rx="10"/>
+  <text class="b" x="534" y="114">XGBoost ③</text><text x="534" y="134">深さ 10・列の抽出 0.2</text><text x="534" y="154">行の抽出 0.6・seed 3</text><text class="m" x="534" y="171">min_child_weight 300・800 回</text>
+  <line class="ar" x1="380" y1="178" x2="380" y2="195"/><polygon class="ah" points="375,194 385,194 380,202"/>
+  <rect class="nm" x="20" y="202" width="720" height="76" rx="10"/>
+  <text class="b c" x="380" y="224">単純平均 → pr_win（勝率だけ。3 着内は出さない）</text>
+  <text class="c" x="380" y="246">y 年は y−1 年までで学ぶ（年ごとに前へ進める。予測は 2017〜2024 年）</text>
+  <text class="c m" x="380" y="266">パラメータは固定（2022〜24 年を見て選び直さない）</text>
+</svg>
+</div>
+<div class="tbl"><table>
+<thead><tr><th>項目</th><th>本番 v6e</th><th>めぐの AI（v5bag）</th></tr></thead>
+<tbody>
+<tr><td>使う場所</td><td>本番の画面・集計・推奨</td><td>研究用（RC-6 の前向きの記録など）。本番の入口なし</td></tr>
+<tr><td>部品</td><td>7（LightGBM・XGBoost・NN）</td><td>3（XGBoost だけ。設定と seed を変える）</td></tr>
+<tr><td>合わせ方</td><td>学んだ重み（logit の重み付き和・前進選択）</td><td>単純平均</td></tr>
+<tr><td>出す確率</td><td>勝率・2 着内・3 着内</td><td>勝率だけ</td></tr>
+<tr><td>入力の列</td><td>1,231 列（調教・補助の予測・RB を含む）</td><td>1,083 列（同じ除外の規則の rich v5 の値。bag 単独の列の数は未確認）</td></tr>
+<tr><td>学び方</td><td>2020〜2025 年の全行で 1 回</td><td>年ごとに前へ進める（2016 年から）</td></tr>
+</tbody></table></div>
+
+<h2>6. 学習の流れ</h2>
+<div class="fig">
+<svg viewBox="0 0 760 350" role="img" aria-label="学習の年の図。各モデルがどの年で学び、どの年で重みを決め、どの年で評価したか">
+  <g>
+    <text class="yr" x="235" y="20">2016</text><text class="yr" x="285" y="20">2017</text><text class="yr" x="335" y="20">2018</text><text class="yr" x="385" y="20">2019</text>
+    <text class="yr" x="435" y="20">2020</text><text class="yr" x="485" y="20">2021</text><text class="yr" x="535" y="20">2022</text><text class="yr" x="585" y="20">2023</text>
+    <text class="yr" x="635" y="20">2024</text><text class="yr" x="685" y="20">2025</text><text class="yr" x="735" y="20">2026</text>
+    <line class="grid" x1="210" y1="28" x2="210" y2="340"/><line class="grid" x1="410" y1="28" x2="410" y2="340"/>
+    <line class="grid" x1="510" y1="28" x2="510" y2="340"/><line class="grid" x1="660" y1="28" x2="660" y2="340"/><line class="grid" x1="710" y1="28" x2="710" y2="340"/>
+  </g>
+  <text x="10" y="54">v6e 部品の OOF</text>
+  <rect class="tr" x="410" y="38" width="100" height="24" rx="4"/><text class="m" x="416" y="54">学習</text>
+  <rect class="va" x="510" y="38" width="150" height="24" rx="4"/><text class="m" x="516" y="54">検証 2022〜24</text>
+  <text x="10" y="92">合成の重み</text>
+  <rect class="we" x="510" y="76" width="150" height="24" rx="4"/><text class="m" x="516" y="92">OOF で決める・LOYO</text>
+  <text x="10" y="130">test 2025（1 回）</text>
+  <rect class="tr" x="410" y="114" width="250" height="24" rx="4"/><text class="m" x="416" y="130">bundle_v6_2024（2024-12-22 まで）</text>
+  <rect class="te" x="660" y="114" width="50" height="24" rx="4"/><text class="m" x="664" y="130">評価</text>
+  <text class="b" x="10" y="168">v6e 本番の束</text>
+  <rect class="tr" x="410" y="152" width="300" height="24" rx="4"/><text class="m" x="416" y="168">2020〜2025 の全行（283,714 行・5 seed）</text>
+  <rect class="se" x="710" y="152" width="45" height="24" rx="4"/><text class="m" x="713" y="168">推論</text>
+  <text x="10" y="206">前段 S3B</text>
+  <rect class="tr" x="410" y="190" width="300" height="24" rx="4"/><text class="m" x="416" y="206">学習の行は年ごとの OOF・推論用は全行</text>
+  <rect class="se" x="710" y="190" width="45" height="24" rx="4"/>
+  <text x="10" y="244">§77 想定オッズ</text>
+  <rect class="tr" x="410" y="228" width="300" height="24" rx="4"/><text class="m" x="416" y="244">2020〜2025（較正は 22〜25 の OOF）</text>
+  <rect class="se" x="710" y="228" width="45" height="24" rx="4"/>
+  <text x="10" y="282">候補 r04・第 2 段</text>
+  <rect class="tr" x="210" y="266" width="500" height="24" rx="4"/><text class="m" x="216" y="282">2016〜2025 の全行（477,671 行・3 seed）。重みは 22〜24 の OOF</text>
+  <rect class="se" x="710" y="266" width="45" height="24" rx="4"/>
+  <text x="10" y="320">めぐの AI v5bag</text>
+  <rect class="tr" x="210" y="304" width="50" height="24" rx="4"/>
+  <rect class="va" x="260" y="304" width="400" height="24" rx="4"/><text class="m" x="266" y="320">y 年は y−1 年までで学ぶ（予測 2017〜2024）</text>
+</svg>
+</div>
+<p class="legend muted"><span style="background:var(--c-train)"></span>学習<span style="background:var(--c-valid)"></span>検証・前へ進める予測<span style="background:var(--c-weight)"></span>重みを決める<span style="background:var(--c-test)"></span>1 回だけの評価<span style="background:var(--c-serve)"></span>推論だけ（学習に使わない）</p>
+<ul class="sub">
+<li>部品の OOF は、検証年 2022・2023・2024 の各年を、その年より前の行で学んで予測する（年ごとに前へ進める）。</li>
+<li>合成の重みは、この OOF 全部で 1 回当てはめる。LOYO（1 年を外して残りの年で重みを決め、外した年で測る）は良し悪しの測定に使う（<code>tp27_eval.py:529</code>）。</li>
+<li>test 2025 は、2024-12-22 より前で学んだ <code>bundle_v6_2024</code> で 1 回だけ測った。結果を見て選び直さない決まり（<code>TEST2025_EVALUATED.json</code>）。</li>
+<li>前段 S3B の学習の行は、年ごとに前へ進める OOF の値で入る。推論用の前段（<code>final_stage/v6_e_2025</code>）は 2020〜2025 年の全行（283,714 行）で学ぶ。</li>
+<li>2026 年はどのモデルも学習に使わない。</li>
+</ul>
+
+<h2>7. 学習と推論のずれの注意</h2>
+<p>学習の X と当日の推論の X が、同じ馬でも違う値になる列が見つかっている（<code>docs/operations/train_serve_skew_20261126.md</code>）。ずれた列は本番 v6e・§77・候補のどれにも入っている。</p>
+<div class="tbl"><table>
+<thead><tr><th>群</th><th>列</th><th>ずれの形</th><th>いまの扱い</th></tr></thead>
+<tbody>
+<tr><td>前日の馬場</td><td><code>fe_prev_day_going</code> ほか（枠×馬場・血統×馬場を合わせて 12 列）</td><td>推論の出馬表の馬場が空で、列が空か「重」扱い（推論で 72% 欠け）</td><td>結果表で埋める直しを 11/26 に本番の <code>.env</code> へ入れた。効くのは 11/28 の朝から</td></tr>
+<tr><td>追い切り</td><td><code>tl_w1_*</code>・<code>tl_w2_*</code>・<code>wc_*</code>（v6e では wc_ 37・tl_w 26 列）</td><td>走ったことのある馬は、推論の側がほぼ全部空（未勝利で 99〜100%）</td><td>未解決（D-1）。発走前は最終追い切りしか載らない見立て</td></tr>
+<tr><td>内回り・外回り</td><td><code>course_type</code>（全部品の入力）</td><td>学習の行だけ 3 割前後に値。推論は常に空</td><td>出どころを調べる段</td></tr>
+<tr><td>追い切りの評価</td><td><code>oikiri_eval</code> ほか 3 列</td><td>学習の側が新馬で 30% 欠け（逆向き）</td><td>調べる段</td></tr>
+<tr><td>障害のレース</td><td><code>f1_sw</code>・<code>f1_sim_res</code></td><td>推論で 100% 空</td><td>原因は未確認</td></tr>
+<tr><td>作りの違い（候補）</td><td>pxe・pxc・sr・fm・z・f5・mtl_ の 126〜131 列</td><td>学習は OOF・時点の作り、推論は全データで作る</td><td>mean|Δlog p| 0.10。68 R のうち 11 R で買う・見送るが入れ替わった</td></tr>
+</tbody></table></div>
+<p class="sub">めぐの AI（v5bag）は研究の表から作り、推論の経路（<code>serving_v4</code>）を通らない。そのため上の直しの影響を受けない。</p>
+
+<h2>8. 出典</h2>
+<details open><summary>コード（path:line）</summary>
+<ul class="sub">
+<li>7 部品の一覧と入力の与え方: <code>src/scripts/data/fit_final_v4.py:39</code>（MEMBERS）・<code>:58</code>（build_matrices）・<code>:68</code>（NN の上位 100 列）</li>
+<li>v6 の最終学習: <code>src/scripts/data/fit_final_v6.py:36</code>・<code>:37</code>（重みの読み先）・<code>:109</code>（重みの読み込み）・<code>:122</code>（束の組み立て）・<code>:125</code>（学習）</li>
+<li>部品の推論と合成: <code>src/pipeline/models/ensemble_bundle.py:84</code>（predict_member）・<code>:95</code>（Harville）・<code>:118</code>（predict）・<code>:125</code>（合成と正規化）</li>
+<li>合成の方法: <code>src/pipeline/models/ensemble.py:34</code>（logit の重み）・<code>:47</code>（前進選択）・<code>:98</code>（LOYO）・<code>:110</code>（apply_spec）</li>
+<li>目的ごとの合成の方法の選び: <code>src/scripts/data/tp27_eval.py:529</code></li>
+<li>学習器の作り: <code>src/pipeline/models/zoo.py:21</code>（harville_topk）・<code>:310</code>（fit_predict）・<code>:357</code>（linear は隠れ層なし）</li>
+<li>部品の名前: <code>src/scripts/data/model_cycles.py:37</code>（V6E_MEMBERS）・<code>src/scripts/data/model_cycles_final.py:27</code>（候補の 5 部品）</li>
+<li>本番の束と前段の置き場: <code>src/pipeline/inference/v3_serving.py:80</code>（v6_paths）・<code>:82</code>・<code>:83</code>、<code>config/gcp_job_map.json:283</code></li>
+<li>前段 S3B: <code>src/pipeline/features/serving_stage_rel.py:66</code>（目的）・<code>:71</code>（StageModels）・<code>:110</code>（predict）、<code>src/scripts/data/fit_final_stage_v6.py:49</code>、<code>src/scripts/data/v6_stage.py:79</code>・<code>:84</code>（変種 e）</li>
+<li>第 2 段: <code>src/pipeline/inference/stage2_market.py:1</code>・<code>:68</code>（Stage2Model）・<code>:110</code>（predict_race）・<code>:136</code>（base_margin）、<code>src/scripts/data/model_cycles_market.py:187</code>（fit_pred）・<code>:227</code>（土台の雑音）、<code>src/pipeline/inference/candidate_runner.py:407</code>、<code>config/candidate_runtime.json:36</code></li>
+<li>サンプル買い目: <code>src/pipeline/inference/stage2_bets.py:1</code>、画面への出し方 <code>src/api/stage2_live.py:1</code></li>
+<li>印: <code>src/api/local_predictions.py:114</code>（score_entries）・<code>:153</code>（assign_mece_marks）</li>
+<li>§77: <code>src/pipeline/inference/odds_sec77.py:73</code>（predict_frame）・<code>:96</code>・<code>:100</code>、<code>src/scripts/data/odds_sec77_fit.py:71</code>（2020〜2025）・<code>:78</code>（LightGBM）・<code>:87</code>（較正の直線）</li>
+<li>めぐの AI: <code>src/research/megu_cycles/mc_data.py:157</code>（XGB_PARAMS）・<code>:159</code>（800 回）・<code>:291</code>（BAG_SETS）・<code>:295</code>（cmd_build_bag）・<code>:311</code>（前へ進める）・<code>:314</code>（平均）</li>
+</ul>
+</details>
+<details><summary>設定ファイル（手元。git 管理外）</summary>
+<ul class="sub">
+<li>本番の束: <code>data/local/modeling/training_pipeline/final_v6e/bundle_v6_2025/bundle.json</code>・<code>fit_info.json</code>（7 部品・1,231 列・5 seed・283,714 行）</li>
+<li>重み: <code>data/local/modeling/training_pipeline_v4/tp27_v6e/ens/v6.json</code></li>
+<li>前段 S3B: <code>data/local/modeling/training_pipeline/final_stage/v6_e_2025/stage_meta.json</code>（275 列・283,714 行）</li>
+<li>候補 r04: <code>retrain_out/cycles16_fix3/final/bundle_v6_2025/bundle.json</code>・<code>fit_info.json</code>（5 部品・1,193 列・3 seed・477,671 行）</li>
+<li>第 2 段: <code>retrain_out/cycles16_fix3/market/full/noise_fit2025/meta.json</code>（offset raw・雑音 0.54・3 seed・1,193 列）</li>
+<li>§77: <code>data/local/modeling/odds_pred/serving/meta.json</code>（1,119 列・較正の直線・払戻率 0.797・幅 0.2282）</li>
+<li>めぐの AI: <code>megu_cycles_out/build_rich.json</code>（1,083 列。rich v5 の値）</li>
+</ul>
+</details>
+
+</main></body></html>
