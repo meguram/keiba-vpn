@@ -1,10 +1,36 @@
 {
- "note": "穴馬 AI（担当 longshot-ai、2026-11-27）。着順を開く前に固定する。変えるときは新しい版にして試した数に入れる。計画は docs/operations/longshot_ai/plan.md",
- "version": "la-1",
- "years": {"dev_first": 2016, "dev_last": 2024, "pred_years": [2018, 2024], "select": [2019, 2021], "confirm_once": [2022, 2024]},
- "population": {"odds_threshold": 10.0, "train_main": "odds_final", "train_alt": "odds_pre0", "eval_main": "odds_pre0..4（5 通りの平均）", "eval_sub": "odds_final"},
- "labels": {"source": "/home/jovyan/work/model_relabel_out/labels_convert_A.parquet", "source_sha256": "d6cf83c12677ea84a4702925b2f3e5374ea2ecab3f5cb1011f144e35827660d0",
-            "spec_commit": "origin/model-relabel 29741349（config/model_relabel/spec.json mr-3）", "train": "y_p1", "truth": "y3"},
+ "note": "穴馬 AI（担当 longshot-ai、2026-11-27）。着順を開く前に固定する。変えるときは新しい版にして試した数に入れる。計画は docs/operations/longshot_ai/plan.md。la-2 は会議の決定（docs/operations/roi_plus_council/decisions.md の「longshot-ai の la-2」、11/27・着順を開く前）",
+ "version": "la-2",
+ "years": {
+  "dev_first": 2016,
+  "dev_last": 2024,
+  "pred_years": [
+   2018,
+   2024
+  ],
+  "select": [
+   2019,
+   2021
+  ],
+  "confirm_once": [
+   2022,
+   2024
+  ]
+ },
+ "population": {
+  "odds_threshold": 10.0,
+  "train_main": "odds_final",
+  "train_alt": "odds_pre0",
+  "eval_main": "odds_pre0..4（5 通りの平均）",
+  "eval_sub": "odds_final"
+ },
+ "labels": {
+  "source": "/home/jovyan/work/model_relabel_out/labels_convert_A.parquet",
+  "source_sha256": "d6cf83c12677ea84a4702925b2f3e5374ea2ecab3f5cb1011f144e35827660d0",
+  "spec_commit": "origin/model-relabel 29741349（config/model_relabel/spec.json mr-3）",
+  "train": "y_p1",
+  "truth": "y3"
+ },
  "arms": {
   "L1_MF_xgb": "主。母集団 10 倍以上（確定）・y_p1・市場と独立の列・XGBoost（megu_cycles の BAG_SETS × XGB_PARAMS × 800 本）・offset なし",
   "L0_MF_xgb": "対照。ラベル y3",
@@ -16,13 +42,110 @@
   "L1T_MF_xgb": "副。母集団を T-60 の再現（odds_pre0）で 10 倍以上として学ぶ"
  },
  "n_trials": 8,
- "send_to_confirm": "L1_MF_xgb だけ。他を送るなら Bonferroni（8 本、95% → 99.4%）",
  "calibration": "Platt（logit の 1 次）。年 t は t−1 年の前向きの予測で当てる",
- "primary_metric": "評価の母集団（T-60 の再現 10 倍以上）の中の予測 1 位（★ の候補）の本物の 3 着内率",
- "judge": "2019〜21 で、L1_MF_xgb の候補の 3 着内率 − めぐ AI（v5bag pr_top3）の候補の 3 着内率の 95% 区間（開催日 × 場で束ねたブートストラップ 2,000 回）の下端が 0 より上、かつ 3 年のうち 2 年以上で正",
- "baselines": ["無作為（母集団の平均）", "市場（母集団の中で T-60 の再現のオッズが最も低い馬）", "めぐ AI（v5bag の pr_top3 の 1 位）"],
- "secondary": ["本物の 3 着内の対数損失・AUC（全体・レース内）・較正（十分位・ECE）・上位 10% の 3 着内率", "MF − M", "Benter の 2 段（t−1 年で当てる）", "正の対照（合成の列）"],
- "roi": "記述だけ。単勝・複勝・★ を軸の片方にした馬連・ワイド（相手はめぐ AI の上位 1〜3）。買い方にしない",
+ "primary_metric": "★ の本物の 3 着内率（y3）",
+ "judge": {
+  "select_2019_2021": [
+   "(i) ★ − C0 の差の 95% 下端 > 0",
+   "(ii) ★ − 市場の差の 95% 下端 > 0",
+   "(iii) ★ の A/E（Σ y3 ÷ Σ 較正した市場 q3。T-60 の再現の Harville q3 を前の試みの式で t−1 年までで較正）の 95% 下端 > 1.00、かつ ★ の A/E ≥ C0 の 1 位の A/E（点）",
+   "(iv) v6 の列で ★ − C0 の点の値 > 0"
+  ],
+  "confirm_2022_2024_once": [
+   "★ − C0 の片側 95% 下端 > 0",
+   "★ − 市場の両側 95% 下端 > 0",
+   "★ の A/E の 95% 下端 > 1.00",
+   "v6 で同じ向き",
+   "mechanism の予測 1 の向きが合う"
+  ],
+  "years_2_of_3": "記述だけ",
+  "bootstrap": "開催日 × 場で束ねた対のブートストラップ 2,000 回、seed 20261127",
+  "claim_if_pass": "★ の候補として採る、まで。回収率と 100% 超は言わない。A/E ≈ 1.28〜1.29 の線は rules-council に渡す"
+ },
+ "secondary": [
+  "本物の 3 着内の対数損失・AUC（全体・レース内）・較正（十分位・ECE）・上位 10% の 3 着内率",
+  "MF − M",
+  "Benter の 2 段（t−1 年で当てる）",
+  "正の対照（合成の列）"
+ ],
+ "roi": "記述だけ。単勝・複勝・★ を軸の片方にした馬連・ワイド（相手は pair_describe のとおり 1 頭に固定）。買い方にしない",
  "bootstrap_seed": 20261127,
- "market_free_columns": "docs/operations/longshot_ai/market_free_columns.md（market と suspect を外す）"
+ "main_arm": "L1_MF_xgb（確かめに送るのはこれだけ。2019〜21 で落ちたら閉じる。他の 7 本は記述）",
+ "controls": {
+  "C0": "全馬・y3・同じ MF 列・同じ BAG_SETS × XGB_PARAMS × 800 本・年 t は t より前で学ぶ（主の比べ先）",
+  "market": "評価の母集団の中で T-60 の再現のオッズが最も低い馬",
+  "describe_only": [
+   "単体の rich v5 の pr_top3 の 1 位",
+   "v5bag の pr_win の 1 位",
+   "本番の ★ は較正後の期待値（市場のオッズを使う。src/utils/race_probabilities.py:445,488）で過去の行に再現できないため、v5bag の pr_win の 1 位で代える",
+   "確定の複勝オッズの 1 位（判定に使わない）"
+  ],
+  "v6_leak_check": "v6 の列（RICH_VERSIONS['v6'] − 追い切り評価の 3 列）で L1_MF と C0 を学び直す"
+ },
+ "features": {
+  "MF": "v5 の 1,083 列 − oikiri_eval・oikiri_eval_rank・oikiri_eval_gap（1,080 列）",
+  "M": "v5 のまま",
+  "doc": "docs/operations/longshot_ai/market_free_columns.md",
+  "doc_sha256_16": "418d0053e9873cfb",
+  "audit_csv_sha256_16": "86c507b1bc0d2051"
+ },
+ "mechanism": {
+  "doc": "docs/operations/longshot_ai/mechanism.md",
+  "sha256_16": "21b6fda345c47d16",
+  "pred1_in_judge": "★ の A/E は 15〜50 倍の帯で 10〜15 倍の帯より高い"
+ },
+ "five_draws": "再現ごとに母集団と ★ を選んで物差しを出し、5 通りの平均。ブートストラップの束は 5 通り・全腕で共通",
+ "skip": "主では見送りなし。母集団 0 頭のレースは除いて数を記録。新馬・障害・7 頭以下は層の記述",
+ "power_gate": "★ と C0 の 1 位の一致率を着順なしで数え、真の差 +1.0pt での (i) の検出力を模擬 1,000 回（真の確率は較正した市場 q3、★ の側だけ上乗せ）。0.5 未満なら 2019〜21 を開けずに閉じる。式は開ける前に commit",
+ "positive_control": "★ の 3 着内率を +1.5pt 上げる大きさの合成の列を決める段で 200 回植える。(i) で拾えた割合 < 0.7 なら不合格は「判定できない」",
+ "looks": {
+  "longshot_ai_2019_2021": 0,
+  "longshot_ai_2022_2024": "0 / 1（本会議の 3 回の枠とは別。汚れの無い読みとは書かない）",
+  "2025_2026": "使わない"
+ },
+ "pair_describe": {
+  "partner": "めぐ（v5bag pr_win）の上位 1 頭に固定。★ と同じ馬なら 2 位",
+  "bets": [
+   "馬連",
+   "ワイド"
+  ],
+  "refund": "特払い・取消は払戻の表のまま（返還は 1.0 倍として数える）",
+  "baselines": [
+   "無作為の母集団の馬",
+   "市場の最低オッズ",
+   "C0 の 1 位"
+  ],
+  "stats": [
+   "束ねた区間",
+   "上位 5 件を除いた値",
+   "帰無（母集団の中で ★ を無作為に替えて 1,000 回）"
+  ],
+  "use": "記述だけ。買い方にしない"
+ },
+ "forward_stop": "config/longshot_ai/forward_stop.json（型だけ。線の値は 2019〜21 の select の後に入れる）",
+ "output": {
+  "path": "/home/jovyan/work/longshot_ai_out/star_candidates.parquet",
+  "cols": [
+   "race_id",
+   "date",
+   "horse_id",
+   "horse_number",
+   "train_last_year",
+   "arm",
+   "model_sha",
+   "label_sha",
+   "p_top3_cal",
+   "p_win_cal",
+   "p_top2_cal",
+   "odds_pre0..4",
+   "odds_final",
+   "pop_n_pre0..4",
+   "star_pre0..4",
+   "overlap_megu_top1_3"
+  ],
+  "rows": "2018〜2021 だけ。2022〜24 は確かめの 1 回の後",
+  "note": "★ の p は本会議の 30% の着順でも学んだもの。確かめは前向きの記録だけ"
+ },
+ "use": "開催の後の再生での前向きの記録だけ（本番の経路は v5 の列を 136 / 1,083 列しか作れない）",
+ "label_threshold_origin": "1 馬身は 11/27 のユーザーの指定（model-relabel の mr-3、評価の数を見る前）。割合の表は見たが、モデルの成績は見ていない"
 }

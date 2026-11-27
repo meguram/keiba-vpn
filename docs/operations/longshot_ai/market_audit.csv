@@ -1,0 +1,1084 @@
+column,family,verdict,source_path_line,reason
+surface,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+direction,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+grade,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+race_class,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+weather,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+track_condition,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+venue_code,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+weight_rule,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+course_type,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+sex,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+track_bias_cond_bucket,track_bias_/sire_/dam_sire_ (馬場傾向),clean,"src/pipeline/features/track_bias_pedigree.py:245,408,453-504; src/pipeline/features/serving_layer_a.py:140-180",勝ち馬の上がり 3F（当日前・前日）と父/母父の面別勝率。確定オッズの S−E を使う別の track bias とは別物
+track_bias_dist_band,track_bias_/sire_/dam_sire_ (馬場傾向),clean,"src/pipeline/features/track_bias_pedigree.py:245,408,453-504; src/pipeline/features/serving_layer_a.py:140-180",勝ち馬の上がり 3F（当日前・前日）と父/母父の面別勝率。確定オッズの S−E を使う別の track bias とは別物
+distance,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+field_size,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+round,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+horse_number,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+bracket_number,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+weight,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+weight_change,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+age,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+start_hour,条件・基本列 (layer_a),clean,src/pipeline/models/layer_a_dataset.py:132-137,出馬表の固定情報。当日 odds/popularity は drop_mkt で落としている
+jockey_prior_races,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+jockey_prior_wins,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+jockey_prior_top3,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+jockey_prior_win_rate,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+jockey_prior_top3_rate,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+trainer_prior_races,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+trainer_prior_wins,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+trainer_prior_top3,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+trainer_prior_win_rate,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+trainer_prior_top3_rate,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+horse_prior_races,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+horse_prior_wins,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+horse_prior_top3,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+horse_prior_win_rate,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+horse_prior_top3_rate,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+horse_prior_avg_finish,jockey_/trainer_/horse_prior_ (通算成績),clean,"src/pipeline/features/historical_entity_stats.py:54-87(学習側); src/pipeline/features/serving_layer_a.py:100-129(推論側); src/pipeline/models/layer_a_dataset.py:132,177",finish_position だけの as-of 件数・勝率・複勝率・平均着順。人気の重み付けなし
+track_bias_winner_3f_same_day_prior,track_bias_/sire_/dam_sire_ (馬場傾向),clean,"src/pipeline/features/track_bias_pedigree.py:245,408,453-504; src/pipeline/features/serving_layer_a.py:140-180",勝ち馬の上がり 3F（当日前・前日）と父/母父の面別勝率。確定オッズの S−E を使う別の track bias とは別物
+track_bias_winner_3f_prev_day,track_bias_/sire_/dam_sire_ (馬場傾向),clean,"src/pipeline/features/track_bias_pedigree.py:245,408,453-504; src/pipeline/features/serving_layer_a.py:140-180",勝ち馬の上がり 3F（当日前・前日）と父/母父の面別勝率。確定オッズの S−E を使う別の track bias とは別物
+track_bias_winner_3f_diff,track_bias_/sire_/dam_sire_ (馬場傾向),clean,"src/pipeline/features/track_bias_pedigree.py:245,408,453-504; src/pipeline/features/serving_layer_a.py:140-180",勝ち馬の上がり 3F（当日前・前日）と父/母父の面別勝率。確定オッズの S−E を使う別の track bias とは別物
+track_bias_winner_3f_weighted,track_bias_/sire_/dam_sire_ (馬場傾向),clean,"src/pipeline/features/track_bias_pedigree.py:245,408,453-504; src/pipeline/features/serving_layer_a.py:140-180",勝ち馬の上がり 3F（当日前・前日）と父/母父の面別勝率。確定オッズの S−E を使う別の track bias とは別物
+sire_prior_win_rate_surface,track_bias_/sire_/dam_sire_ (馬場傾向),clean,"src/pipeline/features/track_bias_pedigree.py:245,408,453-504; src/pipeline/features/serving_layer_a.py:140-180",勝ち馬の上がり 3F（当日前・前日）と父/母父の面別勝率。確定オッズの S−E を使う別の track bias とは別物
+dam_sire_prior_win_rate_surface,track_bias_/sire_/dam_sire_ (馬場傾向),clean,"src/pipeline/features/track_bias_pedigree.py:245,408,453-504; src/pipeline/features/serving_layer_a.py:140-180",勝ち馬の上がり 3F（当日前・前日）と父/母父の面別勝率。確定オッズの S−E を使う別の track bias とは別物
+sire_x_track_bias_diff,track_bias_/sire_/dam_sire_ (馬場傾向),clean,"src/pipeline/features/track_bias_pedigree.py:245,408,453-504; src/pipeline/features/serving_layer_a.py:140-180",勝ち馬の上がり 3F（当日前・前日）と父/母父の面別勝率。確定オッズの S−E を使う別の track bias とは別物
+dam_sire_x_track_bias_diff,track_bias_/sire_/dam_sire_ (馬場傾向),clean,"src/pipeline/features/track_bias_pedigree.py:245,408,453-504; src/pipeline/features/serving_layer_a.py:140-180",勝ち馬の上がり 3F（当日前・前日）と父/母父の面別勝率。確定オッズの S−E を使う別の track bias とは別物
+sire_x_track_bias_weighted,track_bias_/sire_/dam_sire_ (馬場傾向),clean,"src/pipeline/features/track_bias_pedigree.py:245,408,453-504; src/pipeline/features/serving_layer_a.py:140-180",勝ち馬の上がり 3F（当日前・前日）と父/母父の面別勝率。確定オッズの S−E を使う別の track bias とは別物
+dam_sire_x_track_bias_weighted,track_bias_/sire_/dam_sire_ (馬場傾向),clean,"src/pipeline/features/track_bias_pedigree.py:245,408,453-504; src/pipeline/features/serving_layer_a.py:140-180",勝ち馬の上がり 3F（当日前・前日）と父/母父の面別勝率。確定オッズの S−E を使う別の track bias とは別物
+a_l3fz_ewm2,a_ (上がり・脚質),clean,"src/pipeline/features/horse_history/profile.py:21-46,98-110; src/pipeline/features/horse_history/common.py:22",上がり 3F の z・順位・通過順。市場なし
+a_l3fz_ewm6,a_ (上がり・脚質),clean,"src/pipeline/features/horse_history/profile.py:21-46,98-110; src/pipeline/features/horse_history/common.py:22",上がり 3F の z・順位・通過順。市場なし
+a_l3fz_best,a_ (上がり・脚質),clean,"src/pipeline/features/horse_history/profile.py:21-46,98-110; src/pipeline/features/horse_history/common.py:22",上がり 3F の z・順位・通過順。市場なし
+a_l3fz_med5,a_ (上がり・脚質),clean,"src/pipeline/features/horse_history/profile.py:21-46,98-110; src/pipeline/features/horse_history/common.py:22",上がり 3F の z・順位・通過順。市場なし
+a_l3fz_std5,a_ (上がり・脚質),clean,"src/pipeline/features/horse_history/profile.py:21-46,98-110; src/pipeline/features/horse_history/common.py:22",上がり 3F の z・順位・通過順。市場なし
+a_gap_ewm2,a_ (上がり・脚質),clean,"src/pipeline/features/horse_history/profile.py:21-46,98-110; src/pipeline/features/horse_history/common.py:22",上がり 3F の z・順位・通過順。市場なし
+a_rk_ewm2,a_ (上がり・脚質),clean,"src/pipeline/features/horse_history/profile.py:21-46,98-110; src/pipeline/features/horse_history/common.py:22",上がり 3F の z・順位・通過順。市場なし
+a_top3_freq,a_ (上がり・脚質),clean,"src/pipeline/features/horse_history/profile.py:21-46,98-110; src/pipeline/features/horse_history/common.py:22",上がり 3F の z・順位・通過順。市場なし
+a_l3fz_back,a_ (上がり・脚質),clean,"src/pipeline/features/horse_history/profile.py:21-46,98-110; src/pipeline/features/horse_history/common.py:22",上がり 3F の z・順位・通過順。市場なし
+a_l3fz_front,a_ (上がり・脚質),clean,"src/pipeline/features/horse_history/profile.py:21-46,98-110; src/pipeline/features/horse_history/common.py:22",上がり 3F の z・順位・通過順。市場なし
+a_style,a_ (上がり・脚質),clean,"src/pipeline/features/horse_history/profile.py:21-46,98-110; src/pipeline/features/horse_history/common.py:22",上がり 3F の z・順位・通過順。市場なし
+a_style_late,a_ (上がり・脚質),clean,"src/pipeline/features/horse_history/profile.py:21-46,98-110; src/pipeline/features/horse_history/common.py:22",上がり 3F の z・順位・通過順。市場なし
+a_trend,a_ (上がり・脚質),clean,"src/pipeline/features/horse_history/profile.py:21-46,98-110; src/pipeline/features/horse_history/common.py:22",上がり 3F の z・順位・通過順。市場なし
+a_style_move,a_ (上がり・脚質),clean,"src/pipeline/features/horse_history/profile.py:21-46,98-110; src/pipeline/features/horse_history/common.py:22",上がり 3F の z・順位・通過順。市場なし
+b_aff_all,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_n_sd,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_aff_sd,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_n_venue,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_aff_venue,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_n_going,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_aff_going,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_n_dir,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_aff_dir,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_n_course,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_aff_course,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_n_class,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_aff_class,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_dist_pred,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_dist_se,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_dist_slope,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+b_dist_gap,b_ (条件適性),clean,"src/pipeline/features/horse_history/profile.py:135-150; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差 res の条件別の縮約平均・距離回帰
+c_res_ewm2,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_res_ewm6,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_res_med5,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_res_max5,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_res_min5,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_fs_ewm2,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_fstop3_ewm2,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_standing_ewm2,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_rq_ewm2,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_cls_ewm2,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_cls_prev,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_res_prev1,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_res_trim5,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_opp_step,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_cls_step,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_fs_step,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+c_last_dev,c_ (Elo 残差・クラス),clean,"src/pipeline/features/horse_history/profile.py:79-135; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",c_res_* の res は Elo の S−E（着順スコア − Elo の期待スコア）。市場の見込みではない
+d_rest,d_ (間隔・体重・前走),clean,src/pipeline/features/horse_history/profile.py:79-100; src/pipeline/features/horse_history/common.py:22,日数・体重・前走着順
+d_rest2,d_ (間隔・体重・前走),clean,src/pipeline/features/horse_history/profile.py:79-100; src/pipeline/features/horse_history/common.py:22,日数・体重・前走着順
+d_nprior,d_ (間隔・体重・前走),clean,src/pipeline/features/horse_history/profile.py:79-100; src/pipeline/features/horse_history/common.py:22,日数・体重・前走着順
+d_career_days,d_ (間隔・体重・前走),clean,src/pipeline/features/horse_history/profile.py:79-100; src/pipeline/features/horse_history/common.py:22,日数・体重・前走着順
+d_wt_dev,d_ (間隔・体重・前走),clean,src/pipeline/features/horse_history/profile.py:79-100; src/pipeline/features/horse_history/common.py:22,日数・体重・前走着順
+d_wt_chg_last,d_ (間隔・体重・前走),clean,src/pipeline/features/horse_history/profile.py:79-100; src/pipeline/features/horse_history/common.py:22,日数・体重・前走着順
+d_wt_chg_now,d_ (間隔・体重・前走),clean,src/pipeline/features/horse_history/profile.py:79-100; src/pipeline/features/horse_history/common.py:22,日数・体重・前走着順
+d_prev_fin,d_ (間隔・体重・前走),clean,src/pipeline/features/horse_history/profile.py:79-100; src/pipeline/features/horse_history/common.py:22,日数・体重・前走着順
+d_prev_field,d_ (間隔・体重・前走),clean,src/pipeline/features/horse_history/profile.py:79-100; src/pipeline/features/horse_history/common.py:22,日数・体重・前走着順
+d_prev_fin_pct,d_ (間隔・体重・前走),clean,src/pipeline/features/horse_history/profile.py:79-100; src/pipeline/features/horse_history/common.py:22,日数・体重・前走着順
+e_n_l3f,e_ (ばらつき),clean,"src/pipeline/features/horse_history/profile.py:115; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差の標準偏差・上がりの件数
+e_res_std5,e_ (ばらつき),clean,"src/pipeline/features/horse_history/profile.py:115; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差の標準偏差・上がりの件数
+e_res_std_all,e_ (ばらつき),clean,"src/pipeline/features/horse_history/profile.py:115; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差の標準偏差・上がりの件数
+f1_sim_res,f1_ (類似条件の残差),clean,"src/pipeline/features/horse_history/match.py:125; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差の類似度重み付き平均
+f1_sw,f1_ (類似条件の残差),clean,"src/pipeline/features/horse_history/match.py:125; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差の類似度重み付き平均
+f1_neff,f1_ (類似条件の残差),clean,"src/pipeline/features/horse_history/match.py:125; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差の類似度重み付き平均
+f1_sim_z,f1_ (類似条件の残差),clean,"src/pipeline/features/horse_history/match.py:125; src/pipeline/features/horse_history/common.py:22(RUN_COLS に odds 無し); src/pipeline/features/horse_history/elo.py:16-17,46(res=S-E は Elo の見込み)",Elo 残差の類似度重み付き平均
+f2_nknown,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_nfront,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_nfront40,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_early_rank,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_pressure,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_bin,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_n_reg0,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_a_reg0,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_n_reg1,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_a_reg1,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_n_reg2,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_a_reg2,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_pace_match,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_pace_adv,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_p_fast,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_style_x_press,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f2_lone_front,f2_ (展開・ペース),clean,src/pipeline/features/horse_history/match.py:26-73; src/pipeline/features/horse_history/common.py:22,通過順・ペースからの展開の指標
+f3_r,f3_ (Elo レーティング),clean,src/pipeline/features/horse_history/match.py:11-20; src/pipeline/features/horse_history/elo.py:12-26,f3_E は Elo の期待スコア（オッズでない）。f3_r は Elo レーティング
+f3_E,f3_ (Elo レーティング),clean,src/pipeline/features/horse_history/match.py:11-20; src/pipeline/features/horse_history/elo.py:12-26,f3_E は Elo の期待スコア（オッズでない）。f3_r は Elo レーティング
+f3_fs_mean,f3_ (Elo レーティング),clean,src/pipeline/features/horse_history/match.py:11-20; src/pipeline/features/horse_history/elo.py:12-26,f3_E は Elo の期待スコア（オッズでない）。f3_r は Elo レーティング
+f3_fs_top3,f3_ (Elo レーティング),clean,src/pipeline/features/horse_history/match.py:11-20; src/pipeline/features/horse_history/elo.py:12-26,f3_E は Elo の期待スコア（オッズでない）。f3_r は Elo レーティング
+f3_fs_std,f3_ (Elo レーティング),clean,src/pipeline/features/horse_history/match.py:11-20; src/pipeline/features/horse_history/elo.py:12-26,f3_E は Elo の期待スコア（オッズでない）。f3_r は Elo レーティング
+f3_r_gap,f3_ (Elo レーティング),clean,src/pipeline/features/horse_history/match.py:11-20; src/pipeline/features/horse_history/elo.py:12-26,f3_E は Elo の期待スコア（オッズでない）。f3_r は Elo レーティング
+f3_r_gap_top3,f3_ (Elo レーティング),clean,src/pipeline/features/horse_history/match.py:11-20; src/pipeline/features/horse_history/elo.py:12-26,f3_E は Elo の期待スコア（オッズでない）。f3_r は Elo レーティング
+f3_r_rank,f3_ (Elo レーティング),clean,src/pipeline/features/horse_history/match.py:11-20; src/pipeline/features/horse_history/elo.py:12-26,f3_E は Elo の期待スコア（オッズでない）。f3_r は Elo レーティング
+f3_n_pre,f3_ (Elo レーティング),clean,src/pipeline/features/horse_history/match.py:11-20; src/pipeline/features/horse_history/elo.py:12-26,f3_E は Elo の期待スコア（オッズでない）。f3_r は Elo レーティング
+f3_r_eff,f3_ (Elo レーティング),clean,src/pipeline/features/horse_history/match.py:11-20; src/pipeline/features/horse_history/elo.py:12-26,f3_E は Elo の期待スコア（オッズでない）。f3_r は Elo レーティング
+f5_cl,f5_ (クラス適性),clean,src/pipeline/features/horse_history/match.py:150-164; src/pipeline/features/horse_history/common.py:22,f5_cl はクラスタ番号、f5_aff・f5_win は Elo 残差 res と勝ちの as-of 累計
+f5_aff,f5_ (クラス適性),clean,src/pipeline/features/horse_history/match.py:150-164; src/pipeline/features/horse_history/common.py:22,f5_cl はクラスタ番号、f5_aff・f5_win は Elo 残差 res と勝ちの as-of 累計
+f5_win,f5_ (クラス適性),clean,src/pipeline/features/horse_history/match.py:150-164; src/pipeline/features/horse_history/common.py:22,f5_cl はクラスタ番号、f5_aff・f5_win は Elo 残差 res と勝ちの as-of 累計
+pc_pci_ewm2,pc_ (ペース指数),clean,"src/pipeline/features/horse_history/pace.py:16,44-57; src/pipeline/features/horse_history/common.py:25-37",ラップ・前後半 3F からの PCI/RPCI
+pc_pci_ewm6,pc_ (ペース指数),clean,"src/pipeline/features/horse_history/pace.py:16,44-57; src/pipeline/features/horse_history/common.py:25-37",ラップ・前後半 3F からの PCI/RPCI
+pc_pcrel_ewm2,pc_ (ペース指数),clean,"src/pipeline/features/horse_history/pace.py:16,44-57; src/pipeline/features/horse_history/common.py:25-37",ラップ・前後半 3F からの PCI/RPCI
+pc_pcrel_ewm6,pc_ (ペース指数),clean,"src/pipeline/features/horse_history/pace.py:16,44-57; src/pipeline/features/horse_history/common.py:25-37",ラップ・前後半 3F からの PCI/RPCI
+pc_rpci_ewm3,pc_ (ペース指数),clean,"src/pipeline/features/horse_history/pace.py:16,44-57; src/pipeline/features/horse_history/common.py:25-37",ラップ・前後半 3F からの PCI/RPCI
+pc_pci_trend,pc_ (ペース指数),clean,"src/pipeline/features/horse_history/pace.py:16,44-57; src/pipeline/features/horse_history/common.py:25-37",ラップ・前後半 3F からの PCI/RPCI
+pc_n_reg0,pc_ (ペース指数),clean,"src/pipeline/features/horse_history/pace.py:16,44-57; src/pipeline/features/horse_history/common.py:25-37",ラップ・前後半 3F からの PCI/RPCI
+pc_a_reg0,pc_ (ペース指数),clean,"src/pipeline/features/horse_history/pace.py:16,44-57; src/pipeline/features/horse_history/common.py:25-37",ラップ・前後半 3F からの PCI/RPCI
+pc_n_reg1,pc_ (ペース指数),clean,"src/pipeline/features/horse_history/pace.py:16,44-57; src/pipeline/features/horse_history/common.py:25-37",ラップ・前後半 3F からの PCI/RPCI
+pc_a_reg1,pc_ (ペース指数),clean,"src/pipeline/features/horse_history/pace.py:16,44-57; src/pipeline/features/horse_history/common.py:25-37",ラップ・前後半 3F からの PCI/RPCI
+pc_n_reg2,pc_ (ペース指数),clean,"src/pipeline/features/horse_history/pace.py:16,44-57; src/pipeline/features/horse_history/common.py:25-37",ラップ・前後半 3F からの PCI/RPCI
+pc_a_reg2,pc_ (ペース指数),clean,"src/pipeline/features/horse_history/pace.py:16,44-57; src/pipeline/features/horse_history/common.py:25-37",ラップ・前後半 3F からの PCI/RPCI
+pc_adv,pc_ (ペース指数),clean,"src/pipeline/features/horse_history/pace.py:16,44-57; src/pipeline/features/horse_history/common.py:25-37",ラップ・前後半 3F からの PCI/RPCI
+sr_var_n,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_var_today,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_perf_ewm2,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_perf_ewm6,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_perf_best5,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_perf_med5,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_perf_std5,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_n,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_load_eq,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_load_dev,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_load_pts,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_load_chg,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_sex_pts,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_age_pts,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_exp,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_exp6,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_unc,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_exp_rel,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+sr_exp_rank,sr_ (標準条件レーティング),clean,"src/pipeline/features/horse_history/rating.py:1-10,37-",走破時計・斤量・性齢の補正。市場なし
+s_time_pred,s_ (前段 S3),clean,"src/scripts/data/parent_2016.py:27; src/scripts/data/v6_stage.py:66-68,80-91; src/pipeline/models/stage_models.py:73-74; src/scripts/data/tp54_model.py:34; src/scripts/data/pos_model.py:58-60; src/scripts/data/tp53_dataset.py:188-207",前段モデル。目的変数は走破時計の偏差・正規化着順。入力は base175 + tl_ + CY(wc_) + EASE2/LAP/pos_rel（スキーマに市場列なし）+ horse_ease の PF_COLS だけ（horse_ease の odds 列は columns= で読まない）
+s_time_gap,s_ (前段 S3),clean,"src/scripts/data/parent_2016.py:27; src/scripts/data/v6_stage.py:66-68,80-91; src/pipeline/models/stage_models.py:73-74; src/scripts/data/tp54_model.py:34; src/scripts/data/pos_model.py:58-60; src/scripts/data/tp53_dataset.py:188-207",前段モデル。目的変数は走破時計の偏差・正規化着順。入力は base175 + tl_ + CY(wc_) + EASE2/LAP/pos_rel（スキーマに市場列なし）+ horse_ease の PF_COLS だけ（horse_ease の odds 列は columns= で読まない）
+s_rank_pred,s_ (前段 S3),clean,"src/scripts/data/parent_2016.py:27; src/scripts/data/v6_stage.py:66-68,80-91; src/pipeline/models/stage_models.py:73-74; src/scripts/data/tp54_model.py:34; src/scripts/data/pos_model.py:58-60; src/scripts/data/tp53_dataset.py:188-207",前段モデル。目的変数は走破時計の偏差・正規化着順。入力は base175 + tl_ + CY(wc_) + EASE2/LAP/pos_rel（スキーマに市場列なし）+ horse_ease の PF_COLS だけ（horse_ease の odds 列は columns= で読まない）
+f3_r_rz,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+f3_r_rrank,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+f3_r_rgap,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+sr_perf_ewm2_rz,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+sr_perf_ewm2_rrank,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+sr_perf_ewm2_rgap,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+sr_perf_ewm6_rz,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+sr_perf_ewm6_rrank,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+sr_perf_ewm6_rgap,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+sr_exp_rz,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+sr_exp_rrank,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+sr_exp_rgap,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+c_res_ewm2_rz,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+c_res_ewm2_rrank,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+c_res_ewm2_rgap,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+c_cls_ewm2_rz,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+c_cls_ewm2_rrank,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+c_cls_ewm2_rgap,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+a_l3fz_ewm2_rz,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+a_l3fz_ewm2_rrank,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+a_l3fz_ewm2_rgap,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+a_rk_ewm2_rz,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+a_rk_ewm2_rrank,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+a_rk_ewm2_rgap,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+a_style_rz,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+a_style_rrank,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+a_style_rgap,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+b_aff_all_rz,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+b_aff_all_rrank,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+b_aff_all_rgap,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+pc_adv_rz,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+pc_adv_rrank,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+pc_adv_rgap,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+f2_pace_match_rz,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+f2_pace_match_rrank,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+f2_pace_match_rgap,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+horse_prior_win_rate_rz,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+horse_prior_win_rate_rrank,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+horse_prior_win_rate_rgap,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+jockey_prior_win_rate_rz,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+jockey_prior_win_rate_rrank,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+jockey_prior_win_rate_rgap,*_rz/_rrank/_rgap (レース内相対化),clean,src/pipeline/features/serving_stage_rel.py:25-38; src/pipeline/models/tp05_data.py:17-18,元の列（clean）のレース内 z・順位・最大との差。結果・市場は使わない
+oikiri_eval,oikiri_ (追い切り評価),clean,"src/pipeline/features/prerace_extras.py:3,17; src/pipeline/models/tp05_data.py:76-77",netkeiba の追い切り評価 A〜D を数値化（市場ではない。公開の専門家の意見なので市場と相関しうる点は注記）
+oikiri_eval_rank,oikiri_ (追い切り評価),clean,"src/pipeline/features/prerace_extras.py:3,17; src/pipeline/models/tp05_data.py:76-77",netkeiba の追い切り評価 A〜D を数値化（市場ではない。公開の専門家の意見なので市場と相関しうる点は注記）
+oikiri_eval_gap,oikiri_ (追い切り評価),clean,"src/pipeline/features/prerace_extras.py:3,17; src/pipeline/models/tp05_data.py:76-77",netkeiba の追い切り評価 A〜D を数値化（市場ではない。公開の専門家の意見なので市場と相関しうる点は注記）
+ped_sire_sd_win,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_sire_sd_n,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_sire_sd_t3,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_sire_sd_pe,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_sire_sd_l3,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_sire_go_win,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_sire_go_n,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_sire_go_t3,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_sire_go_pe,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_sire_go_l3,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_sire_vn_win,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_sire_vn_n,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_sire_vn_t3,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_sire_vn_pe,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_sire_vn_l3,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_dam_sire_sd_win,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_dam_sire_sd_n,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_dam_sire_sd_t3,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_dam_sire_go_win,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_dam_sire_go_n,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_dam_sire_go_t3,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_dam_sire_vn_win,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_dam_sire_vn_n,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+ped_dam_sire_vn_t3,ped_ (血統×条件),clean,src/pipeline/features/pedigree_context.py:29-53; src/pipeline/models/stage_models.py:26,stage_labels の pos_early・l3f と勝ち・複勝の as-of
+o_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_l3dev,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_pos,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_venue_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_venue_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_venue_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_venue_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_surf_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_surf_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_surf_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_surf_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_sdb_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_sdb_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_sdb_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_sdb_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_go_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_go_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_go_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_go_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_cls_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_cls_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_cls_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_cls_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_fld_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_fld_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_fld_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_fld_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_brk_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_brk_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_brk_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_brk_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_vsd_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_vsd_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_vsd_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_vsd_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_lay_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_lay_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_lay_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_lay_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_runno_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_runno_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_runno_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_runno_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_sexage_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_sexage_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_sexage_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_sexage_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w7_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w7_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w7_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w7_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w14_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w14_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w14_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w14_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w14_form_gap_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w30_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w30_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w30_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w30_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w90_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w90_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w90_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w90_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w90_form_gap_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w365_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w365_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w365_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_w365_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_days_since_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_days_since_ride,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+o_rides_since_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_l3dev,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_pos,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_venue_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_venue_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_venue_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_venue_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_surf_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_surf_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_surf_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_surf_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_sdb_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_sdb_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_sdb_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_sdb_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_go_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_go_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_go_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_go_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_cls_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_cls_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_cls_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_cls_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_fld_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_fld_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_fld_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_fld_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_brk_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_brk_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_brk_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_brk_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_vsd_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_vsd_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_vsd_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_vsd_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_lay_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_lay_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_lay_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_lay_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_runno_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_runno_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_runno_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_runno_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_sexage_win,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_sexage_top3,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_sexage_res,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+ob_sexage_n,o_/ob_ (馬主/生産者),clean,"src/pipeline/features/factory_conn.py:6,20-22,68,161-223",o_=馬主・ob_=生産者（odds でない）。res は着順の正規化 0.5−(着順−1)/(頭数−1)。HIST_COLS に odds なし
+chg_jockey,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_trainer,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_surface,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_venue,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_direction,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_going,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_weather,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_cls,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_cls_up,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_cls_down,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_dist,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_dist_abs,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_dist_up,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_dist_down,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_field,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_bracket,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_hn,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_hour,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_going_num,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_jockey_x_prevfp,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+n_jockeys_last5,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+chg_trainer_x_n,chg_/n_jockeys (前走からの変化),clean,src/pipeline/features/factory_self.py:323-342,騎手・条件の変化、前走着順との積
+exp_n_venue,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_venue,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_venue,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_n_surface,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_surface,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_surface,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_n_dist_exact,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_dist_exact,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_dist_exact,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_n_dist_round,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_dist_round,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_dist_round,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_n_dist_band,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_dist_band,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_dist_band,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_n_course,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_course,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_course,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_n_direction,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_direction,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_direction,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_n_going,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_going,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_going,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_n_venue_surface,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_venue_surface,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_venue_surface,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_n_surf_dist,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_surf_dist,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_surf_dist,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_n_cls,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_cls,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_cls,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_n_field,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_field,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_field,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_n_weather,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_weather,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_weather,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_n_month,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_month,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_month,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_n_hour,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_hour,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_hour,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_n_kai,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_first_kai,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+exp_win_kai,exp_ (条件の経験数),clean,src/pipeline/features/factory_self.py:386-405,同条件の出走数・勝ち数（factory_src の sx_exp_ とは別物）
+lag1_margin_len,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag2_margin_len,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag3_margin_len,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag4_margin_len,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag5_margin_len,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag1_l3f_gap,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag2_l3f_gap,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag3_l3f_gap,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag4_l3f_gap,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag5_l3f_gap,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag1_l3f_rank,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag2_l3f_rank,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag3_l3f_rank,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag1_time_gap200,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag2_time_gap200,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag3_time_gap200,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag4_time_gap200,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+lag5_time_gap200,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+margin_mean5,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+margin_min5,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+margin_max5,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+margin_n_close,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+pair_hj_n,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+pair_hj_win,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+pair_hj_win_rate,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+pair_hj_top3_rate,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+pair_hj_first,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+pair_ht_n,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+pair_ht_win,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+pair_ht_win_rate,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+pair_ht_top3_rate,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+pair_ht_first,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+pair_hjv_n,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+pair_hjv_win,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+pair_hjv_win_rate,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+pair_hjv_top3_rate,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+pair_hjv_first,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+pair_jockey_streak,pair_ (馬×騎手/調教師),clean,src/pipeline/features/factory_self.py:518-535,同じ組み合わせの過去の勝ち・複勝の件数
+rest_prev,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_prev2,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_prev3,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_mean3,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_max3,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_ratio,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_log,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_is_renso,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_is_nakaichi,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_is_long90,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_is_long180,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_is_long365,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_n_last30d,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_n_last60d,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_n_last90d,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_n_last180d,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_n_last365d,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_n_layoff90,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_since_layoff,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_since_win,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+rest_since_top3,rest_ (間隔),clean,src/pipeline/features/factory_self.py:198-270,日付から
+seq_slope5_fp,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_std5_fp,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_best5_fp,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_worst5_fp,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_last_vs_mean5_fp,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm1_fp,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm3_fp,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm8_fp,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_slope5_margin_len,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_std5_margin_len,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_best5_margin_len,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_worst5_margin_len,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_last_vs_mean5_margin_len,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm1_margin_len,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm3_margin_len,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm8_margin_len,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_slope5_l3f_gap,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_std5_l3f_gap,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_best5_l3f_gap,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_worst5_l3f_gap,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_last_vs_mean5_l3f_gap,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm1_l3f_gap,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm3_l3f_gap,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm8_l3f_gap,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_slope5_pos_first,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_std5_pos_first,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_best5_pos_first,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_worst5_pos_first,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_last_vs_mean5_pos_first,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm1_pos_first,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm3_pos_first,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm8_pos_first,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_slope5_pos_gain,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_std5_pos_gain,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_best5_pos_gain,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_worst5_pos_gain,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_last_vs_mean5_pos_gain,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm1_pos_gain,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm3_pos_gain,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm8_pos_gain,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_slope5_time_gap200,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_std5_time_gap200,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_best5_time_gap200,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_worst5_time_gap200,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_last_vs_mean5_time_gap200,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm1_time_gap200,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm3_time_gap200,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm8_time_gap200,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_slope5_l3f_rank,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_std5_l3f_rank,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_best5_l3f_rank,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_worst5_l3f_rank,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_last_vs_mean5_l3f_rank,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm1_l3f_rank,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm3_l3f_rank,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_ewm8_l3f_rank,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_top3_in5,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_win_in5,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+seq_top3_in3,seq_/lag*_/margin_ (過去走の系列),clean,"src/pipeline/features/factory_self.py:4,18-20,62-106,408-457",着順・着差・上がり・通過順・時計差。RUN_COLS に odds なし
+td_ewm1,td_ (時計の偏差),clean,src/pipeline/features/factory_self.py:499-515,同条件の過去平均時計との差
+td_ewm3,td_ (時計の偏差),clean,src/pipeline/features/factory_self.py:499-515,同条件の過去平均時計との差
+td_lag1,td_ (時計の偏差),clean,src/pipeline/features/factory_self.py:499-515,同条件の過去平均時計との差
+td_best5,td_ (時計の偏差),clean,src/pipeline/features/factory_self.py:499-515,同条件の過去平均時計との差
+td_mean5,td_ (時計の偏差),clean,src/pipeline/features/factory_self.py:499-515,同条件の過去平均時計との差
+td_std5,td_ (時計の偏差),clean,src/pipeline/features/factory_self.py:499-515,同条件の過去平均時計との差
+td_slope5,td_ (時計の偏差),clean,src/pipeline/features/factory_self.py:499-515,同条件の過去平均時計との差
+attr_birthplace,attr_ (産地),clean,src/pipeline/features/factory_self.py:547-565,産地コードと産地の過去成績（着順）
+attr_bp_n,attr_ (産地),clean,src/pipeline/features/factory_self.py:547-565,産地コードと産地の過去成績（着順）
+attr_bp_fp,attr_ (産地),clean,src/pipeline/features/factory_self.py:547-565,産地コードと産地の過去成績（着順）
+attr_bp_win,attr_ (産地),clean,src/pipeline/features/factory_self.py:547-565,産地コードと産地の過去成績（着順）
+fm_f3_r_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_f3_r_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_f3_r_min,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_f3_r_std,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_f3_r_gap12,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_f3_r_top3mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_f3_r_own_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_f3_r_own_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_f3_r_own_z,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_f3_r_own_pct,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_f3_r_n_better,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_exp_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_exp_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_exp_min,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_exp_std,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_exp_gap12,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_exp_top3mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_exp_own_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_exp_own_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_exp_own_z,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_exp_own_pct,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_exp_n_better,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_perf_ewm2_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_perf_ewm2_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_perf_ewm2_min,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_perf_ewm2_std,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_perf_ewm2_gap12,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_perf_ewm2_top3mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_perf_ewm2_own_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_perf_ewm2_own_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_perf_ewm2_own_z,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_perf_ewm2_own_pct,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_sr_perf_ewm2_n_better,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_res_ewm2_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_res_ewm2_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_res_ewm2_min,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_res_ewm2_std,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_res_ewm2_gap12,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_res_ewm2_top3mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_res_ewm2_own_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_res_ewm2_own_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_res_ewm2_own_z,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_res_ewm2_own_pct,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_res_ewm2_n_better,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_b_aff_all_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_b_aff_all_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_b_aff_all_min,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_b_aff_all_std,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_b_aff_all_gap12,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_b_aff_all_top3mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_b_aff_all_own_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_b_aff_all_own_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_b_aff_all_own_z,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_b_aff_all_own_pct,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_b_aff_all_n_better,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_horse_prior_win_rate_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_horse_prior_win_rate_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_horse_prior_win_rate_min,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_horse_prior_win_rate_std,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_horse_prior_win_rate_gap12,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_horse_prior_win_rate_top3mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_horse_prior_win_rate_own_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_horse_prior_win_rate_own_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_horse_prior_win_rate_own_z,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_horse_prior_win_rate_own_pct,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_horse_prior_win_rate_n_better,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_jockey_prior_win_rate_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_jockey_prior_win_rate_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_jockey_prior_win_rate_min,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_jockey_prior_win_rate_std,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_jockey_prior_win_rate_gap12,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_jockey_prior_win_rate_top3mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_jockey_prior_win_rate_own_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_jockey_prior_win_rate_own_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_jockey_prior_win_rate_own_z,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_jockey_prior_win_rate_own_pct,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_jockey_prior_win_rate_n_better,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_trainer_prior_win_rate_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_trainer_prior_win_rate_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_trainer_prior_win_rate_min,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_trainer_prior_win_rate_std,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_trainer_prior_win_rate_gap12,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_trainer_prior_win_rate_top3mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_trainer_prior_win_rate_own_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_trainer_prior_win_rate_own_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_trainer_prior_win_rate_own_z,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_trainer_prior_win_rate_own_pct,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_trainer_prior_win_rate_n_better,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_a_l3fz_ewm2_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_a_l3fz_ewm2_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_a_l3fz_ewm2_min,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_a_l3fz_ewm2_std,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_a_l3fz_ewm2_gap12,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_a_l3fz_ewm2_top3mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_a_l3fz_ewm2_own_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_a_l3fz_ewm2_own_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_a_l3fz_ewm2_own_z,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_a_l3fz_ewm2_own_pct,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_a_l3fz_ewm2_n_better,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_cls_ewm2_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_cls_ewm2_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_cls_ewm2_min,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_cls_ewm2_std,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_cls_ewm2_gap12,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_cls_ewm2_top3mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_cls_ewm2_own_mean,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_cls_ewm2_own_max,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_cls_ewm2_own_z,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_cls_ewm2_own_pct,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fm_c_cls_ewm2_n_better,fm_ (メンバーの強さの分布),clean,"src/pipeline/features/factory_field.py:1,26-27,76-81",STRENGTH（f3_r・sr_exp・c_res_ewm2 など clean な列）のレース内集計
+fd_age_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_age_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_age_min,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_age_std,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_age_gap12,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_age_top3mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_age_own_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_age_own_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_age_own_z,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_age_own_pct,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_age_n_better,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wt_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wt_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wt_min,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wt_std,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wt_gap12,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wt_top3mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wt_own_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wt_own_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wt_own_z,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wt_own_pct,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wt_n_better,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wchg_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wchg_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wchg_min,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wchg_std,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wchg_gap12,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wchg_top3mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wchg_own_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wchg_own_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wchg_own_z,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wchg_own_pct,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wchg_n_better,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_rest_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_rest_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_rest_min,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_rest_std,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_rest_gap12,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_rest_top3mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_rest_own_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_rest_own_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_rest_own_z,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_rest_own_pct,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_rest_n_better,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_nprior_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_nprior_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_nprior_min,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_nprior_std,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_nprior_gap12,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_nprior_top3mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_nprior_own_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_nprior_own_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_nprior_own_z,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_nprior_own_pct,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_nprior_n_better,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_hrace_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_hrace_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_hrace_min,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_hrace_std,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_hrace_gap12,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_hrace_top3mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_hrace_own_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_hrace_own_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_hrace_own_z,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_hrace_own_pct,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_hrace_n_better,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsprev_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsprev_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsprev_min,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsprev_std,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsprev_gap12,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsprev_top3mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsprev_own_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsprev_own_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsprev_own_z,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsprev_own_pct,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsprev_n_better,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsstep_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsstep_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsstep_min,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsstep_std,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsstep_gap12,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsstep_top3mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsstep_own_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsstep_own_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsstep_own_z,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsstep_own_pct,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_clsstep_n_better,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_jwratio_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_jwratio_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_jwratio_min,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_jwratio_std,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_jwratio_gap12,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_jwratio_top3mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_jwratio_own_mean,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_jwratio_own_max,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_jwratio_own_z,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_jwratio_own_pct,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_jwratio_n_better,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_n_female,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_share_female,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_own_female,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_n_gelding,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_share_gelding,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_own_gelding,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_n_male,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_share_male,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_own_male,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_n_age2,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_n_age3,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_n_age4,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_n_age5,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_own_age_rank_share,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_n_first,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_share_first,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_n_layoff,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_own_layoff,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_n_classup,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_n_classdown,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_own_a3,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_n_a3,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_own_a2,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_n_a2,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_own_a1,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_n_a1,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_own_a0,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_own_apprentice,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wchg_abs,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_wchg_rel,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fd_n_wchg_big,fd_ (メンバーの属性),clean,src/pipeline/features/factory_field.py:85-121,年齢・斤量・体重・間隔・減量記号のレース内集計
+fc_jk_mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk_max,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk_min,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk_std,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk_gap12,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk_top3mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk_own_mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk_own_max,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk_own_z,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk_own_pct,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk_n_better,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr_mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr_max,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr_min,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr_std,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr_gap12,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr_top3mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr_own_mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr_own_max,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr_own_z,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr_own_pct,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr_n_better,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk3_mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk3_max,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk3_min,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk3_std,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk3_gap12,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk3_top3mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk3_own_mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk3_own_max,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk3_own_z,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk3_own_pct,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jk3_n_better,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr3_mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr3_max,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr3_min,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr3_std,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr3_gap12,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr3_top3mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr3_own_mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr3_own_max,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr3_own_z,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr3_own_pct,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_tr3_n_better,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jkn_mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jkn_max,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jkn_min,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jkn_std,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jkn_gap12,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jkn_top3mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jkn_own_mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jkn_own_max,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jkn_own_z,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jkn_own_pct,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_jkn_n_better,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_trn_mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_trn_max,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_trn_min,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_trn_std,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_trn_gap12,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_trn_top3mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_trn_own_mean,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_trn_own_max,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_trn_own_z,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_trn_own_pct,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_trn_n_better,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_trainer_entries,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_n_trainers,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_n_jockeys,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_trainer_best_in_stable,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_trainer_stable_gap,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_top_jockey,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fc_n_top_jockey,fc_ (騎手・調教師の格の分布),clean,src/pipeline/features/factory_field.py:125-142,jockey/trainer_prior_*（finish_position だけの率）と f3_r のレース内集計。人気の重みなし
+fdr_course_win_mean,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_course_win_n,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_br_win_mean,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_br_win_n,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_br_win_delta,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_hn_win_mean,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_hn_win_n,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_hn_win_delta,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_third_win_mean,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_third_win_n,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_third_win_delta,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_cond_third_win_mean,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_cond_third_win_n,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_cond_third_win_delta,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_fs_third_win_mean,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_fs_third_win_n,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_fs_third_win_delta,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_course_t3_mean,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_course_t3_n,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_br_t3_mean,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_br_t3_n,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_br_t3_delta,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_hn_t3_mean,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_hn_t3_n,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_hn_t3_delta,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_third_t3_mean,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_third_t3_n,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_third_t3_delta,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_cond_third_t3_mean,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_cond_third_t3_n,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_cond_third_t3_delta,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_fs_third_t3_mean,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_fs_third_t3_n,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fdr_fs_third_t3_delta,fdr_ (コース別の枠の有利),clean,src/pipeline/features/factory_field.py:297-321,過去の同コースの finish_position の縮約勝率・複勝率
+fe_sin1,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_cos1,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_sin2,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_cos2,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_sin3,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_cos3,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_month,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_weekday,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_dom,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_week,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_kai,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_nichi,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_year_frac,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_is_monday,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_is_sunday,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_start_min,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_start_since_first,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_round,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_round_last,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_round_first,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_round_main,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_round_after_main,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_going,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_weather,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_going_x_weather,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_going_x_surface,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_going_vs_first_race,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_weather_vs_first_race,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_prev_day_going,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_going_change_vs_prev_day,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fe_days_to_weekend,fe_ (カレンダー・馬場),clean,src/pipeline/features/factory_field.py:389-430,日付・発走時刻・馬場・天候
+fr_name_len,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_name_stakes,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_name_sho,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_name_hai,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_name_cup,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_name_kinen,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_name_tokubetsu,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_name_jump,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_name_derby,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_name_fem,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_name_city,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_age_２歳,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_age_３歳以上,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_age_３歳,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_age_４歳以上,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_age_limit_code,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_rule_code,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_grade_code,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_dist_k,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_dist_log,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_dist_mod400,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_dist_mod200,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_is_sprint,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_is_mile,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_is_mid,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_is_long,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_full,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_small,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_field_bin,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_surface_x_dist,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+fr_dir_code,fr_ (レースの種類),clean,src/pipeline/features/factory_field.py:444-469,レース名・条件・距離・頭数
+frn_win_age_mean,frn_ (同名レースの過去の勝ち馬),clean,src/pipeline/features/factory_field.py:472-479,過去の同名レースの勝ち馬の年齢・脚質・f3_r・体重
+frn_win_age_n,frn_ (同名レースの過去の勝ち馬),clean,src/pipeline/features/factory_field.py:472-479,過去の同名レースの勝ち馬の年齢・脚質・f3_r・体重
+frn_own_vs_win_age,frn_ (同名レースの過去の勝ち馬),clean,src/pipeline/features/factory_field.py:472-479,過去の同名レースの勝ち馬の年齢・脚質・f3_r・体重
+frn_win_style_mean,frn_ (同名レースの過去の勝ち馬),clean,src/pipeline/features/factory_field.py:472-479,過去の同名レースの勝ち馬の年齢・脚質・f3_r・体重
+frn_win_style_n,frn_ (同名レースの過去の勝ち馬),clean,src/pipeline/features/factory_field.py:472-479,過去の同名レースの勝ち馬の年齢・脚質・f3_r・体重
+frn_own_vs_win_style,frn_ (同名レースの過去の勝ち馬),clean,src/pipeline/features/factory_field.py:472-479,過去の同名レースの勝ち馬の年齢・脚質・f3_r・体重
+frn_win_strength_mean,frn_ (同名レースの過去の勝ち馬),clean,src/pipeline/features/factory_field.py:472-479,過去の同名レースの勝ち馬の年齢・脚質・f3_r・体重
+frn_win_strength_n,frn_ (同名レースの過去の勝ち馬),clean,src/pipeline/features/factory_field.py:472-479,過去の同名レースの勝ち馬の年齢・脚質・f3_r・体重
+frn_own_vs_win_strength,frn_ (同名レースの過去の勝ち馬),clean,src/pipeline/features/factory_field.py:472-479,過去の同名レースの勝ち馬の年齢・脚質・f3_r・体重
+frn_win_weight_mean,frn_ (同名レースの過去の勝ち馬),clean,src/pipeline/features/factory_field.py:472-479,過去の同名レースの勝ち馬の年齢・脚質・f3_r・体重
+frn_win_weight_n,frn_ (同名レースの過去の勝ち馬),clean,src/pipeline/features/factory_field.py:472-479,過去の同名レースの勝ち馬の年齢・脚質・f3_r・体重
+frn_own_vs_win_weight,frn_ (同名レースの過去の勝ち馬),clean,src/pipeline/features/factory_field.py:472-479,過去の同名レースの勝ち馬の年齢・脚質・f3_r・体重
+frn_win_fs_mean,frn_ (同名レースの過去の勝ち馬),clean,src/pipeline/features/factory_field.py:472-479,過去の同名レースの勝ち馬の年齢・脚質・f3_r・体重
+frn_win_fs_n,frn_ (同名レースの過去の勝ち馬),clean,src/pipeline/features/factory_field.py:472-479,過去の同名レースの勝ち馬の年齢・脚質・f3_r・体重
+frp_course_pace_first_mean,frp_ (コースのペース基準),clean,src/pipeline/features/factory_field.py:486-501,過去の同コースの前後半 3F・RPCI
+frp_course_pace_first_n,frp_ (コースのペース基準),clean,src/pipeline/features/factory_field.py:486-501,過去の同コースの前後半 3F・RPCI
+frp_course_cls_pace_first_mean,frp_ (コースのペース基準),clean,src/pipeline/features/factory_field.py:486-501,過去の同コースの前後半 3F・RPCI
+frp_course_cls_pace_first_n,frp_ (コースのペース基準),clean,src/pipeline/features/factory_field.py:486-501,過去の同コースの前後半 3F・RPCI
+frp_style_x_pace_first,frp_ (コースのペース基準),clean,src/pipeline/features/factory_field.py:486-501,過去の同コースの前後半 3F・RPCI
+frp_course_pace_second_mean,frp_ (コースのペース基準),clean,src/pipeline/features/factory_field.py:486-501,過去の同コースの前後半 3F・RPCI
+frp_course_pace_second_n,frp_ (コースのペース基準),clean,src/pipeline/features/factory_field.py:486-501,過去の同コースの前後半 3F・RPCI
+frp_course_cls_pace_second_mean,frp_ (コースのペース基準),clean,src/pipeline/features/factory_field.py:486-501,過去の同コースの前後半 3F・RPCI
+frp_course_cls_pace_second_n,frp_ (コースのペース基準),clean,src/pipeline/features/factory_field.py:486-501,過去の同コースの前後半 3F・RPCI
+frp_style_x_pace_second,frp_ (コースのペース基準),clean,src/pipeline/features/factory_field.py:486-501,過去の同コースの前後半 3F・RPCI
+frp_course_rpci_mean,frp_ (コースのペース基準),clean,src/pipeline/features/factory_field.py:486-501,過去の同コースの前後半 3F・RPCI
+frp_course_rpci_n,frp_ (コースのペース基準),clean,src/pipeline/features/factory_field.py:486-501,過去の同コースの前後半 3F・RPCI
+frp_course_cls_rpci_mean,frp_ (コースのペース基準),clean,src/pipeline/features/factory_field.py:486-501,過去の同コースの前後半 3F・RPCI
+frp_course_cls_rpci_n,frp_ (コースのペース基準),clean,src/pipeline/features/factory_field.py:486-501,過去の同コースの前後半 3F・RPCI
+frp_style_x_rpci,frp_ (コースのペース基準),clean,src/pipeline/features/factory_field.py:486-501,過去の同コースの前後半 3F・RPCI
+pd_sire_sd_res,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_sire_sd_n,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_sire_sd_win,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_sire_gd_res,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_sire_gd_n,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_sire_vn_res,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_sire_vn_n,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_sire_sf_res,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_sire_sf_n,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_sire_sf_win,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_sire_all_res,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_sire_all_n,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_sire_sd_res,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_sire_sd_n,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_sire_sd_win,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_sire_gd_res,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_sire_gd_n,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_sire_vn_res,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_sire_vn_n,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_sire_sf_res,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_sire_sf_n,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_sire_sf_win,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_sire_all_res,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_sire_all_n,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_sire_sire_sd_res,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_sire_sire_sd_n,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_sire_sire_sf_res,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_sire_sire_sf_n,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_dam_sd_res,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_dam_sd_n,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_dam_sf_res,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pd_dam_dam_sf_n,pd_ (父×条件),clean,src/pipeline/features/factory_ped.py:101-117; src/pipeline/features/factory_src.py:51-55,res_score は着順だけ
+pxc_sd_w,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_r,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_pos,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_g1,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_g2,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_g3,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_g4,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_g5,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_side0,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_side1,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_tm,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_tf,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_max3,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_min3,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_n12,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_w_rel,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxc_sd_r_rel,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_0,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_1,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_2,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_3,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_4,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_5,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_6,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_7,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_8,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_9,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_10,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_11,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_12,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_13,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_14,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+pxe_15,pxc_/pxe_ (血統の位置・埋め込み),clean,"src/pipeline/features/serving_v5_px.py:33; src/pipeline/features/tp38_pedigree.py:81-88,142",着順だけのセル統計・血統の TF-IDF の SVD
+z,z/zg/zc (血統リッジ),clean,"src/pipeline/features/tp38_ridge.py:114,119-133; src/pipeline/features/tp38_pedigree.py:81-111",目的変数 y は着順由来（res_y）
+zg,z/zg/zc (血統リッジ),clean,"src/pipeline/features/tp38_ridge.py:114,119-133; src/pipeline/features/tp38_pedigree.py:81-111",目的変数 y は着順由来（res_y）
+zc,z/zg/zc (血統リッジ),clean,"src/pipeline/features/tp38_ridge.py:114,119-133; src/pipeline/features/tp38_pedigree.py:81-111",目的変数 y は着順由来（res_y）
+z_s0,z/zg/zc (血統リッジ),clean,"src/pipeline/features/tp38_ridge.py:114,119-133; src/pipeline/features/tp38_pedigree.py:81-111",目的変数 y は着順由来（res_y）
+z_s1,z/zg/zc (血統リッジ),clean,"src/pipeline/features/tp38_ridge.py:114,119-133; src/pipeline/features/tp38_pedigree.py:81-111",目的変数 y は着順由来（res_y）
+z_g12,z/zg/zc (血統リッジ),clean,"src/pipeline/features/tp38_ridge.py:114,119-133; src/pipeline/features/tp38_pedigree.py:81-111",目的変数 y は着順由来（res_y）
+z_g3p,z/zg/zc (血統リッジ),clean,"src/pipeline/features/tp38_ridge.py:114,119-133; src/pipeline/features/tp38_pedigree.py:81-111",目的変数 y は着順由来（res_y）
+z_tm,z/zg/zc (血統リッジ),clean,"src/pipeline/features/tp38_ridge.py:114,119-133; src/pipeline/features/tp38_pedigree.py:81-111",目的変数 y は着順由来（res_y）
+z_rel,z/zg/zc (血統リッジ),clean,"src/pipeline/features/tp38_ridge.py:114,119-133; src/pipeline/features/tp38_pedigree.py:81-111",目的変数 y は着順由来（res_y）
+zc_rel,z/zg/zc (血統リッジ),clean,"src/pipeline/features/tp38_ridge.py:114,119-133; src/pipeline/features/tp38_pedigree.py:81-111",目的変数 y は着順由来（res_y）
