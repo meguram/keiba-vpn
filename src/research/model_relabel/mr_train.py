@@ -38,6 +38,7 @@ V6E_BUNDLE = Path(os.environ.get("MODEL_RELABEL_V6E_BUNDLE")
                   or "/home/jovyan/work/retrain_out/base_2016/final_v6e16/bundle_v6_2025/bundle.json")
 FOLDS_CSV = ROOT / "docs/operations/model_relabel/meeting_folds.csv"
 YEARS = range(2017, 2025)
+MARKET_POLICY_DROP = ("oikiri_eval", "oikiri_eval_rank", "oikiri_eval_gap")
 NTHREAD = int(os.environ.get("MODEL_RELABEL_NTHREAD") or 4)
 
 
@@ -49,7 +50,7 @@ def fs_configs(fs: str) -> tuple[list[dict], list[int]]:
     """木の設定（固定）と保存する本数の一覧。"""
     from src.research.megu_cycles import mc_data as MC
     sp = spec()["select"]
-    if fs in ("v5bag", "v5bag_ped"):
+    if fs in ("v5bag", "v5bag_ped", "v5bag_mf"):
         sets = [dict(MC.XGB_PARAMS, **bs) for bs in MC.BAG_SETS]
         rounds = [int(r) for r in sp["rounds_v5bag"]]
     elif fs == "v6e":
@@ -72,8 +73,15 @@ def fs_configs(fs: str) -> tuple[list[dict], list[int]]:
 def load_matrix(fs: str):
     """X（float32）と meta（race_id・horse_id・year・finish_position）を year<=2024 の行だけ返す。"""
     from src.research.megu_cycles import mc_data as MC
-    if fs in ("v5bag", "v5bag_ped"):
+    if fs in ("v5bag", "v5bag_ped", "v5bag_mf"):
         X, meta, names = MC._rich_matrix("v5")
+        if fs == "v5bag_mf":
+            # 市場を確実に外す版（11/27 ユーザーの指定・longshot-ai の market_free_columns.md の規則 8）: v5 の 1,083 列に市場の列は 0。
+            # 公開の意見で人気と重なりうる追い切り評価の 3 列を方針で外す
+            drop = [c for c in names if c in MARKET_POLICY_DROP]
+            assert len(drop) == len(MARKET_POLICY_DROP), drop
+            X = X.drop(columns=drop)
+            names = [c for c in names if c not in MARKET_POLICY_DROP]
         if fs == "v5bag_ped":
             # 血統の 4 列（mr_ped.py。凍結の第 4 版の as-of の作り・推論の側も同じ関数）を足す。feat_v4 に無い走は NaN
             from src.research.model_relabel import mr_ped
@@ -162,12 +170,14 @@ def blocked(now=None) -> bool:
     return day and 730 <= hm < 1700
 
 
-def _fingerprint(lab: pd.DataFrame, target: str, variant: str, sets: list[dict], rounds: list[int]) -> dict:
+def _fingerprint(lab: pd.DataFrame, target: str, variant: str, sets: list[dict], rounds: list[int], names=None) -> dict:
     """部品の作りの印（spec の版・ラベルの中身・木の設定・本数）。違う印の部品は混ぜない。"""
     import hashlib
     y, wt = target_and_weight(lab, target, variant)
     h = hashlib.md5(np.ascontiguousarray(np.stack([y, wt])).tobytes()).hexdigest()
     fp = {"spec_version": spec()["version"], "label_md5": h, "sets": sets, "rounds": rounds}
+    if names is not None:                          # 特徴量の列の一覧（外す列を後で変えたら混ぜない）
+        fp["cols_md5"] = hashlib.md5("\n".join(map(str, names)).encode()).hexdigest()
     if variant.endswith("_nc"):                    # 学習の行の除き方も印に入れる
         fp["chalk_md5"] = hashlib.md5(np.ascontiguousarray(lab["chalk_race"].to_numpy(bool)).tobytes()).hexdigest()
     return fp
@@ -177,14 +187,15 @@ def _check_manifest(d: Path, fp: dict) -> None:
     m = d / "manifest.json"
     d.mkdir(parents=True, exist_ok=True)
     if m.exists():
-        def strip(x):          # 比べるのはラベルの md5・木の設定・本数。スレッドの数（11/27 に 4 → 2）と spec の版（記録だけ）は値に関わらない
+        def strip(x, keys):    # 比べるのはラベルの md5・木の設定・本数・列の一覧。スレッドの数（11/27 に 4 → 2）と spec の版（記録だけ）は値に関わらない
             x = json.loads(json.dumps(x))
             x.pop("spec_version", None)
             for st in x.get("sets", []):
                 st.pop("nthread", None)
-            return x
+            return {k: v for k, v in x.items() if k in keys}
         old = json.loads(m.read_text(encoding="utf-8"))
-        if strip(old) != strip(fp):
+        keys = set(old) & set(fp)          # 列の一覧の印（cols_md5）は 11/27 夜から。前の部品は列が v5 の決まりで固定だったので、その鍵は比べない
+        if set(old) - set(fp) or strip(old, keys) != strip(fp, keys):
             raise SystemExit(f"部品の作りの印が違う（古い部品を混ぜない）: {d}")
     else:
         m.write_text(json.dumps(fp, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -216,7 +227,7 @@ def run(fs: str, target: str, variant: str, split: str = "time", conv: str = "co
             cal = lab["meeting"].map(f[f"calib_{j}"]).to_numpy() == 1
             units.append((f"f{j}", (mt != j) & ~cal, (mt == j) | cal))     # 予測は外側の折と較正の側の両方
     todo = [u for u in units if u[0] == only_unit] if only_unit else units
-    _check_manifest(_part_path(split, fs, target, variant, conv, 0, "x").parent, _fingerprint(lab, target, variant, sets, rounds))
+    _check_manifest(_part_path(split, fs, target, variant, conv, 0, "x").parent, _fingerprint(lab, target, variant, sets, rounds, names))
     for bi, params in enumerate(sets):
         for unit, tr, te in todo:
             p = _part_path(split, fs, target, variant, conv, bi, unit)
@@ -295,11 +306,12 @@ def _assemble_meeting(fs, target, variant, conv, lab, units, n_bags, rounds) -> 
 JOBS = [f"{fs}:{t}:{v}" for fs in ("v5bag", "v6e", "v5bag_ped")
         for t, vs in (("win", ("orig", "ext_w1", "ext_w2", "ext_w4")),
                       ("top3", ("orig", "ext_w1", "ext_w2", "ext_w4", "ext1_w1", "ext1_w2", "ext1_w4")), ("notbig", ("orig",)))
-        for v in vs] + [f"v5bag:{t}:{v}_nc" for t in ("win", "top3") for v in ("orig", "ext_w1", "ext_w2", "ext_w4")]
+        for v in vs] + [f"v5bag:{t}:{v}_nc" for t in ("win", "top3") for v in ("orig", "ext_w1", "ext_w2", "ext_w4")] \
+    + [f"v5bag_mf:{t}:{v}" for t in ("win", "top3") for v in ("orig", "ext_w1", "ext_w2", "ext_w4")] + ["v5bag_mf:notbig:orig"]
 
 
 def status() -> None:
-    """時間の順の全 44 本の済み・残り（部品の数）。止まっても続きから流せる（部品ごとに保存）。"""
+    """時間の順の全 53 本の済み・残り（部品の数）。止まっても続きから流せる（部品ごとに保存）。"""
     done, left = [], []
     for j in JOBS:
         fs, t, v = j.split(":")
@@ -316,7 +328,7 @@ def status() -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["run", "labels", "status"])
-    ap.add_argument("--fs", choices=["v5bag", "v5bag_ped", "v6e"], default="v5bag")
+    ap.add_argument("--fs", choices=["v5bag", "v5bag_ped", "v5bag_mf", "v6e"], default="v5bag")
     ap.add_argument("--target", choices=["win", "top3", "notbig"], default="win")
     ap.add_argument("--variant", default="orig")
     ap.add_argument("--split", choices=["time", "meeting"], default="time")

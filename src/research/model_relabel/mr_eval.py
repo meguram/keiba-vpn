@@ -167,7 +167,8 @@ def candidates(fs: str, target: str, sp: dict, base: pd.DataFrame) -> dict[str, 
     """族ごとに {候補名: 点数の列（全行）}。"""
     rounds = sp["select"]["rounds_v6e" if fs == "v6e" else "rounds_v5bag"]
     fam: dict[str, dict[str, np.ndarray]] = {"base": {}, "pw": {}, "pord": {}}
-    if target == "top3":
+    with_p1 = target == "top3" and fs != "v5bag_mf"      # 1 馬身の版は v5bag_mf では作らない（mr-5）
+    if with_p1:
         fam["pw1"], fam["pord1"] = {}, {}               # 複勝の 1 馬身の版（候補の名前は x1 で始めて、1/2 馬身の版と重ねない）
     b = load_pred(fs, target, "orig", base)
     for r in rounds:
@@ -189,7 +190,7 @@ def candidates(fs: str, target: str, sp: dict, base: pd.DataFrame) -> dict[str, 
         except FileNotFoundError as err:
             print("本命決着を除いた版の予測がまだ無いので base_nc・pw_nc を飛ばす", err, flush=True)
             MISSING.append(f"{fs}|{target}|base_nc・pw_nc")
-    if target == "top3":
+    if with_p1:
         try:
             ext1 = {w: load_pred(fs, target, f"ext1_w{w}", base) for w in sp["penalty"]["P_w"]["w"]}
         except FileNotFoundError as err:          # 1 馬身の版が未完でも、ほかの族の評価は続ける
@@ -384,14 +385,14 @@ def cmd(period: str) -> None:
     lams = [sp["metric"]["lambda_main"]] + list(sp["metric"]["lambda_sensitivity"])
     report = {"spec_version": sp["version"], "period": period, "years": list(years), "results": {}, "feature_axis": {}}
     kept: dict = {}
-    for fs in ("v5bag", "v5bag_ped", "v6e"):
+    for fs in ("v5bag", "v5bag_ped", "v5bag_mf", "v6e"):
         for target in ("win", "top3"):
             try:
                 allres = nested_time(fs, target, years, lams, sp, base)
             except FileNotFoundError as e:
                 print("予測がまだ揃っていない", fs, target, e, flush=True)
                 continue
-            if fs in ("v5bag", "v5bag_ped"):
+            if fs in ("v5bag", "v5bag_ped", "v5bag_mf"):
                 kept[(fs, target)] = allres
             for lam, res in allres.items():
                 summ = summarize(res, years)
@@ -404,14 +405,16 @@ def cmd(period: str) -> None:
                 report["results"][f"{fs}|{target}|lam{lam}"] = {"summary": summ, "boot": boots, "per_year": per_year}
                 print(f"{fs}|{target}|lam{lam}", json.dumps({f: {k: summ[f].get(k) for k in ("ll", "L_main", "winner_nlp", "race_auc", "benter_gain")}
                                                              for f in summ}, ensure_ascii=False), json.dumps(boots, ensure_ascii=False), flush=True)
-    # 特徴量の軸（2 × 2）: 同じ族の v5bag_ped − v5bag（spec の judge_feature・selection_caveat）
+    # 特徴量の軸: 同じ族の v5bag_ped − v5bag（spec の judge_feature・selection_caveat）と v5bag_mf − v5bag（judge_market_free）
     for target in ("win", "top3"):
-        if ("v5bag", target) in kept and ("v5bag_ped", target) in kept:
+        for alt in ("v5bag_ped", "v5bag_mf"):
+            if ("v5bag", target) not in kept or (alt, target) not in kept:
+                continue
             for lam in lams:
-                ra, rb = kept[("v5bag_ped", target)][lam], kept[("v5bag", target)][lam]
-                report["feature_axis"][f"{target}|lam{lam}"] = {f"{f}:ped-v5bag": paired_boot(ra, base, target, f, f, years, res_b=rb)
-                                                                for f in ra["years"][years[0]] if "_fixed_" not in f and f in rb["years"][years[0]]}
-            print("feature_axis", target, json.dumps(report["feature_axis"].get(f"{target}|lam{lams[0]}"), ensure_ascii=False), flush=True)
+                ra, rb = kept[(alt, target)][lam], kept[("v5bag", target)][lam]
+                report["feature_axis"][f"{alt}|{target}|lam{lam}"] = {f"{f}:{alt}-v5bag": paired_boot(ra, base, target, f, f, years, res_b=rb)
+                                                                      for f in ra["years"][years[0]] if "_fixed_" not in f and f in rb["years"][years[0]]}
+            print("feature_axis", alt, target, json.dumps(report["feature_axis"].get(f"{alt}|{target}|lam{lams[0]}"), ensure_ascii=False), flush=True)
     report["missing_families"] = MISSING
     if MISSING:
         print("[警告] 飛ばした族がある（揃ってから流し直す）:", MISSING, flush=True)

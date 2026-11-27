@@ -203,6 +203,22 @@ def test_target_and_weight_ext1_uses_y_p1():
     assert y.tolist() == [1, 1, 0, 0] and wt.tolist() == [1, 1, 1, 2]
 
 
+def test_manifest_compare(tmp_path):
+    import json
+
+    from src.research.model_relabel.mr_train import _check_manifest
+    old = {"spec_version": "mr-2", "label_md5": "a", "sets": [{"max_depth": 8, "nthread": 4}], "rounds": [200]}
+    (tmp_path / "manifest.json").write_text(json.dumps(old))
+    # 版・スレッドの数が違い、列の印が新しく付いても通る
+    _check_manifest(tmp_path, {"spec_version": "mr-5", "label_md5": "a", "sets": [{"max_depth": 8, "nthread": 2}], "rounds": [200], "cols_md5": "x"})
+    with pytest.raises(SystemExit):     # ラベルが違えば止める
+        _check_manifest(tmp_path, {"spec_version": "mr-5", "label_md5": "b", "sets": [{"max_depth": 8, "nthread": 2}], "rounds": [200]})
+    with pytest.raises(SystemExit):     # 古い印にあって新しい印に無い鍵（除き方など）があれば止める
+        old2 = dict(old, chalk_md5="c")
+        (tmp_path / "manifest.json").write_text(json.dumps(old2))
+        _check_manifest(tmp_path, {"spec_version": "mr-5", "label_md5": "a", "sets": [{"max_depth": 8}], "rounds": [200]})
+
+
 def test_chalk_races():
     res = pd.DataFrame({"race_id": ["a"] * 4 + ["b"] * 4, "finish_position": [1, 2, 3, 4, 1, 2, 3, -1],
                         "popularity": [2, 1, 3, 10, 1, 2, 5, 4]})
