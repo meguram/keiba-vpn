@@ -468,6 +468,9 @@ def dnf_sensitivity(res: dict, base: pd.DataFrame, target: str, years) -> dict:
             vals[f] = float(np.mean(per_year))          # summarize と同じく年ごとの平均の単純な平均
         out[how] = {f: round(v, 6) for f, v in vals.items()}
         out[f"{how}_minus_base"] = {f: round(v - vals["base"], 6) for f, v in vals.items() if f != "base"}
+    # spec の dnf_rule: 3 通りで族 − base の差の符号がそろうか（そろわない比べは「決まらない」）
+    out["direction_agree"] = {f: len({np.sign(out[f"{h}_minus_base"][f]) for h in ("none", "min", "median")}) == 1
+                              for f in out["none_minus_base"]}
     return out
 
 
@@ -550,9 +553,15 @@ def cmd(period: str, only: str | None = None) -> None:
                 if alt == "v5bag_mfs":     # mfs の pw は w を 1 つに決めた版なので、mf の側は同じ w の固定の群と対にする（同じラベルどうし）。mfc − mfs は族どうしのまま
                     w = json.loads((DOCS / "market_choice.json").read_text(encoding="utf-8"))[target]
                     pairs = [("base", "base"), ("pw", f"pw_fixed_w{w}")]
+                da = report["results"][f"{alt}|{target}|lam{lam}"]["dnf_sensitivity"]
+                db = report["results"][f"{ref}|{target}|lam{lam}"]["dnf_sensitivity"]
                 report["feature_axis"][f"{alt}|{target}|lam{lam}"] = {
                     **{f"{a}:{alt}-{ref}:{b}": paired_boot(ra, base, target, a, b, years, res_b=rb) for a, b in pairs},
-                    **{f"{a}:{alt}-{ref}:{b}:benter": paired_boot_benter(ra, a, rb, b, years) for a, b in pairs}}
+                    **{f"{a}:{alt}-{ref}:{b}:benter": paired_boot_benter(ra, a, rb, b, years) for a, b in pairs},
+                    # spec の dnf_rule: 中止の馬の扱いの 3 通りで、差の符号がそろうか
+                    **{f"{a}:{alt}-{ref}:{b}:dnf": {h: round(da[h][a] - db[h][b], 6) for h in ("none", "min", "median")} | {
+                        "direction_agree": len({np.sign(da[h][a] - db[h][b]) for h in ("none", "min", "median")}) == 1}
+                       for a, b in pairs}}
             print("feature_axis", alt, target, json.dumps(report["feature_axis"].get(f"{alt}|{target}|lam{lams[0]}"), ensure_ascii=False), flush=True)
     report["missing_families"] = MISSING
     if MISSING:
