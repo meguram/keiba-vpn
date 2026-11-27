@@ -211,8 +211,10 @@ def join_frame(meta: pd.DataFrame, label_max_year: int | None) -> tuple[pd.DataF
 
 # ---------------------------------------------------------------- 学習
 def arm_rows(j: pd.DataFrame, arm: str) -> tuple[np.ndarray, np.ndarray]:
-    """腕の訓練の行の印と目標（ラベルのある行だけ）。L1: 確定 10 倍以上・y_p1。C0: 全馬（オッズの無い馬も）・y3。"""
-    has = j["has_label"].to_numpy()
+    """腕の訓練の行の印と目標（ラベルのある行だけ）。L1: 確定 10 倍以上・y_p1。C0: オッズのある全馬（オッズの帯を問わない）・y3。
+    X の meta にあって runners に無い行（毎年約 1,500 頭）は、全部が障害レース（runners は平地だけ）。L1 と C0 の差を
+    「母集団とラベル」だけにするため、C0 も平地（オッズのある行）で学ぶ（dataset_check.md）。"""
+    has = j["has_label"].to_numpy() & j["odds_final"].notna().to_numpy()
     if arm == "L1":
         return has & population(j["odds_final"].to_numpy(float)), j["y_p1"].to_numpy(np.float32)
     if arm == "C0":

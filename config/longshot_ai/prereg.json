@@ -25,11 +25,12 @@
   "eval_sub": "odds_final"
  },
  "labels": {
-  "source": "/home/jovyan/work/model_relabel_out/labels_convert_A.parquet",
+  "source": "/home/jovyan/work/longshot_ai_out/frozen/labels_convert_A_d6cf83c1.parquet",
   "source_sha256": "d6cf83c12677ea84a4702925b2f3e5374ea2ecab3f5cb1011f144e35827660d0",
   "spec_commit": "origin/model-relabel 29741349（config/model_relabel/spec.json mr-3）",
   "train": "y_p1",
-  "truth": "y3"
+  "truth": "y3",
+  "source_note": "11/27 08:06 UTC に model-relabel が元の labels_convert_A.parquet に chalk_race の列を足して書き換えた（既存の列は全部一致を確かめた）。書き換えに巻き込まれないよう、凍結の版（sha256 d6cf83c1…、元は labels_convert_A.before_nc.parquet）を自分の置き場に写して読む。着順を開く前の直し"
  },
  "arms": {
   "L1_MF_xgb": "主。母集団 10 倍以上（確定）・y_p1・市場と独立の列・XGBoost（megu_cycles の BAG_SETS × XGB_PARAMS × 800 本）・offset なし",
