@@ -23,8 +23,8 @@ import { LoadingNotice } from "@/components/LoadingNotice";
 import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { firstCornerPos } from "@/lib/resultCheck";
 import { MarkNote } from "@/components/MarkNote";
-import { RaceLevelNote } from "@/components/RaceResult";
-import type { RaceLevel, RaceResultData } from "@/lib/hooks/useRaceResult";
+import { RaceLevelNote, TrackBiasNote } from "@/components/RaceResult";
+import type { RaceLevel, RaceResultData, TrackBias } from "@/lib/hooks/useRaceResult";
 
 const SHOW_MEGU = featureEnabled("megu-index");
 const SHOW_TRACKING = featureEnabled("tracking-difficulty");
@@ -284,6 +284,7 @@ export default function RaceDetailPage() {
   const { isMember, isAdmin, loading: authLoading } = useAuthStatus();
   const lock = !authLoading && !isMember;      // 匿名は勝率・複勝率まで（それ以外はサーバが落としている）
   const [raceLevel, setRaceLevel] = useState<RaceLevel | undefined>(undefined);   // レースレベル・開催日レベル・メンバーレベル（会員だけ。確定の結果の API）
+  const [trackBias, setTrackBias] = useState<TrackBias | undefined>(undefined);   // トラックバイアス（会員だけ。同じ API）
   const narrow = useNarrow();
 
   const loadSeq = useRef(0);
@@ -389,10 +390,11 @@ export default function RaceDetailPage() {
   const hasResult = (raceData?.race_result?.entries?.length ?? 0) > 0;
   useEffect(() => {
     setRaceLevel(undefined);                                       // 別のレースへ移ったら前の値を消す
+    setTrackBias(undefined);
     if (!raceId || !hasResult || lock || authLoading || USE_MOCK) return;
     let alive = true;
     getJson<RaceResultData>(`/api/race/${raceId}/result`, { ttlMs: PRED_TTL_MS })
-      .then((d) => { if (alive && d?.status === "final") setRaceLevel(d.race_level); })
+      .then((d) => { if (alive && d?.status === "final") { setRaceLevel(d.race_level); setTrackBias(d.track_bias); } })
       .catch(() => { /* 取れなければ出さない */ });
     return () => { alive = false; };
   }, [raceId, hasResult, lock, authLoading]);
@@ -630,6 +632,7 @@ export default function RaceDetailPage() {
   ) : (
     <div style={{ overflowX: "auto" }}>
       {!lock && <RaceLevelNote lv={raceLevel} />}
+      {!lock && <TrackBiasNote tb={trackBias} />}
       <table data-no-sort style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
         <thead style={{ background: "var(--surface2)" }}>
           <tr>

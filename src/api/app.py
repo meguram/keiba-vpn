@@ -7827,7 +7827,8 @@ def _tracking_difficulty_public_payload(data: dict) -> dict:
 async def api_race_result(request: Request, race_id: str):
     """レース結果（着順・払戻）。確定があれば確定、無ければ発走 +15 分に取る速報。無いときは available=false。
     確定のレースには、会員・開発者だけにレースレベル・開催日レベル・メンバーレベル（race_level。ホストで事前に計算した値を読むだけ。
-    src/pipeline/race_time/levels.py）を足す。匿名の応答には入れない（共有キャッシュに置く匿名の応答と混ざらない）。"""
+    src/pipeline/race_time/levels.py）と、トラックバイアス（track_bias。src/pipeline/track_bias/view.py）を足す。
+    匿名の応答には入れない（共有キャッシュに置く匿名の応答と混ざらない）。"""
     if not (race_id.isdigit() and len(race_id) == 12):
         return JSONResponse({"error": "race_id は 12 桁の数字です"}, status_code=400)
     with_level = is_member(request) or is_developer(request)
@@ -7843,6 +7844,14 @@ async def api_race_result(request: Request, race_id: str):
                 view["race_level"] = result_block(race_id, str(view.get("date") or race_id[:4]))
             except Exception as exc:  # noqa: BLE001  レベルが読めなくても結果は返す
                 logger.warning("レースレベルの読み込みに失敗 %s: %s", race_id, exc)
+            try:   # トラックバイアス（その日・その場・その面の名札とこのレースの寄与。src/pipeline/track_bias/view.py。読むだけ）
+                from src.pipeline.track_bias.view import result_block as track_bias_block
+
+                tb = track_bias_block(race_id, str(view.get("date") or race_id[:4]))
+                if tb is not None:                       # 値の置き場がまだ無い（meta.json が無い）ときは付けない
+                    view["track_bias"] = tb
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("トラックバイアスの読み込みに失敗 %s: %s", race_id, exc)
         return view
 
     return JSONResponse(await asyncio.to_thread(_run))

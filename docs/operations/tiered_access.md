@@ -22,6 +22,7 @@ UI の隠しではなく、**サーバが応答から項目を落とす**（許�
 | 出走馬カード（`/api/race/{id}/entry/{horse}/card`） | 近走の公式の事実・同条件の成績・騎手・調教師の成績。追い切り・厩舎コメント・成長曲線（めぐ指数）・近走の人気は落とす（`access.locked`） | 全部 |
 | 予測成績（`/api/prediction-results/*`） | 印と着順の突き合わせ。勝率・オッズ・人気・仮想購入は落とす | 仮想購入まで |
 | Flask `/api/v1/races/{id}/results` | 確定の結果はそのまま。速報のときはオッズ・人気・払戻を落とす | そのまま |
+| めぐ分析（`/api/v1/races/{id}/analysis`）の血統予想家の欄 `pedigree_persona`（紹介文・血統の上位の人気薄・理由の文・レースの事実の札。2026-11-27） | 見えない（パス全体が 401） | 見える。発走の後は API が欄を落とす。ホストが `visible` を付けない影の開催では開発者だけ（`with_pedigree_persona`・`tests/research/test_pedigree_persona.py`） |
 
 - 画面は、落とした欄を空欄にせず「🔒 会員限定」と出す（`EntryCardPanel`・レース詳細・週の予想・予測成績）。
 - 出し分けを変えて配備したら、nginx の API のキャッシュを purge する（`scripts/ops/vps/purge_api_cache.sh`。確定済みのレースの匿名の応答は s-maxage 30 日で置かれるので、purge しないと前の版が出続ける）。edge のフォルダは、指紋に配備の commit が入るので自動で作り直される。Cloudflare は API を置かない（`cf-cache-status: DYNAMIC`。2026-11-25 に確認）。

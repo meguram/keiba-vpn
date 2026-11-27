@@ -5,6 +5,7 @@
 もとになった研究は docs/operations/pedigree_lab/log.md と、docs/html/operations/final/pedigree_model.html・pedigree_easy.html にあります。
 
 ## 結論
+- 規則の凍結（2026-11-27・会議の 1 号の条件 3）: 版 pp-1。rules.py の sha256 bdf979ca4f9b6f4f…・columns.py 3e02a34a336d0aeb…・frozen.json bbddb91d7e387154…（閾値 ダート 1.208406・芝 1.262158）。満期まで直さない。実装の状態は persona_impl_plan.md の末尾。
 - 血統予想家は、**「理由の分かる見方の 1 つ」**として作ります。回収率 100% 超の根拠はありません。
 - 出力は 3 つで、どれも印とは別の欄に置きます。**印は 1 種類（めぐAI印）のまま**にし、血統予想家は印を出しません。
   - 「血統の上位の人気薄」の一覧

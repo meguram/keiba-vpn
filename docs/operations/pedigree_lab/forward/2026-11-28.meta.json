@@ -1,0 +1,14 @@
+{
+ "made_at": "2026-11-26T21:33:46+09:00",
+ "model": "v4_pure_dd（freeze_v4_gate.sha256）",
+ "inputs": {
+  "runs_rows_before_day": 508689,
+  "runs_last_date": "2026-11-23",
+  "shutuba_mtime": "2026-11-26T19:30:08+09:00",
+  "ped_rows": 58662
+ },
+ "races": 23,
+ "horses": 331,
+ "no_pedigree": 0,
+ "backfill": false
+}

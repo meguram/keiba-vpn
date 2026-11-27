@@ -15,6 +15,17 @@ export type RaceResultData = {
   field_size?: number | null; finish?: ResultFinish[]; payoff?: ResultPayoff[]; fetched_at?: string;
   /** 確定のレースだけ・会員と開発者だけ。ホストで事前に計算した値（src/pipeline/race_time/levels.py） */
   race_level?: RaceLevel;
+  /** 確定のレースだけ・会員と開発者だけ。その日・その場・その面のトラックバイアス（ホストで事前に計算した値。src/pipeline/track_bias/view.py） */
+  track_bias?: TrackBias;
+};
+/** トラックバイアスの 1〜3 着の位置（番手は 番手/頭数 の分子。通過順が無ければ null） */
+export type TrackBiasTop = { pos: number; horse_number: number; popularity: number | null; passing_order: string | null; early: number | null; corner4: number | null; field: number };
+/** トラックバイアス（その日の結果の振り返り）。値が無ければ available=false で「算出前」 */
+export type TrackBias = {
+  available: boolean; note?: string; version?: string; built?: string; formula?: string;
+  day?: { venue?: string; surf?: string; label?: string; front_label?: string; inner_label?: string; z_front: number | null; z_inner: number | null; n_races: number | null };
+  race?: { front_se: number | null; front_zc: number | null; inner_se: number | null; inner_zc: number | null; front4c_se: number | null };
+  top3?: TrackBiasTop[];
 };
 /** レースレベル・開催日レベル・メンバーレベル（秒。負なら基準より速い）。値が無ければ available=false で「算出なし」 */
 export type RaceLevel = {
@@ -44,8 +55,9 @@ export function hasStarted(date: string | undefined, startTime: string | undefin
   return d.length === 8 && d < todayJst();
 }
 
-/** 発走後のレースの結果（着順・払戻）。結果が出ていなければ null。開いている間は結果が出るまで追いかける。 */
-export function useRaceResult(raceId: string, date: string | undefined, startTime: string | undefined, enabled: boolean): { result: RaceResultData | null; started: boolean } {
+/** 発走後のレースの結果（着順・払戻）。結果が出ていなければ null。開いている間は結果が出るまで追いかける。
+ *  poll=false は、開いたときに発走後なら 1 回だけ取る（周回しない。めぐ分析。CLAUDE.md: 15 分未満の間隔のタブの定期問い合わせを足さない）。 */
+export function useRaceResult(raceId: string, date: string | undefined, startTime: string | undefined, enabled: boolean, poll = true): { result: RaceResultData | null; started: boolean } {
   const [result, setResult] = useState<RaceResultData | null>(null);
   const [started, setStarted] = useState(false);
   useEffect(() => {
@@ -71,13 +83,13 @@ export function useRaceResult(raceId: string, date: string | undefined, startTim
         }
       }
       const within = startMs == null || now - startMs < POLL_WINDOW_MS;
-      if (!cancelled && !done && within) {
+      if (poll && !cancelled && !done && within) {
         const wait = st || startMs == null ? POLL_MS : Math.min(POLL_MS, Math.max(5_000, startMs - now));
         timer = setTimeout(tick, wait);
       }
     };
     tick();
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
-  }, [raceId, date, startTime, enabled]);
+  }, [raceId, date, startTime, enabled, poll]);
   return { result, started };
 }

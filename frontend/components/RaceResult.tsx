@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import type { RaceLevel, RaceResultData } from "@/lib/hooks/useRaceResult";
+import type { RaceLevel, RaceResultData, TrackBias } from "@/lib/hooks/useRaceResult";
 import { MARK_ORDER } from "@/lib/tableSort";
 
 const TH: CSSProperties = { padding: "5px 8px", textAlign: "right", fontSize: 12, color: "var(--text-dim)", fontWeight: 600, whiteSpace: "nowrap" };
@@ -40,6 +40,34 @@ export function RaceLevelNote({ lv }: { lv?: RaceLevel }) {
   );
 }
 
+/** 符号つきの数（−0.53 の形） */
+const signed = (v: number | null | undefined, nd = 2) => (v == null ? "—" : `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(v).toFixed(nd)}`);
+
+/** トラックバイアス（その日・その場・その面の名札・このレースの寄与・1〜3 着の位置）。値は事前に計算したものを読むだけ */
+export function TrackBiasNote({ tb }: { tb?: TrackBias }) {
+  if (!tb) return null;
+  const box: CSSProperties = { margin: "0 0 10px", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)", fontSize: 12.5, lineHeight: 1.7 };
+  if (!tb.available) return <div style={box}><b>トラックバイアス</b>：{tb.note ?? "算出前"}</div>;
+  const d = tb.day, r = tb.race;
+  const surf = d?.surf === "芝" ? "芝" : d?.surf === "ダ" ? "ダート" : (d?.surf ?? "");
+  const pos = (t: NonNullable<TrackBias["top3"]>[number]) => (t.passing_order == null || t.early == null
+    ? "通過なし" : `通過 ${t.passing_order}・序盤 ${t.early}/${t.field}・4 角 ${t.corner4 ?? "—"}/${t.field}`);
+  return (
+    <div style={box} data-testid="track-bias">
+      <div><b>トラックバイアス（{d?.venue ?? ""}{surf}）</b>：{d?.label ?? "—"}
+        <span style={{ color: "var(--text-dim)" }}> ／ 前後 z {signed(d?.z_front, 1)}・内外 z {signed(d?.z_inner, 1)}・{d?.n_races ?? "—"} レース</span></div>
+      <div><b>このレースの効き</b>：前後 {signed(r?.front_se)}（日の z への寄与 {signed(r?.front_zc)}）・内外 {signed(r?.inner_se)}（寄与 {signed(r?.inner_zc)}）
+        <span style={{ color: "var(--text-dim)" }}> ／ 4 角の位置で測ると前後 {signed(r?.front4c_se)}</span></div>
+      {(tb.top3 ?? []).length > 0 && (
+        <div><b>1〜3 着の位置</b>：{(tb.top3 ?? []).map((t) => `${t.pos}着 ${t.horse_number}番 ${t.popularity ?? "?"}人気（${pos(t)}）`).join(" ／ ")}</div>
+      )}
+      <div style={{ marginTop: 4, fontSize: 11, color: "var(--text-dim)" }}>
+        {tb.note} 正の値は前・内の馬が見込みより来た向き。{tb.formula}
+      </div>
+    </div>
+  );
+}
+
 /** 週間予測の『レース結果』タブ。着順表（めぐAI印つき）と払戻表。速報は払戻が揃うまで『速報』と出す。 */
 export function RaceResult({ result, marks }: { result: RaceResultData; marks?: MarkMap }) {
   const finish = result.finish ?? [];
@@ -57,6 +85,7 @@ export function RaceResult({ result, marks }: { result: RaceResultData; marks?: 
       </div>
 
       {!provisional && <RaceLevelNote lv={result.race_level} />}
+      {!provisional && <TrackBiasNote tb={result.track_bias} />}
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid var(--border)", background: "var(--surface)" }}>
           <thead style={{ background: "var(--surface2)" }}>

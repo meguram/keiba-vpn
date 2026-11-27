@@ -14,12 +14,16 @@ import { RunningMap } from "@/components/analysis/RunningMap";
 import { TrainerPatternTable } from "@/components/analysis/TrainerPatternTable";
 import { GradedPicks } from "@/components/analysis/GradedPicks";
 import { CourseRules } from "@/components/analysis/CourseRules";
+import { PedigreePersona } from "@/components/analysis/PedigreePersona";
+import { pastStart, type PPFigure } from "@/lib/pedigreePersona";
 import type { CRFigure } from "@/lib/courseRules";
 import type { GPFigure } from "@/lib/gradedPicks";
 import type { TPFigure } from "@/lib/trainerPattern";
 import type { RunningMapFigure } from "@/lib/raceAnalysis";
 import { entriesUnavailable, formatComputedAt, formatPeriod } from "@/lib/raceAnalysis";
 import type { RaceAnalysis } from "@/lib/raceAnalysis";
+import { RaceResult } from "@/components/RaceResult";
+import { useRaceResult } from "@/lib/hooks/useRaceResult";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 import { sameRoundIn } from "@/lib/raceGrade";
 
@@ -202,9 +206,16 @@ export default function AnalysisPage() {
   }, [load.state, activeRaceId, selectable, warm]);
 
   const data = load.state === "ok" ? load.data : undefined;
-  const modules = data?.modules ?? [];
+  // 血統予想家の欄は、発走の後は出さない（API も落とすが、ブラウザに保存された前回の応答を先に出すときのため）
+  const modules = (data?.modules ?? []).filter((m) => m.view !== "pedigree_persona" || !pastStart(data?.race));
   const mod = modules.find((m) => m.id === selectedModule) ?? modules.find((m) => m.status === "ok") ?? modules[0];
   const race = data?.race;
+  // 発走後のレースは、週の予測と同じ結果の API（会員だけ）で結果を読む。発走前は呼ばない。周回はしない（開いたときに 1 回だけ）。
+  // 日付・時刻はレースの一覧（activeRace）を先に使う（分析の応答 race は切り替えの直後に前のレースのままのことがある）
+  const sameRace = race?.race_id === activeRaceId;
+  const { result: fetchedResult } = useRaceResult(activeRaceId, activeRace?.date ?? (sameRace ? race?.date : undefined) ?? undefined,
+    activeRace?.start_time ?? (sameRace ? race?.start_time : undefined) ?? undefined, isMember && !authLoading && !!activeRaceId, false);
+  const raceResult = fetchedResult?.race_id === activeRaceId ? fetchedResult : null;   // 切り替えた直後に前のレースの結果を出さない
 
   return (
     <div className="page-wide" style={{ minHeight: "100dvh", background: "var(--bg)", color: "var(--text)" }}>
@@ -284,6 +295,12 @@ export default function AnalysisPage() {
                   </div>
                 </div>
 
+                {raceResult && (
+                  <div className="card" data-testid="analysis-race-result" style={{ marginBottom: 12 }}>
+                    <RaceResult result={raceResult} />
+                  </div>
+                )}
+
                 {data.provisional_entries && (
                   <div role="note" style={{ marginBottom: 10, padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(210,153,34,0.4)", background: "rgba(210,153,34,0.08)", color: "#d29922", fontSize: 12 }}>
                     暫定の出馬表です。馬番・枠順・騎手は確定前で、変わることがあります。
@@ -335,6 +352,8 @@ export default function AnalysisPage() {
                             ? (mod.figure ? <GradedPicks fig={mod.figure as GPFigure} notes={mod.notes} /> : null)
                             : mod.view === "course_rules"
                             ? (mod.figure ? <CourseRules fig={mod.figure as CRFigure} notes={mod.notes} /> : null)
+                            : mod.view === "pedigree_persona"
+                            ? (mod.figure ? <PedigreePersona fig={mod.figure as PPFigure} notes={mod.notes} /> : null)
                             : <>
                               {/* 位置取りの幅（range）の列があるモジュールは、平均の位置から位置取りマトリックスを表の上に出す */}
                               {mod.columns?.filter((c) => c.fmt === "range").slice(0, 1).map((c) => <PositionMatrix key={c.key} entries={data.entries} module={mod} rangeKey={c.key} />)}
@@ -346,7 +365,7 @@ export default function AnalysisPage() {
                           <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--text)" }}>{formatPeriod(mod.source)}</p>
                         )}
                         {/* 走法マップは軸と馬だけを見せる（説明文・注記は出さない） */}
-                        {mod.status === "ok" && mod.view !== "map" && !((mod.view === "graded_picks" || mod.view === "course_rules") && mod.figure) && mod.notes?.length ? (
+                        {mod.status === "ok" && mod.view !== "map" && !((mod.view === "graded_picks" || mod.view === "course_rules" || mod.view === "pedigree_persona") && mod.figure) && mod.notes?.length ? (
                           <ul style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 11, color: "var(--text-dim)" }}>
                             {mod.notes?.map((n) => <li key={n}>{n}</li>)}
                           </ul>
