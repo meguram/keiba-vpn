@@ -479,9 +479,13 @@ main { max-width:980px; padding-top:0; }
 #sum .why2 { color:var(--c); font-size:12.5px; overflow-wrap:anywhere; }
 #sum .ln { overflow-wrap:anywhere; margin-top:2px; } #sum .k { color:var(--muted); margin-right:4px; }
 #sum details { margin-top:3px; } #sum summary { cursor:pointer; color:var(--accent); font-size:12.5px; }
-#sum .gl { max-height:40vh; overflow:auto; border-top:1px solid var(--border); margin-top:4px; padding-top:4px; }
+#sum .gl { max-height:25vh; overflow:auto; border-top:1px solid var(--border); margin-top:4px; padding-top:4px; }
 #sum code { font-size:12px; }
-#log { padding:10px 0 72px; }
+#log { padding:4px 0 40px; }
+#latest { width:100%; max-height:30vh; overflow-y:auto; border:1px solid var(--border); border-radius:10px; padding:0 8px; background:var(--bg); }
+#latest:empty { display:none; }
+.bar { max-height:70vh; overflow-y:auto; }  /* ゴールを開いても、帯で画面が埋まらない */
+.lh { width:100%; font-size:12px; color:var(--muted); margin:2px 0 -2px; }
 .row { display:flex; margin:10px 0; }
 .row.l { justify-content:flex-start; } .row.r { justify-content:flex-end; } .row.c { justify-content:center; }
 .bub { max-width:min(78%, 760px); min-width:0; background:color-mix(in srgb, var(--c) 9%, var(--panel)); border:1px solid color-mix(in srgb, var(--c) 35%, var(--border));
@@ -509,34 +513,28 @@ main { max-width:980px; padding-top:0; }
 .tlist { font-size:11.5px; color:var(--muted); margin:2px 0 0; padding-left:1.2em; max-width:min(78%, 760px); }
 .grp { display:flex; flex-direction:column; }
 .row.l .grp { align-items:flex-start; } .row.r .grp { align-items:flex-end; }
-#news { position:fixed; left:50%; transform:translateX(-50%); bottom:18px; padding:7px 16px; border-radius:18px; border:1px solid var(--accent);
-  background:var(--panel); color:var(--accent); cursor:pointer; font:inherit; font-size:13.5px; box-shadow:0 2px 10px rgba(0,0,0,.18); z-index:4; }
 .empty { color:var(--muted); text-align:center; padding:40px 0; }
 .s1 { --c:var(--s1); } .s2 { --c:var(--s2); } .s3 { --c:var(--s3); } .p1 { --c:var(--p1); } .p2 { --c:var(--p2); }
 .sc { --c:var(--sc); } .so { --c:var(--so); } .sx { --c:var(--sx); } .sn { --c:var(--sn); }
 @media (max-width:600px) { .bub, .mini, .tlist { max-width:94%; } .bar { font-size:13px; } main { padding-left:10px; padding-right:10px; }
-  #tabs { flex-wrap:nowrap; overflow-x:auto; padding-bottom:3px; } .tab { flex:0 0 auto; } .tab .nm { max-width:10em; } #sum .gl { max-height:30vh; } }
+  #tabs { flex-wrap:nowrap; overflow-x:auto; padding-bottom:3px; } .tab { flex:0 0 auto; } .tab .nm { max-width:10em; } #sum .gl { max-height:18vh; }
+  #latest { max-height:25vh; } }
 """
 LIVE_JS = r"""
 (function () {
   var POLL = %POLL%, LEFT = {s1:1, s2:1, s3:1, p1:1, p2:1, sx:1};
   var $ = function (id) { return document.getElementById(id); };
-  var log = $('log'), st = $('st'), news = $('news'), tabs = $('tabs'), sum = $('sum'), selN = $('lim'), chkT = $('tools');
-  var sid = '', seq = 0, epoch = '', unread = 0, timer = 0, busy = false, lastTool = null, gen = 0, lastSig = null;
-  var tabRows = {}, lastSum = null, lastGoal = null, sumOpen = false;
+  var log = $('log'), latest = $('latest'), st = $('st'), tabs = $('tabs'), sum = $('sum'), selN = $('lim'), chkT = $('tools');
+  var sid = '', seq = 0, epoch = '', timer = 0, busy = false, lastTool = null, gen = 0, lastSig = null, LATEST_N = 3;
+  var tabRows = {}, lastSum = null, sumOpen = false;
   var STATE = {running:'実行中', waiting:'待機中', blocked:'止まっている', done:'終わった', past:'記録だけ', other:'不明'};
   function load(k, d) { try { return localStorage.getItem('live.' + k) || d; } catch (e) { return d; } }
   function save(k, v) { try { localStorage.setItem('live.' + k, v); } catch (e) {} }
   selN.value = load('lim', '30'); if (!selN.value) selN.value = '30';
   chkT.checked = load('tools', '0') === '1';
-  function atBottom() { return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 80; }
-  function toBottom() { window.scrollTo(0, document.documentElement.scrollHeight); }
   function el(tag, cls, text) { var x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; }
   function hhmm(ts) { var d = new Date(ts); return isNaN(d) ? '' : d.toLocaleString('ja-JP', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}); }
   function side(e) { return e.kind === 'notice' ? 'c' : (LEFT[e.cls] ? 'l' : 'r'); }
-  function showNews() { news.hidden = unread === 0; news.textContent = '新しい発言 ' + unread + ' 件 ↓'; }
-  window.addEventListener('scroll', function () { if (atBottom()) { if (unread) trim(); unread = 0; showNews(); } }, {passive: true});
-  news.addEventListener('click', function () { unread = 0; showNews(); toBottom(); });
   function bubble(e) {
     var row = el('div', 'row ' + side(e));
     if (e.kind === 'notice' || e.kind === 'call') {
@@ -570,24 +568,33 @@ LIVE_JS = r"""
       row._n += 1; var name = x.text.split(':')[0]; row._names[name] = (row._names[name] || 0) + 1;
       var parts = []; for (var k in row._names) parts.push(k + ' ' + row._names[k]);
       btn.textContent = row._who + ' のツール ' + row._n + ' 件（' + parts.join('・') + '）';
-      ul.appendChild(el('li', '', hhmm(x.ts) + ' ' + x.text));
+      ul.insertBefore(el('li', '', hhmm(x.ts) + ' ' + x.text), ul.firstChild);  /* 新しい順 */
     };
     return row;
+  }
+  /* 新しい順: 新しい発言は上の固定の枠（#latest）の一番上に足す。発言が LATEST_N 件を超えたら、古い分を下の流れ（#log）の一番上へ移す */
+  function rowsOf(box) { return Array.prototype.slice.call(box.children).filter(function (r) { return r.classList.contains('row'); }); }
+  function spill() {
+    var rows = rowsOf(latest), talk = 0;
+    for (var i = 0; i < rows.length; i++) {
+      if (!rows[i]._add) talk += 1;  /* ツールのまとめは数えない（ただし枠に溜めすぎない） */
+      if (talk > LATEST_N || i >= LATEST_N * 2) { for (var j = rows.length - 1; j >= i; j--) log.insertBefore(rows[j], log.firstChild); return; }
+    }
   }
   function append(e) {
     if (e.kind === 'tool') {
       if (!chkT.checked) return;
-      if (!lastTool || lastTool._who !== e.speaker || lastTool !== log.lastChild) { lastTool = toolGroup(e); log.appendChild(lastTool); }
-      lastTool._add(e); return;
+      if (!lastTool || lastTool._who !== e.speaker || lastTool !== latest.firstChild) { lastTool = toolGroup(e); latest.insertBefore(lastTool, latest.firstChild); }
+      lastTool._add(e); spill(); return;
     }
-    var row = bubble(e); log.appendChild(row); clampIfLong(row);
+    var row = bubble(e); latest.insertBefore(row, latest.firstChild); clampIfLong(row); spill();
   }
-  function trim() {
-    var lim = Math.max(1, +selN.value || 30), rows = log.querySelectorAll('.row'), talk = 0;
-    for (var i = rows.length - 1; i >= 0; i--) {
-      if (rows[i]._add) continue;  /* ツールのまとめは数えない */
+  function trim() {  /* 直近 N 件を超えた古い発言を、下の流れの末尾から捨てる */
+    var lim = Math.max(1, +selN.value || 30), rows = rowsOf(latest).concat(rowsOf(log)), talk = 0;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i]._add) continue;
       talk += 1;
-      if (talk > lim) { while (log.firstChild && log.firstChild !== rows[i].nextSibling) log.removeChild(log.firstChild); break; }
+      if (talk > lim) { for (var j = rows.length - 1; j >= i; j--) rows[j].parentNode.removeChild(rows[j]); break; }
     }
   }
   var agentsNote = '';
@@ -626,7 +633,7 @@ LIVE_JS = r"""
     d.appendChild(gl); sum.appendChild(d);
   }
   function schedule(ms) { clearTimeout(timer); timer = setTimeout(poll, ms); }
-  function reset() { gen += 1; seq = 0; epoch = ''; unread = 0; showNews(); lastTool = null; log.textContent = ''; }
+  function reset() { gen += 1; seq = 0; epoch = ''; lastTool = null; log.textContent = ''; latest.textContent = ''; }
   function poll() {
     if (!sid || busy) { schedule(POLL); return; }
     busy = true;
@@ -639,17 +646,20 @@ LIVE_JS = r"""
         if (had) { reset(); schedule(0); return; }
       }
       if (d.summary) renderSum(d.summary);
-      var follow = atBottom() || seq === 0, talk = 0, first = seq === 0;
+      /* 上へ足しても、下を読んでいる人の位置はずらさない（足した高さの分だけ下げる） */
+      var y = window.scrollY, h0 = document.documentElement.scrollHeight, talk = 0, first = seq === 0;
       (d.events || []).forEach(function (e) { append(e); if (e.kind !== 'tool') talk += 1; seq = Math.max(seq, e.seq); });
-      if (first && !log.firstChild) log.appendChild(el('div', 'empty', 'まだ発言がありません。'));
+      if (first && !latest.firstChild && !log.firstChild) log.appendChild(el('div', 'empty', 'まだ発言がありません。'));
       else if (talk && log.querySelector('.empty')) log.removeChild(log.querySelector('.empty'));
-      if (follow) { trim(); toBottom(); } else if (talk) { unread += talk; showNews(); }
+      var dh = document.documentElement.scrollHeight - h0;
+      if (!first && dh > 0) window.scrollTo(0, y + dh);
+      if (window.scrollY < 400) trim();  /* 下で古い発言を読んでいる間は消さない（上へ戻ったときに切り詰める） */
       status('更新 ' + new Date().toLocaleTimeString('ja-JP') + '（' + POLL / 1000 + ' 秒おき）');
       schedule(document.hidden ? POLL * 5 : POLL);
     }, function (code) {
       busy = false;
       if (code === 404 && g === gen) {
-        log.textContent = ''; log.appendChild(el('div', 'empty', 'このセッションの記録が見つかりません（またはこの画面では中身を出さないセッション）。'));
+        log.textContent = ''; latest.textContent = ''; log.appendChild(el('div', 'empty', 'このセッションの記録が見つかりません（またはこの画面では中身を出さないセッション）。'));
         status('記録なし'); schedule(POLL * 5); return;
       }
       status('つながりません。再試行しています…'); schedule(g !== gen ? 0 : POLL * 2);
@@ -701,8 +711,9 @@ def live_page(nonce: str = "") -> str:
         f'<label>直近 <select id="lim" aria-label="表示する件数">{opts}</select></label>'
         '<label><input type="checkbox" id="tools"> ツールの行</label>'
         '<a href="/">目次へ</a><span id="st" class="mu">読み込み中…</span>'
-        '<div id="tabs" role="tablist" aria-label="セッション"></div><section id="sum" hidden></section></div>'
-        '<div id="log"></div><button id="news" hidden></button>'
+        '<div id="tabs" role="tablist" aria-label="セッション"></div><section id="sum" hidden></section>'
+        '<div class="lh">最新の発言（新しい順）</div><div id="latest"></div></div>'
+        '<div class="lh">それより前（新しい順）</div><div id="log"></div>'
         f"<style>{LIVE_CSS}</style><script nonce=\"{html.escape(nonce)}\">{LIVE_JS.replace('%POLL%', str(LIVE_POLL_MS))}</script>"
     )
     return page("セッションのライブ", body)

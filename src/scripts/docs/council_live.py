@@ -511,6 +511,7 @@ class SessionFeed:
         self.created = time.time()
         self.last_used = self.created  # 作ったばかりのものを先に捨てない  # 作り直すと番号が 1 から振り直しになる（画面はこれで取り直しを知る）
         self._goal: str | None = None
+        self._goal_size = -1  # ゴールを探したときの記録の大きさ（頭 2MB を探し終えたら読み直さない）
         self._lock = threading.Lock()
 
     def discover(self) -> None:
@@ -570,9 +571,15 @@ class SessionFeed:
 
     def goal(self) -> str:
         """最初の利用者の文（初めの指示）。頭だけ 1 回読んで覚える。"""
-        if not self._goal:  # 始めたばかりで、まだ書かれていないときは次の回に読み直す
-            self._goal = first_user_text(self.main)
-        return self._goal
+        if not self._goal:  # 始めたばかりで、まだ書かれていないときは、記録が伸びたときだけ読み直す
+            try:
+                size = self.main.stat().st_size
+            except OSError:
+                size = -1
+            if size != self._goal_size and (self._goal_size < GOAL_SCAN_HEAD or self._goal is None):
+                self._goal_size = size
+                self._goal = first_user_text(self.main)
+        return self._goal or ""
 
     def last_activity(self) -> float:
         """本体とサブエージェントの記録の、いちばん新しい更新の時刻（UNIX 秒）。"""
@@ -957,7 +964,8 @@ def wait_reasons(events: list[dict], state: str, short: str = "", bg: list[dict]
     if tool is not None and tool.get("tool") == "SendMessage":
         to = tool.get("to") or ""
         orch = not to or "orchestrator" in to or to == "main"
-        replied = any(e.get("cls") not in ("sc", "sn") and (e.get("cls") == "so" or not orch) for e in events[tool_i + 1:])
+        replied = any(e.get("kind") == "text" and (e.get("cls") == "so" if orch else e.get("cls") not in ("sc", "sn", "so"))
+                      for e in events[tool_i + 1:])  # ほかの宛先は、その後の地の文・報告（ツールの行は数えない）
         if not replied:
             out.append("統括役の返事を待っている" if orch else f"{to} の返事を待っている")
     if last is not None and last["kind"] == "call":

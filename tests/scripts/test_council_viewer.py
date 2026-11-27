@@ -334,3 +334,13 @@ def test_modeling_final_html_served_and_listed(root: Path, tmp_path: Path):
     finally:
         srv.shutdown()
         srv.server_close()
+
+
+def test_live_page_newest_first_with_sticky_latest():
+    body = cv.live_page("n")
+    bar = body[body.index('<div class="bar">'):body.index('<div id="log">')]
+    assert 'id="tabs"' in bar and 'id="sum"' in bar and 'id="latest"' in bar  # 最新の枠は固定の帯の中
+    assert bar.index('id="sum"') < bar.index('id="latest"')
+    assert 'id="news"' not in body and "toBottom" not in body  # 一番下へ動かす作りはやめた
+    assert "latest.insertBefore(row, latest.firstChild)" in body  # 新しい発言は上に足す
+    assert "#latest { max-height:25vh; }" in body  # スマホの幅でも画面の半分を超えない
