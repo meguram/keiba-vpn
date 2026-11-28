@@ -1,0 +1,111 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>拡張ラベルのめぐ AI — keiba-vpn docs</title>
+<style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1100px; margin:0 auto; padding:36px 20px 80px; }
+h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:19px; margin:40px 0 4px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:22px 0 4px; }
+.muted { color:var(--muted); font-size:13px; }
+.wrap { overflow-x:auto; }
+table { border-collapse:collapse; width:100%; margin:8px 0 14px; font-size:13px; }
+th,td { border:1px solid var(--border); padding:5px 9px; text-align:right; vertical-align:top; }
+th { background:var(--panel); color:var(--muted); font-weight:600; text-align:center; }
+td.l, th.l { text-align:left; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12px; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+.ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
+</style></head><body><main>
+
+<h1>拡張ラベルのめぐ AI</h1>
+<p class="muted">最終更新: 2026-11-28。担当 model-relabel。研究だけで、本番のモデル・前向きの記録の版（prereg_2026_r2・rc6）は替えていない。2025・26 年は開いていない。
+仕様は <code>config/model_relabel/spec.json</code>（成績を見る前に版を重ねて固定。最後は mr-10）、記録は <code>docs/operations/model_relabel/</code>。</p>
+
+<div class="box">
+<b>結論</b>
+<ul>
+<li>勝ち馬から 1/2 馬身以内の馬も 1 にする勝ちの拡張ラベルは、本物の 1 着の当たりを良くしなかった。市場と組んだときの上乗せ（Benter の 2 段）は、むしろ減った（v5bag の 2022〜24 で +0.0018 悪化）。</li>
+<li>複勝の拡張ラベル（3 着馬から 1/2 馬身・1 馬身以内）も、本物の 3 着内の当たりを良くしなかった。1 馬身の版ははっきり悪くなる。</li>
+<li>大敗の馬への罰（重み w・3 値の順序）を足しても、上の 2 つは変わらなかった。</li>
+<li>本命決着のレース（1〜3 着がすべて 3 番人気以内、8.9%）を学習から除くと、複勝の Benter の上乗せが約 11% 増えた（2022〜24 で −0.00058 nats/頭、Bonferroni の区間でも 0 より下）。単体の当たりはほぼ変わらない。</li>
+<li>市場の logit と |ρ| ≥ 0.5 の 108 列を外しても、市場に足す上乗せは劣らなかった。単体の当たりは下がるので、本番のモデルを替える根拠ではない。</li>
+<li>本番への反映はしない。反映を考えるなら、統括役とユーザーの承認と stg を通す。</li>
+</ul>
+</div>
+
+<h2>1. 作り</h2>
+<h3>ラベル（2016〜24 の完走馬での割合）</h3>
+<div class="wrap"><table>
+<tr><th class="l">名前</th><th class="l">定義</th><th>割合</th></tr>
+<tr><td class="l">y1</td><td class="l">1 着</td><td>7.24%</td></tr>
+<tr><td class="l">y_w</td><td class="l">1 着、または勝ち馬からの着差の累積 ≤ 0.5 馬身</td><td>10.49%</td></tr>
+<tr><td class="l">y3</td><td class="l">3 着内</td><td>21.70%</td></tr>
+<tr><td class="l">y_p</td><td class="l">3 着内、または 3 着内の馬の累積の最大から ≤ 0.5 馬身</td><td>26.10%</td></tr>
+<tr><td class="l">y_p1</td><td class="l">同じ作りで ≤ 1.0 馬身</td><td>29.32%</td></tr>
+<tr><td class="l">大敗</td><td class="l">6 着以下、かつ勝ち馬との時計の差 ≥ 1.0 秒</td><td>49.85%</td></tr>
+</table></div>
+<p class="muted">着差の換算は ハナ 0.05・アタマ 0.1・クビ 0.25・同着 0。降着・空の着差・時計の逆転のあるレース（21 レース）は拡張しない。</p>
+
+<h3>罰と選びの指標</h3>
+<ul>
+<li>P-w: 大敗の負例の重みを w ∈ {1, 2, 4}。P-ord: s = logit(P(拡張の正)) + κ·log P(大敗でない)、κ ∈ {0.5, 1}。</li>
+<li>選びの指標 L<sub>λ</sub> = 本物のラベルの対数損失 + λ·大敗の −log(1 − p̂)。λ = 0.5 が主、1.5・0 が感度。木の設定は v5bag・v6e のまま固定し、選ぶのは w・κ・本数・較正だけ。元のラベルの基準も同じ手順で作り直した。</li>
+</ul>
+
+<h3>分けと評価</h3>
+<ul>
+<li>時間の順: 年 t は t より前の年で学ぶ。外側 2019〜21 で選び、2022〜24 は採否の 3 つの比べ（spec の confirm_plan）だけを 1 回読んだ。</li>
+<li>評価の行は、平地で全頭の市場の q がそろったレース。物差しは本物の 1 着・3 着内の当てはまりと Benter の 2 段（確定の q と組み、t−1 年で当てて t 年で数える）。回収率は数えない。</li>
+<li>開催単位の分けは未実施。ラベルの拡張が効かず、報告だけの分けを足しても結論が変わらないため（統括役の判断）。</li>
+</ul>
+
+<h2>2. 結果: ラベルの拡張（v5bag、λ = 0.5、拡張 − 元。プラスは悪い）</h2>
+<div class="wrap"><table>
+<tr><th class="l">比べ</th><th>2019〜21 単体</th><th>2019〜21 Benter</th><th>2022〜24 単体</th><th>2022〜24 Benter</th></tr>
+<tr><td class="l">勝ち pw（重み）</td><td>−0.0003 [−0.0038, +0.0030]</td><td class="bad">+0.0010 [+0.0001, +0.0019]</td><td>−0.0005 [−0.0038, +0.0027]</td><td class="bad">+0.0018 [+0.0007, +0.0028]</td></tr>
+<tr><td class="l">勝ち pord（順序）</td><td>+0.0001 [−0.0033, +0.0035]</td><td>+0.0009 [−0.0000, +0.0018]</td><td>−0.0002 [−0.0036, +0.0031]</td><td class="bad">+0.0017 [+0.0006, +0.0028]</td></tr>
+<tr><td class="l">複勝 pw（1/2 馬身）</td><td>+0.0002 [−0.0002, +0.0006]</td><td>−0.0001 [−0.0002, +0.0001]</td><td>+0.0003 [−0.0001, +0.0006]</td><td>−0.0000 [−0.0002, +0.0001]</td></tr>
+<tr><td class="l">複勝 pord（1/2 馬身）</td><td class="bad">+0.0007 [+0.0002, +0.0013]</td><td>−0.0002 [−0.0004, −0.0000]</td><td class="bad">+0.0006 [+0.0001, +0.0011]</td><td>−0.0003（Bonferroni の上限 +0.00002、C2 不通過）</td></tr>
+<tr><td class="l">複勝 pw1（1 馬身）</td><td class="bad">+0.0012 [+0.0007, +0.0019]</td><td>+0.0000 [−0.0002, +0.0003]</td><td class="bad">+0.0009 [+0.0004, +0.0015]</td><td>+0.0000 [−0.0002, +0.0003]</td></tr>
+</table></div>
+<p class="muted">単体の物差しは、勝ちが勝ち馬の −log p、複勝が y3 の全頭の対数損失。区間は開催日で束ねた対のブートストラップの 95%。v6e の代理の勝ち pw は 2022〜24 で −0.0066 [−0.0118, −0.0018] だったが、2019〜21 では 0 をまたぎ、採否の比べに入れていない（記述だけ）。</p>
+
+<h2>3. 結果: 採否を読んだ 3 つの比べ（2022〜24、Bonferroni 12）</h2>
+<div class="wrap"><table>
+<tr><th class="l">比べ</th><th class="l">線</th><th>値</th><th>判定</th></tr>
+<tr><td class="l">C1 mfc05 − mfs の Benter（勝ち・複勝 × base・pw）</td><td class="l">上限 ≤ +0.001</td><td>上限 +0.0004〜+0.0009</td><td class="ok">劣らない</td></tr>
+<tr><td class="l">C2 複勝 pord − base の Benter</td><td class="l">上限 &lt; 0</td><td>−0.00027、上限 +0.00002</td><td class="bad">通らない</td></tr>
+<tr><td class="l">C3 複勝 base_nc − base の Benter</td><td class="l">上限 &lt; 0</td><td>−0.00058 [−0.00088, −0.00029]</td><td class="ok">良い</td></tr>
+<tr><td class="l">C3 複勝 pw_nc − base の Benter</td><td class="l">上限 &lt; 0</td><td>−0.00055 [−0.00083, −0.00027]</td><td class="ok">良い</td></tr>
+</table></div>
+
+<h3>C3 の読み（なぜ効くか・大きさ）</h3>
+<ul>
+<li>大きさ: 2022〜24 の複勝で、市場だけの損失から 2 段で下がる幅は、基準 0.00514 に対して本命決着を除いた版が 0.00572（+11%）。2 段の中の AI の重み a は 0.47 → 0.49、市場の重み b は 0.57 → 0.56。単体の上位 3 頭の 3 着内率は 0.5211 → 0.5214 で、ほぼ同じ。</li>
+<li>読み（仮説）: 人気どおりに決まるレースは、市場がそのまま正しい例である。学習に入れると、AI は市場と同じ「人気の馬が来る」形を多く学び、市場に足す情報が薄まる。除くと、市場と重ならない情報（人気薄の 3 着内）を学ぶ比重が上がる。直接の検定はしていない。</li>
+<li>勝ちでは同じ効きは出ない（2019〜21 で base_nc は単体 +0.0045 悪化、Benter も +0.0009 [+0.0004, +0.0015] 悪化）。複勝だけの効きとして読む。</li>
+</ul>
+
+<h2>4. 結果: 特徴量の版</h2>
+<ul>
+<li>血統のダートの 4 列（v5bag_ped − v5bag）: 勝ち・複勝とも単体・Benter の区間が 0 をまたぐ。効きは見えない。4 列の作りは 2016〜24 の成績を見て凍結したものなので、選んだ期間の中の比べ。</li>
+<li>市場を確実に外す版（v5bag_mf − v5bag、追い切り評価の 3 列と course_type を外す）: 2019〜21 の勝ちで単体 +0.0074 [+0.0038, +0.0109] 悪化し、「劣らない」を通らない。2022〜24 は +0.0017 で 0 をまたぐ。内訳（追い切り評価か course_type か）は分けていない。追い切り評価は新馬の欠けが学習 30%・本番 0% のずれがあり、効きの一部はずれを含む。</li>
+<li>漏れの列 s_* を外す版（v5bag_mfs − v5bag_mf）: 勝ちで単体 +0.015（2022〜24 は +0.036）、Benter +0.002〜+0.006 悪化。s_* は後の年の着順が入る上流の学習なので、この効きの一部は楽観。</li>
+<li>市場の logit と相関の高い列を外す版（mfc − mfs）: |ρ| ≥ 0.5（108 列）は Benter が劣らない（C1）。|ρ| ≥ 0.3（259 列）は 2019〜21 で複勝の Benter が +0.0004 悪化し、勝ちの単体は +0.048 悪化する。</li>
+</ul>
+
+<h2>5. 注意</h2>
+<ul>
+<li>中止・失格の馬: 学習の表 X は完走馬だけ（<code>layer_a_dataset.py:167</code>）。本物の行は作れない。群の表（train_table・前段 S3・TL・aux・CY・BEST・factory ほか）がほとんど完走馬の行だけで作られ、レース内の相対の列（約 280 列）は中止の馬を入れると完走馬の値も変わるため。そこで感度で扱った。戻さない・ラベル 0 で戻し予測はレースの最小・中央の 3 通りで、単体の比べはすべて向きがそろった。Benter の比べには中止の馬の感度が無い（中止の馬に市場の q が無い作りのため）。作り直しは 12/1 以降の train-serve-skew の仕事。</li>
+<li>漏れの列: v5bag の列にも s_* と、2021-12 までの全体の当てはめの族（sr_・f3_・f2_・e_・pc_）がある。ラベルどうしの比べは同じ列で行うので効かないが、値の水準は楽観に寄る。</li>
+<li>v6e の代理: 束の 7 本のうち xgb_extras_ped の 1 本（乱数 1 本）。市場の判定を確かめていない 148 列（tl_・wc_・mtl_・rb_ など）が残る。主の判定は v5bag。</li>
+<li>前向きの登録 prereg_dirt_mat5 の比べの相手は、凍結の v5bag のまま。</li>
+<li>データの点検は <code>docs/operations/model_relabel/dataset_check.md</code>（重複 0・取り込みの誤りの写し 2 レース・障害・初出走ほか）。独立の点検役の指摘への直しは spec の mr-7〜mr-9。</li>
+</ul>
+
+<h2>6. 次の一手（案）</h2>
+<ul>
+<li>C3（本命決着を学習から除く）を、複勝の 2 段の入力としてだけ前向きの記録で確かめる。買い方に使うなら会議（rules-council）を通す。</li>
+<li>中止の馬を含む X の作り直し（train-serve-skew、12/1 以降）の後に、単体と Benter の比べを流し直す。</li>
+</ul>
+</main></body></html>

@@ -165,7 +165,7 @@ GROUPS: dict[str, list[Group]] = {
     ],
     "res-model": [
         Group("親モデルの版と比較", "今の本番の版と採用時の精度は「いまのベスト分析 / 馬の予測モデル」。改善サイクルの正は model_cycles（生成）。",
-              ["model_cycles", "model_versions", "retrain_order", "model_accuracy_summary", "deployment_readiness", "v6_features",
+              ["model_cycles", "model_relabel", "model_versions", "retrain_order", "model_accuracy_summary", "deployment_readiness", "v6_features",
                "ensemble_v5", "ensemble_structure", "ensemble_diversity"],
               [E("docs/operations/retrain_trials/README.md", "再学習の試しの記録（README）"),
                E("docs/operations/retrain_trials/model_cycles_20261116.md", "親モデルの改善サイクル（2026-11-16〜）"),
