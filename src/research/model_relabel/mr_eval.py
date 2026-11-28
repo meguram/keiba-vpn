@@ -419,7 +419,9 @@ def _boot(rows: pd.DataFrame, n_boot: int, seed: int) -> dict:
         i = rng.integers(0, len(x), len(x))
         diffs[k] = (A[i].sum() - B[i].sum()) / N[i].sum()
     est = (A.sum() - B.sum()) / N.sum()
+    a2 = 0.05 / 12 / 2              # Bonferroni（族 12 個・両側。spec の confirm_plan）
     return {"diff": round(float(est), 6), "ci95": [round(float(np.quantile(diffs, 0.025)), 6), round(float(np.quantile(diffs, 0.975)), 6)],
+            "ci_bonf12": [round(float(np.quantile(diffs, a2)), 6), round(float(np.quantile(diffs, 1 - a2)), 6)],
             "days": int(len(x))}
 
 
