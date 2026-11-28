@@ -89,7 +89,7 @@ def load_matrix(fs: str):
             assert len(drop) == len(MARKET_POLICY_DROP), drop
             X = X.drop(columns=drop)
             names = [c for c in names if c not in MARKET_POLICY_DROP]
-        if fs == "v5bag_mfs":
+        if fs == "v5bag_mfs" or fs.startswith("v5bag_mfs_apt"):
             drop = [c for c in names if c in LEAK_S_COLS]
             assert len(drop) == len(LEAK_S_COLS), drop
             X = X.drop(columns=drop)
@@ -102,6 +102,22 @@ def load_matrix(fs: str):
             drop = set(t.loc[t["abs_rho"] >= th, "column"])
             X = X.drop(columns=[c for c in names if c in drop])
             names = [c for c in names if c not in drop]
+        if fs.startswith("v5bag_mfs_apt"):
+            # aptitude-group の血統ベクトルの合い具合の 9 列（src/research/aptitude_group/megu_cols.py。年ごとの切り口・as-of）を足す。
+            # v5bag_mfs_apt = 本物、v5bag_mfs_aptnull{101,102,103} = 偽（血統の塊を生年の中で入れ替えた列）。2016 年・障害の行は NaN
+            from src.research.aptitude_group import megu_cols as AG
+            from src.research.aptitude_group import common as AGC
+            suf = fs[len("v5bag_mfs_apt"):]
+            src = [c if not suf else f"{c}__{suf}" for c in AG.COLS]
+            ap = pd.read_parquet(AGC.OUT / "megu_cols.parquet", columns=["race_id", "horse_id"] + src)
+            k = meta[["race_id", "horse_id"]].astype(str).merge(ap, on=["race_id", "horse_id"], how="left")
+            assert len(k) == len(X)
+            yr_ = pd.to_numeric(meta["year"]).to_numpy()
+            cover = k[src[0]].notna().to_numpy()[yr_ >= 2017].mean()
+            assert cover > 0.85, f"血統の列の当たりが少ない（{cover:.3f}）: 鍵の型・書式を確かめる"     # 2016 年は空・障害は空（critic 7 回目の 4）
+            for c, s_ in zip(AG.COLS, src):
+                X[c] = k[s_].to_numpy(np.float32)
+            names = list(names) + list(AG.COLS)
         if fs == "v5bag_ped":
             # 血統の 4 列（mr_ped.py。凍結の第 4 版の as-of の作り・推論の側も同じ関数）を足す。feat_v4 に無い走は NaN
             from src.research.model_relabel import mr_ped
@@ -225,7 +241,8 @@ def run(fs: str, target: str, variant: str, split: str = "time", conv: str = "co
     import xgboost as xgb
     from src.ops import data_ledger as DL
     t0 = time.time()
-    tok = DL.guard(tool="src/research/model_relabel/mr_train.py:run", family="model_relabel", version=f"train-{split}-{fs}-{target}-{variant}-{conv}",
+    tok = DL.guard(tool="src/research/model_relabel/mr_train.py:run", family="aptitude_group" if fs.startswith("v5bag_mfs_apt") else "model_relabel",
+                   version=f"train-{split}-{fs}-{target}-{variant}-{conv}",
                    period=("2016-01-01", "2024-12-31"), purpose="reproduce", reads=("着順",),
                    frozen_paths=[SPEC] + ([MARKET_CORR, MARKET_CHOICE] if fs.startswith("v5bag_mfc")
                                           else [MARKET_CHOICE] if fs == "v5bag_mfs" and variant != "orig" else []),
@@ -249,7 +266,12 @@ def run(fs: str, target: str, variant: str, split: str = "time", conv: str = "co
             cal = lab["meeting"].map(f[f"calib_{j}"]).to_numpy() == 1
             units.append((f"f{j}", (mt != j) & ~cal, (mt == j) | cal))     # 予測は外側の折と較正の側の両方
     todo = [u for u in units if u[0] == only_unit] if only_unit else units
-    _check_manifest(_part_path(split, fs, target, variant, conv, 0, "x").parent, _fingerprint(lab, target, variant, sets, rounds, names))
+    names_fp = list(names)
+    if fs.startswith("v5bag_mfs_apt"):              # 列の中身（megu_cols.parquet）を作り直したら、古い部品を混ぜない（critic 7 回目の 5）
+        import hashlib
+        from src.research.aptitude_group import common as AGC
+        names_fp.append("megu_cols_md5:" + hashlib.md5((AGC.OUT / "megu_cols.parquet").read_bytes()).hexdigest())
+    _check_manifest(_part_path(split, fs, target, variant, conv, 0, "x").parent, _fingerprint(lab, target, variant, sets, rounds, names_fp))
     for bi, params in enumerate(sets):
         for unit, tr, te in todo:
             p = _part_path(split, fs, target, variant, conv, bi, unit)
@@ -359,7 +381,8 @@ def status() -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["run", "labels", "status"])
-    ap.add_argument("--fs", choices=["v5bag", "v5bag_ped", "v5bag_mf", "v5bag_mfs", "v5bag_mfc05", "v5bag_mfc03", "v6e"], default="v5bag")
+    ap.add_argument("--fs", choices=["v5bag", "v5bag_ped", "v5bag_mf", "v5bag_mfs", "v5bag_mfc05", "v5bag_mfc03", "v6e",
+                                     "v5bag_mfs_apt", "v5bag_mfs_aptnull101", "v5bag_mfs_aptnull102", "v5bag_mfs_aptnull103"], default="v5bag")
     ap.add_argument("--target", choices=["win", "top3", "notbig"], default="win")
     ap.add_argument("--variant", default="orig")
     ap.add_argument("--split", choices=["time", "meeting"], default="time")

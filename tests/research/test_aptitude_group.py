@@ -184,6 +184,61 @@ def test_page_js_has_no_code_after_line_comment():
     assert not bad, bad[:3]
 
 
+def _toy_runs(seed: int = 3) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    rows = []
+    for y in (2017, 2018, 2019, 2020):
+        for r in range(40):
+            date = pd.Timestamp(f"{y}-03-01") + pd.Timedelta(days=int(r * 7))
+            surf = "T" if r % 2 else "D"
+            for h in range(8):
+                hid = f"{2014 + (h % 3)}{r % 5:03d}{h:03d}"
+                rows.append({"race_id": f"{y}{r:04d}", "horse_id": hid, "date": date, "sire": f"s{h % 4}", "ss": f"t{h % 2}", "L4": "u",
+                             "ds": f"b{(h + r) % 3}", "bms_ss": "bt", "bms_L4": "bu", "surf": surf, "venue": rng.choice(["東京", "中山", "京都"]),
+                             "distance": int(rng.choice([1200, 1600, 2000])), "going": rng.choice(["G", "S", "W"]), "course_type": "", "direction": "右",
+                             "early": rng.random(), "ts": rng.random() - 0.5, "acc_z": rng.normal(), "gain_r": rng.normal(), "gc": rng.normal(0, 0.3)})
+    F = pd.DataFrame(rows).drop_duplicates(["horse_id", "date"]).reset_index(drop=True)
+    F["lx"] = np.log(F["distance"])
+    return F
+
+
+def test_megu_cols_year_t_ignores_future_and_same_year_outcomes():
+    """年 t の列は、t 年以降の行を足しても、t 年の着順を入れ替えても変わらない（統括役の条件 2・pedigree-2 の 2 本のテスト）。"""
+    from src.research.aptitude_group import megu_cols as MC
+    F = _toy_runs()
+    hs = F["horse_id"].unique()
+    # 牝系 (B) の分岐も通す: 各馬の母の側 3 代（位置 4・6）と 2 代（位置 2）に祖先を置く（critic 7 回目の 8）
+    P = pd.DataFrame([(h, g, p, f"a{(i + p) % 3}") for i, h in enumerate(hs) for g, p in ((2, 2), (3, 4), (3, 6))],
+                     columns=["horse_id", "gen", "pos", "anc"])
+    a = MC.build(F[F["date"].dt.year <= 2019], P, {}, years=[2019], null_seeds=(1,))
+    b = MC.build(F, P, {}, years=[2019], null_seeds=(1,))                       # 2020 年の行を足しても同じ
+    G = F.copy()
+    m = G["date"].dt.year == 2019
+    G.loc[m, "gc"] = G.loc[m, "gc"].sample(frac=1, random_state=0).to_numpy()   # 2019 年の着順を入れ替えても同じ
+    c = MC.build(G, P, {}, years=[2019], null_seeds=(1,))
+    cols = [k for k in a.columns if k.startswith("apt_")]
+    for other in (b, c):
+        assert np.allclose(a[cols].to_numpy(float), other[cols].to_numpy(float), equal_nan=True)
+    assert a["apt_f_surf"].notna().any() and a["apt_b_wetD"].notna().any()
+    # 条件の距離の平均と sd・コースの出現率は前の年から: 同じ年のほかのレースの距離・場を入れ替えても、あるレースの条件は変わらない
+    R = F[F["race_id"] == F.loc[F["date"].dt.year == 2019, "race_id"].iloc[0]].reset_index(drop=True)
+    H = F.copy()
+    m2 = (H["date"].dt.year == 2019) & ~H["race_id"].isin(R["race_id"])
+    H.loc[m2, "distance"] = 3000
+    H.loc[m2, "venue"] = "札幌"
+    H["lx"] = np.log(H["distance"])
+    assert np.allclose(MC.conditions(R, F, 2019).to_numpy(float), MC.conditions(R, H, 2019).to_numpy(float))
+
+
+def test_permute_block_stays_within_birth_year():
+    from src.research.aptitude_group import megu_cols as MC
+    H = pd.DataFrame({"horse_id": ["2015001", "2015002", "2015003", "2016001", "2016002"], "f_surf": [1.0, 2.0, 3.0, 10.0, 20.0],
+                      "f_rel": [0.1, 0.2, 0.3, 0.4, 0.5], "year": 2019})
+    G = MC.permute_block(H, 7)
+    assert sorted(G.loc[:2, "f_surf"]) == [1.0, 2.0, 3.0] and sorted(G.loc[3:, "f_surf"]) == [10.0, 20.0]
+    assert all((G["f_rel"] * 10).round() == G["f_surf"].map({1.0: 1, 2.0: 2, 3.0: 3, 10.0: 4, 20.0: 5}))   # 塊（全部の値）が一緒に動く
+
+
 def test_period_guard_refuses_2025():
     import pytest
     with pytest.raises(AssertionError):
