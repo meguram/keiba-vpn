@@ -1,0 +1,98 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>穴馬 AI（単勝 10 倍以上だけで学ぶ）の結果 — keiba-vpn docs</title>
+<style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --ng:#f87171; --code:#0b1428; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1150px; margin:0 auto; padding:36px 20px 80px; }
+h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:19px; margin:40px 0 4px; padding-top:16px; border-top:1px solid var(--border); }
+.muted { color:var(--muted); font-size:13px; } .sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+.tw { overflow-x:auto; }
+table { border-collapse:collapse; width:100%; margin:8px 0 14px; font-size:13px; }
+th,td { border:1px solid var(--border); padding:5px 9px; text-align:right; vertical-align:top; }
+th { background:var(--panel); color:var(--muted); font-weight:600; white-space:nowrap; text-align:center; }
+td:first-child { text-align:left; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12px; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+.ok { color:var(--ok); } .ng { color:var(--ng); } .warn { color:var(--warn); }
+</style>
+</head><body><main>
+
+<h1>穴馬 AI（単勝 10 倍以上だけで学ぶ）の結果</h1>
+<p class="muted">担当 longshot-ai・2026-11-27〜28。決める段（2019〜21）を事前登録 la-7 のとおり 1 回だけ流した。記録: <code>docs/operations/longshot_ai/result_select.md</code>・計画: <code>docs/operations/longshot_ai/plan.md</code>・会議の決定: <code>docs/operations/roi_plus_council/decisions.md</code>。</p>
+
+<div class="box">
+<b class="ng">採らない。</b>★ は、全馬で学んだ同じ列の木（C0）の、10 倍以上の中の 1 位で足りる。
+<ul>
+<li>★ − C0 の 3 着内率: <b>−0.29pt</b>（95% 区間 −0.79〜+0.22）。年ごとは +0.06pt・−0.47pt・−0.47pt。</li>
+<li>否定したのは「10 倍以上だけで学ぶ」と「1 馬身の拡張ラベル」の 2 つ。穴馬そのものの否定ではない。</li>
+<li>正の対照（+1.5pt を植える）は 200 回中 200 回拾えた。結果は「拾える大きさの差は無かった」。</li>
+<li>2022〜24 は開けずに閉じた。本番の印・画面はこの結果だけでは変えない。</li>
+</ul>
+</div>
+
+<h2>1. 作り</h2>
+<div class="tw"><table>
+<thead><tr><th>項目</th><th>中身</th></tr></thead><tbody>
+<tr><td>母集団</td><td style="text-align:left">学習は確定オッズで単勝 10 倍以上。評価は「確定に雑音を足した母集団（T-60 の再現、5 通り）」で 10 倍以上</td></tr>
+<tr><td>ラベル</td><td style="text-align:left">3 着内、または 3 着内の馬から 1 馬身以内（model-relabel の y_p1）。一桁オッズの馬は母集団の外</td></tr>
+<tr><td>列</td><td style="text-align:left">めぐ AI の v5 の 1,083 列から、追い切り評価の 3 列と course_type を外した 1,079 列（市場に由来する列は 0 列と作りのコードで判定）</td></tr>
+<tr><td>木</td><td style="text-align:left">めぐ AI と同じ XGBoost（3 組 × 800 本）。年 t は t より前の年で学ぶ</td></tr>
+<tr><td>★</td><td style="text-align:left">レースごとに、母集団の中で予測 1 位の馬</td></tr>
+<tr><td>比べ先</td><td style="text-align:left">C0（全馬・3 着内・同じ列と木）の母集団の中の 1 位、市場（母集団の中の最低オッズ）</td></tr>
+</tbody></table></div>
+
+<h2>2. 合否（中止の馬の 3 通り）</h2>
+<div class="tw"><table>
+<thead><tr><th>線</th><th>a 外したまま</th><th>b 0 で戻す</th><th>c 最悪</th></tr></thead><tbody>
+<tr><td>(i) ★ − C0 の下端 &gt; 0</td><td class="ng">× −0.29pt [−0.79, +0.22]</td><td class="ng">× 同じ</td><td class="ng">× −1.07pt</td></tr>
+<tr><td>(ii) ★ − 市場の下端 &gt; 0</td><td class="ok">○ +1.60pt</td><td class="ok">○ +1.64pt</td><td class="ok">○ +0.86pt</td></tr>
+<tr><td>(iii) ★ の A/E（確定の q3）の下端 &gt; 1・≥ C0</td><td class="ok">○ 1.103</td><td class="ok">○ 1.103</td><td class="ok">○ 1.088</td></tr>
+<tr><td>(iv) v6 で ★ − C0 &gt; 0</td><td class="ng">× −0.40pt</td><td class="ng">× −0.40pt</td><td class="ng">× −1.14pt</td></tr>
+<tr><td>(v) 確定の母集団で ★ − C0・★ − 市場 &gt; 0</td><td class="ng">× +0.55pt・−1.63pt</td><td class="ng">× +0.55pt・−1.61pt</td><td class="ng">× −0.14pt・−2.30pt</td></tr>
+</tbody></table></div>
+<p class="sub">3 着内率（a）: ★ 25.7%・C0 26.0%・市場 24.1%。★ と C0 の 1 位の一致は 70.8%。9,984 レース。</p>
+
+<h2>3. (ii)・(iii) が通っても根拠にしない理由</h2>
+<ul>
+<li>確定オッズで母集団を決めると、★ − 市場は −1.63pt（−2.53〜−0.72）で市場に負ける。</li>
+<li>再現の母集団には、確定で一桁の強い馬が雑音で入る。★ の 21.5% がその馬（3 着内率 38.4%）で、母集団全体では 5.2%。</li>
+<li>確定 10 倍以上の中では、レース内の AUC は AI 0.708・市場 0.730、対数損失は AI 0.3163・市場 0.3084 で、どちらも市場が上。</li>
+<li>A/E 1.10 は C0 の 1 位も 1.06 で、AI で選んだ馬に共通の性質。FIT_END の漏れを外した v6 でも 1.07。再現の q3 を分母にすると 1.28 で、分母を確定の q3 に直さなければ作り物で通っていた。</li>
+<li>市場と合わせた Benter の 2 段の上乗せ（対数損失）は +0.0016（+0.0013〜+0.0019）。記述として渡すだけで、規則にしない。</li>
+</ul>
+
+<h2>4. 記述（判定に使わない）</h2>
+<p class="sub">回収率は再現 0 の母集団・確定の払戻・事後の比べ。どれも 100% 未満で、買い方にしない。</p>
+<div class="tw"><table>
+<thead><tr><th></th><th>★</th><th>C0</th><th>市場</th><th>母集団の無作為</th></tr></thead><tbody>
+<tr><td>ワイド（相手はめぐの 1 位）</td><td>93.1%（87.5〜98.8）</td><td>89.1%</td><td>83.7%</td><td>76.0%</td></tr>
+<tr><td>馬連（同じ）</td><td>91.2%（81.1〜101.9）</td><td>90.1%</td><td>84.0%</td><td>77.1%</td></tr>
+<tr><td>単勝</td><td>89.3%</td><td>87.8%</td><td>78.8%</td><td>70.6%</td></tr>
+<tr><td>複勝</td><td>84.0%</td><td>81.6%</td><td>75.8%</td><td>69.8%</td></tr>
+</tbody></table></div>
+<p class="sub">ワイドの帰無（★ を母集団の無作為の馬に替えて 1,000 回）で ★ 以上になったのは 0 回。言えるのは「無作為よりは良い」まで。C0 との順位は区間が無いので言わない。</p>
+
+<div class="tw"><table>
+<thead><tr><th>記述の腕（送らない）</th><th>★ − C0</th><th>★ − 市場</th><th>A/E</th><th>対数損失</th></tr></thead><tbody>
+<tr><td>L0（ラベル 3 着内）</td><td>−0.68pt</td><td>+1.22pt</td><td>1.08</td><td>0.3150</td></tr>
+<tr><td>LA（全馬・一桁は 0）</td><td>−7.27pt</td><td>−5.38pt</td><td>1.21</td><td>0.3298</td></tr>
+<tr><td>LC（人気どおりのレースを訓練から除く）</td><td>−0.63pt</td><td>+1.27pt</td><td>1.09</td><td>0.3161</td></tr>
+<tr><td>L1T（再現で母集団）</td><td>−0.29pt</td><td>+1.60pt</td><td>1.08</td><td>0.3160</td></tr>
+<tr><td>M（方針の 4 列を残す）</td><td>−0.11pt</td><td>+1.78pt</td><td>1.10</td><td>0.3156</td></tr>
+<tr><td>LightGBM</td><td>−1.45pt</td><td>+0.45pt</td><td>1.09</td><td>0.3184</td></tr>
+<tr><td>市場を offset</td><td>+0.60pt</td><td>+2.50pt</td><td>1.08</td><td>0.3123</td></tr>
+<tr><td>v7（s_* を外す）</td><td>−0.23pt</td><td>+1.11pt</td><td>1.09</td><td>0.3177</td></tr>
+<tr><td>v7 − |ρ|≥0.5</td><td>−0.36pt</td><td>+0.98pt</td><td>1.09</td><td>0.3182</td></tr>
+<tr><td>v7 − |ρ|≥0.3</td><td>−1.28pt</td><td>+0.06pt</td><td>1.09</td><td>0.3211</td></tr>
+</tbody></table></div>
+<p class="sub">offset の +0.60pt（−0.09〜+1.31）は兆しとは書かない。10 本の中でいちばん良かった 1 本で、選びの後の値。相関の高い列を外して当たりが下がっても「市場を使っていた証拠」とは読まない。</p>
+
+<h2>5. 使い道への答え</h2>
+<ul>
+<li>★／◎ の候補は、既存の全馬のモデルで「10 倍以上の中の 1 位」を取れば足りる。</li>
+<li>本番の推論の経路は v5 の列を作れないので、C0 そのものは本番に出せない。</li>
+<li>印・画面を変えるなら、pair-bets・rules-council を経て、統括役とユーザーの承認の後。</li>
+<li>再挑戦は、新しい情報源（実物の T-60 の割れ方・動き、出遅れのラベル）が手に入ったときだけ。母集団を絞る・ラベルを広げる形で同じ列のまま再挑戦しない。</li>
+</ul>
+
+</main></body></html>

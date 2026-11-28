@@ -1,0 +1,511 @@
+{
+ "years": [
+  2022,
+  2023,
+  2024
+ ],
+ "models": [
+  "harville",
+  "lbs"
+ ],
+ "ev_lines": [
+  1.0,
+  1.2,
+  1.3,
+  1.5,
+  2.0
+ ],
+ "pair_pop_bands": [
+  [
+   1,
+   3
+  ],
+  [
+   4,
+   10
+  ],
+  [
+   11,
+   30
+  ],
+  [
+   31,
+   80
+  ],
+  [
+   81,
+   999
+  ]
+ ],
+ "win": {
+  "1.0": {
+   "n": 11764,
+   "per_race": 1.225,
+   "p_over_q": 1.3801
+  },
+  "1.2": {
+   "n": 2672,
+   "per_race": 0.278,
+   "p_over_q": 1.6333
+  },
+  "1.3": {
+   "n": 1304,
+   "per_race": 0.136,
+   "p_over_q": 1.778
+  },
+  "1.5": {
+   "n": 390,
+   "per_race": 0.041,
+   "p_over_q": 2.0565
+  },
+  "2.0": {
+   "n": 27,
+   "per_race": 0.003,
+   "p_over_q": 2.833
+  }
+ },
+ "win_c13_line": {
+  "n": 877,
+  "p_over_q": 1.7705
+ },
+ "umaren": {
+  "races": 9519,
+  "pairs": 865663,
+  "log_m_over_H_harville": {
+   "1〜3": -0.1094,
+   "4〜10": 0.0251,
+   "11〜30": 0.2301,
+   "31〜80": 0.468,
+   "81〜999": 0.9539
+  },
+  "m_over_H_sum_harville": {
+   "1〜3": 0.8768,
+   "4〜10": 0.9791,
+   "11〜30": 1.1229,
+   "31〜80": 1.2682,
+   "81〜999": 1.7109
+  },
+  "ev_harville_o": {
+   "1.0": {
+    "pairs": 60742,
+    "per_race": 6.381,
+    "races_with_any": 0.993,
+    "ai_over_m": 1.5956,
+    "ai_over_Hq": 1.3092,
+    "m_over_Hq": 0.8205,
+    "median_odds": 38.1
+   },
+   "1.2": {
+    "pairs": 28031,
+    "per_race": 2.945,
+    "races_with_any": 0.863,
+    "ai_over_m": 1.8239,
+    "ai_over_Hq": 1.4218,
+    "m_over_Hq": 0.7795,
+    "median_odds": 38.2
+   },
+   "1.3": {
+    "pairs": 18710,
+    "per_race": 1.966,
+    "races_with_any": 0.723,
+    "ai_over_m": 1.9461,
+    "ai_over_Hq": 1.4834,
+    "m_over_Hq": 0.7623,
+    "median_odds": 40.1
+   },
+   "1.5": {
+    "pairs": 8154,
+    "per_race": 0.857,
+    "races_with_any": 0.43,
+    "ai_over_m": 2.2096,
+    "ai_over_Hq": 1.6159,
+    "m_over_Hq": 0.7313,
+    "median_odds": 47.4
+   },
+   "2.0": {
+    "pairs": 1203,
+    "per_race": 0.126,
+    "races_with_any": 0.082,
+    "ai_over_m": 2.9806,
+    "ai_over_Hq": 2.0625,
+    "m_over_Hq": 0.692,
+    "median_odds": 89.4
+   }
+  },
+  "ev_harville_o_mid": {
+   "1.0": {
+    "pairs": 60742,
+    "per_race": 6.381,
+    "races_with_any": 0.993,
+    "ai_over_m": 1.5956,
+    "ai_over_Hq": 1.3092,
+    "m_over_Hq": 0.8205,
+    "median_odds": 38.1
+   },
+   "1.2": {
+    "pairs": 28031,
+    "per_race": 2.945,
+    "races_with_any": 0.863,
+    "ai_over_m": 1.8239,
+    "ai_over_Hq": 1.4218,
+    "m_over_Hq": 0.7795,
+    "median_odds": 38.2
+   },
+   "1.3": {
+    "pairs": 18710,
+    "per_race": 1.966,
+    "races_with_any": 0.723,
+    "ai_over_m": 1.9461,
+    "ai_over_Hq": 1.4834,
+    "m_over_Hq": 0.7623,
+    "median_odds": 40.1
+   },
+   "1.5": {
+    "pairs": 8154,
+    "per_race": 0.857,
+    "races_with_any": 0.43,
+    "ai_over_m": 2.2096,
+    "ai_over_Hq": 1.6159,
+    "m_over_Hq": 0.7313,
+    "median_odds": 47.4
+   },
+   "2.0": {
+    "pairs": 1203,
+    "per_race": 0.126,
+    "races_with_any": 0.082,
+    "ai_over_m": 2.9806,
+    "ai_over_Hq": 2.0625,
+    "m_over_Hq": 0.692,
+    "median_odds": 89.4
+   }
+  },
+  "log_m_over_H_lbs": {
+   "1〜3": 0.0094,
+   "4〜10": 0.0143,
+   "11〜30": 0.0628,
+   "31〜80": 0.1194,
+   "81〜999": 0.4357
+  },
+  "m_over_H_sum_lbs": {
+   "1〜3": 1.0001,
+   "4〜10": 0.9894,
+   "11〜30": 1.0094,
+   "31〜80": 0.9926,
+   "81〜999": 1.1589
+  },
+  "ev_lbs_o": {
+   "1.0": {
+    "pairs": 94987,
+    "per_race": 9.979,
+    "races_with_any": 0.991,
+    "ai_over_m": 1.5465,
+    "ai_over_Hq": 1.3195,
+    "m_over_Hq": 0.8532,
+    "median_odds": 119.8
+   },
+   "1.2": {
+    "pairs": 43564,
+    "per_race": 4.577,
+    "races_with_any": 0.873,
+    "ai_over_m": 1.8028,
+    "ai_over_Hq": 1.4396,
+    "m_over_Hq": 0.7985,
+    "median_odds": 147.5
+   },
+   "1.3": {
+    "pairs": 29441,
+    "per_race": 3.093,
+    "races_with_any": 0.764,
+    "ai_over_m": 1.9395,
+    "ai_over_Hq": 1.5037,
+    "m_over_Hq": 0.7753,
+    "median_odds": 165.7
+   },
+   "1.5": {
+    "pairs": 13606,
+    "per_race": 1.429,
+    "races_with_any": 0.515,
+    "ai_over_m": 2.2291,
+    "ai_over_Hq": 1.6324,
+    "m_over_Hq": 0.7323,
+    "median_odds": 205.35000000000002
+   },
+   "2.0": {
+    "pairs": 2392,
+    "per_race": 0.251,
+    "races_with_any": 0.14,
+    "ai_over_m": 3.0128,
+    "ai_over_Hq": 2.0022,
+    "m_over_Hq": 0.6646,
+    "median_odds": 283.95
+   }
+  },
+  "ev_lbs_o_mid": {
+   "1.0": {
+    "pairs": 94987,
+    "per_race": 9.979,
+    "races_with_any": 0.991,
+    "ai_over_m": 1.5465,
+    "ai_over_Hq": 1.3195,
+    "m_over_Hq": 0.8532,
+    "median_odds": 119.8
+   },
+   "1.2": {
+    "pairs": 43564,
+    "per_race": 4.577,
+    "races_with_any": 0.873,
+    "ai_over_m": 1.8028,
+    "ai_over_Hq": 1.4396,
+    "m_over_Hq": 0.7985,
+    "median_odds": 147.5
+   },
+   "1.3": {
+    "pairs": 29441,
+    "per_race": 3.093,
+    "races_with_any": 0.764,
+    "ai_over_m": 1.9395,
+    "ai_over_Hq": 1.5037,
+    "m_over_Hq": 0.7753,
+    "median_odds": 165.7
+   },
+   "1.5": {
+    "pairs": 13606,
+    "per_race": 1.429,
+    "races_with_any": 0.515,
+    "ai_over_m": 2.2291,
+    "ai_over_Hq": 1.6324,
+    "m_over_Hq": 0.7323,
+    "median_odds": 205.35000000000002
+   },
+   "2.0": {
+    "pairs": 2392,
+    "per_race": 0.251,
+    "races_with_any": 0.14,
+    "ai_over_m": 3.0128,
+    "ai_over_Hq": 2.0022,
+    "m_over_Hq": 0.6646,
+    "median_odds": 283.95
+   }
+  }
+ },
+ "wide": {
+  "races": 9519,
+  "pairs": 865663,
+  "log_m_over_H_harville": {
+   "1〜3": -0.2051,
+   "4〜10": -0.0461,
+   "11〜30": 0.2633,
+   "31〜80": 0.637,
+   "81〜999": 1.1482
+  },
+  "m_over_H_sum_harville": {
+   "1〜3": 0.7994,
+   "4〜10": 0.9108,
+   "11〜30": 1.1431,
+   "31〜80": 1.4675,
+   "81〜999": 2.0437
+  },
+  "ev_harville_o": {
+   "1.0": {
+    "pairs": 59060,
+    "per_race": 6.204,
+    "races_with_any": 0.985,
+    "ai_over_m": 1.6689,
+    "ai_over_Hq": 1.241,
+    "m_over_Hq": 0.7436,
+    "median_odds": 9.0
+   },
+   "1.2": {
+    "pairs": 26074,
+    "per_race": 2.739,
+    "races_with_any": 0.831,
+    "ai_over_m": 1.9107,
+    "ai_over_Hq": 1.3288,
+    "m_over_Hq": 0.6955,
+    "median_odds": 9.0
+   },
+   "1.3": {
+    "pairs": 16742,
+    "per_race": 1.759,
+    "races_with_any": 0.683,
+    "ai_over_m": 2.0398,
+    "ai_over_Hq": 1.3783,
+    "m_over_Hq": 0.6757,
+    "median_odds": 9.6
+   },
+   "1.5": {
+    "pairs": 6589,
+    "per_race": 0.692,
+    "races_with_any": 0.379,
+    "ai_over_m": 2.3113,
+    "ai_over_Hq": 1.4846,
+    "m_over_Hq": 0.6423,
+    "median_odds": 11.3
+   },
+   "2.0": {
+    "pairs": 666,
+    "per_race": 0.07,
+    "races_with_any": 0.052,
+    "ai_over_m": 3.0256,
+    "ai_over_Hq": 1.8063,
+    "m_over_Hq": 0.597,
+    "median_odds": 16.5
+   }
+  },
+  "ev_harville_o_mid": {
+   "1.0": {
+    "pairs": 74061,
+    "per_race": 7.78,
+    "races_with_any": 1.0,
+    "ai_over_m": 1.5912,
+    "ai_over_Hq": 1.2109,
+    "m_over_Hq": 0.761,
+    "median_odds": 9.15
+   },
+   "1.2": {
+    "pairs": 36316,
+    "per_race": 3.815,
+    "races_with_any": 0.958,
+    "ai_over_m": 1.7989,
+    "ai_over_Hq": 1.2846,
+    "m_over_Hq": 0.7141,
+    "median_odds": 8.6
+   },
+   "1.3": {
+    "pairs": 24428,
+    "per_race": 2.566,
+    "races_with_any": 0.868,
+    "ai_over_m": 1.9135,
+    "ai_over_Hq": 1.3247,
+    "m_over_Hq": 0.6923,
+    "median_odds": 8.7
+   },
+   "1.5": {
+    "pairs": 10436,
+    "per_race": 1.096,
+    "races_with_any": 0.563,
+    "ai_over_m": 2.1578,
+    "ai_over_Hq": 1.4139,
+    "m_over_Hq": 0.6553,
+    "median_odds": 9.6
+   },
+   "2.0": {
+    "pairs": 1163,
+    "per_race": 0.122,
+    "races_with_any": 0.092,
+    "ai_over_m": 2.7566,
+    "ai_over_Hq": 1.6544,
+    "m_over_Hq": 0.6002,
+    "median_odds": 13.75
+   }
+  },
+  "log_m_over_H_lbs": {
+   "1〜3": 0.0212,
+   "4〜10": 0.0241,
+   "11〜30": 0.046,
+   "31〜80": 0.0367,
+   "81〜999": 0.1597
+  },
+  "m_over_H_sum_lbs": {
+   "1〜3": 1.0073,
+   "4〜10": 1.0012,
+   "11〜30": 1.0086,
+   "31〜80": 0.9708,
+   "81〜999": 0.9808
+  },
+  "ev_lbs_o": {
+   "1.0": {
+    "pairs": 109332,
+    "per_race": 11.486,
+    "races_with_any": 0.966,
+    "ai_over_m": 1.5972,
+    "ai_over_Hq": 1.2594,
+    "m_over_Hq": 0.7885,
+    "median_odds": 62.2
+   },
+   "1.2": {
+    "pairs": 48799,
+    "per_race": 5.126,
+    "races_with_any": 0.838,
+    "ai_over_m": 1.8762,
+    "ai_over_Hq": 1.3373,
+    "m_over_Hq": 0.7128,
+    "median_odds": 86.7
+   },
+   "1.3": {
+    "pairs": 32840,
+    "per_race": 3.45,
+    "races_with_any": 0.734,
+    "ai_over_m": 2.0176,
+    "ai_over_Hq": 1.3745,
+    "m_over_Hq": 0.6813,
+    "median_odds": 99.0
+   },
+   "1.5": {
+    "pairs": 14967,
+    "per_race": 1.572,
+    "races_with_any": 0.513,
+    "ai_over_m": 2.3109,
+    "ai_over_Hq": 1.4397,
+    "m_over_Hq": 0.623,
+    "median_odds": 125.7
+   },
+   "2.0": {
+    "pairs": 2523,
+    "per_race": 0.265,
+    "races_with_any": 0.149,
+    "ai_over_m": 3.0406,
+    "ai_over_Hq": 1.5826,
+    "m_over_Hq": 0.5205,
+    "median_odds": 177.0
+   }
+  },
+  "ev_lbs_o_mid": {
+   "1.0": {
+    "pairs": 134426,
+    "per_race": 14.122,
+    "races_with_any": 0.998,
+    "ai_over_m": 1.5,
+    "ai_over_Hq": 1.2279,
+    "m_over_Hq": 0.8186,
+    "median_odds": 52.599999999999994
+   },
+   "1.2": {
+    "pairs": 62085,
+    "per_race": 6.522,
+    "races_with_any": 0.923,
+    "ai_over_m": 1.7571,
+    "ai_over_Hq": 1.307,
+    "m_over_Hq": 0.7438,
+    "median_odds": 74.9
+   },
+   "1.3": {
+    "pairs": 42174,
+    "per_race": 4.431,
+    "races_with_any": 0.839,
+    "ai_over_m": 1.8908,
+    "ai_over_Hq": 1.342,
+    "m_over_Hq": 0.7097,
+    "median_odds": 88.15
+   },
+   "1.5": {
+    "pairs": 19717,
+    "per_race": 2.071,
+    "races_with_any": 0.611,
+    "ai_over_m": 2.1658,
+    "ai_over_Hq": 1.403,
+    "m_over_Hq": 0.6478,
+    "median_odds": 113.95
+   },
+   "2.0": {
+    "pairs": 3470,
+    "per_race": 0.365,
+    "races_with_any": 0.195,
+    "ai_over_m": 2.7942,
+    "ai_over_Hq": 1.5147,
+    "m_over_Hq": 0.5421,
+    "median_odds": 170.15
+   }
+  }
+ }
+}

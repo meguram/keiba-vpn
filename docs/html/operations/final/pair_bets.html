@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>馬連・ワイドの買い方の研究</title>
+<style>
+:root { --bg:#f7f8fb; --panel:#ffffff; --panel2:#eef1f7; --border:#d5dbe7; --text:#1b2333; --muted:#5b6578;
+  --accent:#2f5fc4; --ok:#1d7f45; --warn:#9a6200; --bad:#b4232c; --code:#eef1f7; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60;
+  --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; } }
+:root[data-theme="dark"] { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60; --text:#e6ecff; --muted:#9aa7c7;
+  --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1180px; margin:0 auto; padding:28px 16px 80px; }
+a { color:var(--accent); }
+h1 { font-size:24px; margin:0 0 6px; line-height:1.4; }
+h2 { font-size:19px; margin:40px 0 6px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:22px 0 4px; }
+p, li { overflow-wrap:anywhere; }
+.sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+.scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:8px 0 14px; border:1px solid var(--border); border-radius:8px; }
+table { border-collapse:collapse; width:100%; min-width:760px; font-size:13.5px; background:var(--panel); }
+th, td { border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+td.n { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+th { background:var(--panel2); color:var(--muted); font-weight:600; white-space:nowrap; }
+tr:last-child td { border-bottom:none; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 5px; border-radius:5px; font-size:12px; overflow-wrap:anywhere; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 16px; margin:12px 0; }
+.b { display:inline-block; font-size:11.5px; padding:0 8px; border-radius:10px; border:1px solid currentColor; white-space:nowrap; }
+.ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .mu { color:var(--muted); }
+details { background:var(--panel); border:1px solid var(--border); border-radius:10px; margin:8px 0; }
+summary { cursor:pointer; padding:8px 12px; }
+details[open] > summary { border-bottom:1px solid var(--border); }
+.dbody { padding:8px 14px 12px; font-size:13.5px; }
+</style>
+</head>
+<body>
+<main>
+<h1>馬連・ワイドの買い方の研究</h1>
+<p class="sub">作成 2026-11-27 17:53（JST）。数字は段 1 の道具（<code>src/research/pair_bets/</code>）の JSON から生成（<code>src/scripts/docs/build_pair_bets.py</code>）。
+段 1 は着順も払戻も使っていない。記録は docs/operations/pair_bets/README.md。判定は rules-council の 1 号（12/4 の A の門）。</p>
+<div class="box">
+<b>結論</b>
+<ul>
+<li>単勝で AI が持つ上乗せは、「軸の 1 頭だけ」に上乗せがある形では、組で薄まる。軸の上乗せ ×1.28 でも組は最大 1.227 倍で、控除の線 1.290 に届かない。</li>
+<li>届くのは、2 頭ともが互いに独立して上乗せを持つ形だけ（2 頭とも ×1.28 で 1.500 倍以上）。2 頭とも ×1.07（確かめの実績の大きさ）では最大 1.172 倍で届かない。</li>
+<li>組の市場（確定）と、単勝の市場から Lo・Bacon-Shone（LBS）の型で作った組の確率は、組の人気の帯の和で比べると 80 番人気まで 0.971〜1.009 で近い。
+ただし組ごとにはばらつきがあり、AI の期待値が 1.3 以上の組では、組の市場の値は単勝からの値より 22〜32% 低い。どちらが正しいかは着順を見ないと決められない。</li>
+<li>AI の組の期待値は、見かけの上で大きく出る。期待値 1.3 以上の組は 1 レースに馬連 3.1・ワイド 3.5 組（単勝は 0.14 頭）。
+AI と市場の食い違いが 2 頭分で掛け算になるためで、上乗せが増えたからではない。
+参考: 単勝の見かけの ×1.78（2022〜24・確定）と、選ぶ期間の実際の ×1.16（2017〜19・T-60 の再現）の比（母集団が違うので目安）を、組の見かけ（AI ÷ 組の市場）に当てると、馬連 1.186・ワイド 1.198 倍で、1.290 に届かない。</li>
+<li>A の門の読み方（1 号が事前に固定）に当てると、札は「上限だけで届く」。100% 超とは言えない。会員の画面・本番の推奨は替えない。</li>
+</ul>
+</div>
+
+<h2>なぜ組では単勝の上乗せが増えないか</h2><ol><li>組が当たるには、軸と相手の 2 頭が両方来る必要がある。AI の強みが軸の 1 頭だけなら、相手の分は市場どおりで、強みは薄まる。</li><li>人気の軸ほど薄まる。軸の勝ちを増やすと、ほかの馬の取り分が減り、相手の 2・3 着の見込みが下がるため。ワイドは 3 着内なので、さらに薄まる。</li><li>強みが掛け算で増えるのは、2 頭ともに独立した強みがあるときだけ。AI が 2 頭を同時に買いかぶると、誤差も同じ向きに出やすい。</li><li>期待値の高い組がたくさん見えるのは、AI と市場の食い違いが 2 頭分で掛け算になるから。しかも、その組の多くは、組の市場が単勝の市場より低く見ている組である。</li></ol>
+<h2>段 1 (a) 上乗せの算数</h2><p>単勝の上乗せ r を、和 1 に直した後の値で植え、同じ型で組の確率の比を出した（1,500 レース・2022〜24・確定の q だけ）。太字は控除の線 1.290 以上。単勝の s* 0.86 を掛けた線は 1.500。</p>
+<div class="scroll"><table><thead><tr><th>型</th><th>r</th><th>馬連 Harville</th><th>馬連 LBS</th><th>ワイド Harville</th><th>ワイド LBS</th></tr></thead><tbody><tr><td>主: 軸だけ</td><td class="n">1.07</td><td class="n">1.059</td><td class="n">1.054</td><td class="n">1.049</td><td class="n">1.043</td></tr><tr><td>主: 軸だけ</td><td class="n">1.15</td><td class="n">1.124</td><td class="n">1.115</td><td class="n">1.104</td><td class="n">1.091</td></tr><tr><td>主: 軸だけ</td><td class="n">1.28</td><td class="n">1.227</td><td class="n">1.211</td><td class="n">1.187</td><td class="n">1.165</td></tr><tr><td>上限: 2 頭とも</td><td class="n">1.07</td><td class="n">1.172</td><td class="n">1.155</td><td class="n">1.137</td><td class="n">1.116</td></tr><tr><td>上限: 2 頭とも</td><td class="n">1.15</td><td class="n"><b>1.393</b></td><td class="n"><b>1.352</b></td><td class="n"><b>1.303</b></td><td class="n">1.256</td></tr><tr><td>上限: 2 頭とも</td><td class="n">1.28</td><td class="n"><b>1.808</b></td><td class="n"><b>1.717</b></td><td class="n"><b>1.595</b></td><td class="n"><b>1.500</b></td></tr></tbody></table></div>
+<p>軸の人気ごと（主の型・r 1.28・Harville・相手の帯の中で最大）:</p>
+<div class="scroll"><table><thead><tr><th>券種</th><th>軸 1 番人気</th><th>軸 2〜3 番人気</th><th>軸 4〜6 番人気</th><th>軸 7〜10 番人気</th><th>軸 11〜 番人気</th></tr></thead><tbody><tr><td>馬連</td><td class="n">1.206</td><td class="n">1.246</td><td class="n">1.264</td><td class="n">1.273</td><td class="n">1.278</td></tr><tr><td>ワイド</td><td class="n">1.142</td><td class="n">1.199</td><td class="n">1.240</td><td class="n">1.263</td><td class="n">1.274</td></tr></tbody></table></div>
+<h2>段 1 (b) 組の市場と単勝の市場</h2><p>確定の組のオッズの m ÷ 単勝の q からの組の確率（帯の和の比）。c13 と同じ平場の 9,519 レース・865,663 組（2022〜24）。Harville との差は、人気馬の 2・3 着を見すぎる型の偏りでも生じる。LBS で直すと帯の和ではほぼ 1 になる（組ごとにはばらつきがある）。</p>
+<div class="scroll"><table><thead><tr><th>組の人気</th><th>馬連 Harville</th><th>馬連 LBS</th><th>ワイド Harville</th><th>ワイド LBS</th></tr></thead><tbody><tr><td>1〜3</td><td class="n">0.877</td><td class="n">1.000</td><td class="n">0.799</td><td class="n">1.007</td></tr><tr><td>4〜10</td><td class="n">0.979</td><td class="n">0.989</td><td class="n">0.911</td><td class="n">1.001</td></tr><tr><td>11〜30</td><td class="n">1.123</td><td class="n">1.009</td><td class="n">1.143</td><td class="n">1.009</td></tr><tr><td>31〜80</td><td class="n">1.268</td><td class="n">0.993</td><td class="n">1.468</td><td class="n">0.971</td></tr><tr><td>81〜999</td><td class="n">1.711</td><td class="n">1.159</td><td class="n">2.044</td><td class="n">0.981</td></tr></tbody></table></div>
+<p>AI（c13 の凍結の組み合わせ・確定のオッズ・LBS。ワイドは下限）の期待値の線ごとの数と、その組の AI ÷ 組の市場・組の市場 ÷ 単勝からの組:</p>
+<div class="scroll"><table><thead><tr><th>線</th><th>単勝（頭/レース）</th><th>馬連（組/レース）</th><th>ワイド（組/レース）</th><th>馬連 AI ÷ 組の市場</th><th>ワイド AI ÷ 組の市場</th><th>馬連 組の市場 ÷ 単勝から</th><th>ワイド 組の市場 ÷ 単勝から</th></tr></thead><tbody><tr><td>1.0</td><td class="n">1.23</td><td class="n">10.0</td><td class="n">11.5</td><td class="n">1.546</td><td class="n">1.597</td><td class="n">0.853</td><td class="n">0.788</td></tr><tr><td>1.2</td><td class="n">0.28</td><td class="n">4.6</td><td class="n">5.1</td><td class="n">1.803</td><td class="n">1.876</td><td class="n">0.798</td><td class="n">0.713</td></tr><tr><td>1.3</td><td class="n">0.14</td><td class="n">3.1</td><td class="n">3.5</td><td class="n">1.940</td><td class="n">2.018</td><td class="n">0.775</td><td class="n">0.681</td></tr><tr><td>1.5</td><td class="n">0.04</td><td class="n">1.4</td><td class="n">1.6</td><td class="n">2.229</td><td class="n">2.311</td><td class="n">0.732</td><td class="n">0.623</td></tr><tr><td>2.0</td><td class="n">0.00</td><td class="n">0.3</td><td class="n">0.3</td><td class="n">3.013</td><td class="n">3.041</td><td class="n">0.665</td><td class="n">0.520</td></tr></tbody></table></div>
+<h2>AI ÷ LBS の帯ごとの m ÷ LBS（組のオッズを帯に使わない）</h2><p>予測と線は数える前に固定した（predictions_ai_band.json）。線: 上の帯 ÷ 下の帯が 3 年とも 0.97〜1.03 なら P1（選び方の偏りだけ）、3 年とも 1.03 より上なら P2、3 年とも 0.97 より下なら P3、割れたら決まらない。判定: 馬連（全部） P1・馬連（81 番人気より下を除く） 決まらない・ワイド 決まらない。線の上の P1 は、端の帯どうしの比が 1 に近いことだけを言い、帯によらず平らという中身は表で確かめる。m を使わない帯の m ÷ LBS は 0.961〜1.058 の範囲（3 つの版・記述だけ）。形はおおむね U 字で、両端が高く中ほどが低い。上の帯が 1 を超えるのは、組の市場が AI と同じ向きの情報を持つ形とも読めるが、下の帯（AI が低く見る組）も 1 を超える版があり、この読みとは逆向きになる。両端の組を LBS が低く見積もるずれとも読め、区別できない。81 番人気より下を除く版は、組を除いた後に十分位を切り直した（組の人気が欠けた組も落ちる）。</p>
+<div class="scroll"><table><thead><tr><th>券種・年</th><th>下の帯（第 1 十分位）</th><th>中ほどの最小</th><th>上の帯（第 10 十分位）</th><th>上 ÷ 下</th></tr></thead><tbody><tr><td>馬連（全部） 2022</td><td class="n">1.054</td><td class="n">0.978</td><td class="n">1.039</td><td class="n">0.986</td></tr><tr><td>馬連（全部） 2023</td><td class="n">1.058</td><td class="n">0.975</td><td class="n">1.038</td><td class="n">0.981</td></tr><tr><td>馬連（全部） 2024</td><td class="n">1.021</td><td class="n">0.969</td><td class="n">1.045</td><td class="n">1.024</td></tr><tr><td>馬連（81 番人気より下を除く） 2022</td><td class="n">1.018</td><td class="n">0.973</td><td class="n">1.040</td><td class="n">1.022</td></tr><tr><td>馬連（81 番人気より下を除く） 2023</td><td class="n">1.016</td><td class="n">0.972</td><td class="n">1.042</td><td class="n">1.026</td></tr><tr><td>馬連（81 番人気より下を除く） 2024</td><td class="n">0.988</td><td class="n">0.961</td><td class="n">1.050</td><td class="n">1.063</td></tr><tr><td>ワイド 2022</td><td class="n">1.016</td><td class="n">0.972</td><td class="n">1.037</td><td class="n">1.021</td></tr><tr><td>ワイド 2023</td><td class="n">1.028</td><td class="n">0.966</td><td class="n">1.038</td><td class="n">1.009</td></tr><tr><td>ワイド 2024</td><td class="n">1.002</td><td class="n">0.967</td><td class="n">1.040</td><td class="n">1.037</td></tr></tbody></table></div>
+<h2>組の s*（確定 ÷ T-60 のオッズ）</h2><p>2026-10-24 以降の 318 レース（手元の写し・着順なし）。選ぶ前の全部の組の中央値で、選んだ組ほど縮む分は入らない。門 0 の模擬の払戻の縮みにだけ使う。</p>
+<div class="scroll"><table><thead><tr><th>T-60 の組の人気</th><th>馬連</th><th>ワイド（下限）</th><th>ワイド（中点）</th></tr></thead><tbody><tr><td>1〜3</td><td class="n">0.952</td><td class="n">0.882</td><td class="n">0.891</td></tr><tr><td>4〜10</td><td class="n">1.060</td><td class="n">0.943</td><td class="n">0.957</td></tr><tr><td>11〜30</td><td class="n">1.159</td><td class="n">1.087</td><td class="n">1.097</td></tr><tr><td>31〜80</td><td class="n">1.382</td><td class="n">1.394</td><td class="n">1.399</td></tr><tr><td>81〜</td><td class="n">1.714</td><td class="n">1.827</td><td class="n">1.828</td></tr></tbody></table></div>
+<h2>この先</h2><ul>
+<li>着順を使う方策の探索（軸の選び方・相手・点数・見送り）は、A の門と R0-12 の門 0 の両方を通ったときだけ、R0-12 の段 B の 10 回目の中で 1 回流す。型は深さ 2 以下の木か格子に限る（1 号の条件）。</li>
+<li>出せるのは凍結した方策・検出力の模擬・前向きの事前登録の案だけ。100% 超と言える道は、凍結の後の発走前オッズでの前向きの記録だけ。</li>
+</ul>
+<h2>作り</h2><ul>
+<li>組の確率: <code>src/research/rules_council/place_w.py</code> の <code>ordered_probs</code>（Harville (1, 1, 1)・LBS (1, 0.81, 0.65)）。</li>
+<li>AI: めぐ AI v5bag（年ごとに前へ進める学習）と c13 の凍結の組み合わせ。q は確定で置いた（楽観の上限）。</li>
+<li>限界: 確定のオッズの値。型の中の算数で、AI の誤差の 2 頭の間の相関は入れていない（上限の型は 2 頭の上乗せが独立の場合）。単勝の縮みの目安は母集団の違う 2 つの値の比で、1.16 はすでに見た値。</li>
+<li>費用 0 円（手元のファイルだけ。GCS を読まない）。</li>
+</ul>
+</main>
+</body>
+</html>

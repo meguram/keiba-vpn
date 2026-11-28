@@ -22,9 +22,10 @@ import { raceExists } from "@/lib/raceExists";
 import { LoadingNotice } from "@/components/LoadingNotice";
 import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { firstCornerPos } from "@/lib/resultCheck";
+import { earlySortKey, positionShort, positionText } from "@/lib/trackBias";
 import { MarkNote } from "@/components/MarkNote";
-import { RaceLevelNote } from "@/components/RaceResult";
-import type { RaceLevel, RaceResultData } from "@/lib/hooks/useRaceResult";
+import { RaceLevelNote, TrackBiasNote } from "@/components/RaceResult";
+import type { RaceLevel, RaceResultData, TrackBias } from "@/lib/hooks/useRaceResult";
 
 const SHOW_MEGU = featureEnabled("megu-index");
 const SHOW_TRACKING = featureEnabled("tracking-difficulty");
@@ -284,6 +285,7 @@ export default function RaceDetailPage() {
   const { isMember, isAdmin, loading: authLoading } = useAuthStatus();
   const lock = !authLoading && !isMember;      // 匿名は勝率・複勝率まで（それ以外はサーバが落としている）
   const [raceLevel, setRaceLevel] = useState<RaceLevel | undefined>(undefined);   // レースレベル・開催日レベル・メンバーレベル（会員だけ。確定の結果の API）
+  const [trackBias, setTrackBias] = useState<TrackBias | undefined>(undefined);   // トラックバイアス（会員だけ。同じ API）
   const narrow = useNarrow();
 
   const loadSeq = useRef(0);
@@ -389,10 +391,11 @@ export default function RaceDetailPage() {
   const hasResult = (raceData?.race_result?.entries?.length ?? 0) > 0;
   useEffect(() => {
     setRaceLevel(undefined);                                       // 別のレースへ移ったら前の値を消す
+    setTrackBias(undefined);
     if (!raceId || !hasResult || lock || authLoading || USE_MOCK) return;
     let alive = true;
     getJson<RaceResultData>(`/api/race/${raceId}/result`, { ttlMs: PRED_TTL_MS })
-      .then((d) => { if (alive && d?.status === "final") setRaceLevel(d.race_level); })
+      .then((d) => { if (alive && d?.status === "final") { setRaceLevel(d.race_level); setTrackBias(d.track_bias); } })
       .catch(() => { /* 取れなければ出さない */ });
     return () => { alive = false; };
   }, [raceId, hasResult, lock, authLoading]);
@@ -600,6 +603,8 @@ export default function RaceDetailPage() {
     </div>
   );
 
+  // 位置の列の頭数: トラックバイアスの 1〜3 着の頭数（発走した馬）。無いときだけ通過順のある行の数で代える（通過順の無い中止の馬の分だけ少ない）
+  const tbField = !lock && trackBias?.available ? (trackBias.top3?.[0]?.field ?? resultEntries.filter((e) => e.passing_order).length) : 0;
   const resultCols: { key: string; label: string; val: (e: RaceEntry) => number | string | null }[] = [
     { key: "pos", label: "着順", val: (e) => finishKey(e) >= 10_000 ? null : finishKey(e) },
     { key: "waku", label: "枠", val: (e) => wakuOf(Number(e.horse_number ?? e.number), resultEntries.length, Number(e.bracket_number) || null) ?? null },
@@ -608,6 +613,8 @@ export default function RaceDetailPage() {
     { key: "jockey", label: "騎手", val: (e) => (pick(e, "jockey_name", "jockey") || null) },
     { key: "time", label: "タイム", val: (e) => parseTimeSec((e.time ?? e.finish_time) as string | undefined) },
     { key: "passing", label: "通過順", val: (e) => firstCornerPos(e.passing_order) },
+    // 位置（序盤 → 4 角の 番手/頭数）は、トラックバイアスが出ているときだけ（会員・確定）。並べ替えは序盤の番手
+    ...(tbField ? [{ key: "tbpos", label: "位置", val: (e: RaceEntry) => earlySortKey(e.passing_order) }] : []),
     { key: "l3f", label: "上り3F", val: (e) => { const n = Number(e.last3f ?? e.last_3f); return Number.isFinite(n) && n > 0 ? n : null; } },
     ...(showFinalOdds ? [
       { key: "pop", label: "人気", val: (e: RaceEntry) => { const n = Number(e.popularity); return Number.isFinite(n) && n > 0 ? n : null; } },
@@ -629,7 +636,8 @@ export default function RaceDetailPage() {
     <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>🏆 レース結果データがありません</div>
   ) : (
     <div style={{ overflowX: "auto" }}>
-      {!lock && <RaceLevelNote lv={raceLevel} />}
+      {!lock && <RaceLevelNote key={raceId} lv={raceLevel} />}
+      {!lock && <TrackBiasNote key={raceId} tb={trackBias} />}
       <table data-no-sort style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
         <thead style={{ background: "var(--surface2)" }}>
           <tr>
@@ -661,6 +669,7 @@ export default function RaceDetailPage() {
                 <td className="m-hide" style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "jockey_name", "jockey") || "—"}</td>
                 <td style={TD}>{e.time ?? e.finish_time ?? "—"}</td>
                 <td className="m-hide" style={{ ...TD, fontSize: 11 }}>{e.passing_order ?? "—"}</td>
+                {tbField > 0 && <td style={{ ...TD, fontSize: 11, color: "var(--text-dim)", whiteSpace: "nowrap" }}><span className="m-hide">{positionText(e.passing_order, tbField)}</span><span className="m-only">{positionShort(e.passing_order, tbField)}</span></td>}
                 <td style={TD}>{e.last3f ?? e.last_3f ?? "—"}</td>
                 {showFinalOdds && <td style={TD}>{positive(Number(e.popularity)) ?? "—"}</td>}
                 {showFinalOdds && <td style={TD}>{positive(e.odds) != null ? `${positive(e.odds)!.toFixed(1)}倍` : "—"}</td>}

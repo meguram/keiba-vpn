@@ -420,6 +420,7 @@ _GUARD_ENTRY = {
     "src/research/course/megu_why.py": {"_collect_inner", "cmd_graded", "cmd_perm"},   # 100% を超えない理由の診断（eval_only・研究の CLI）
     "src/research/course/megu_oikiri.py": {"_select_inner", "_final_inner"},   # 追い切りの切り口の 1 回だけの評価（eval_only・研究の CLI）
     "src/research/megu_cycles/mc_data.py": {"cmd_build", "cmd_build_rich", "cmd_build_offset", "cmd_build_bag"},   # めぐサイクルの表（reproduce・研究の CLI）
+    "src/research/longshot_ai/lsai.py": {"cmd_train", "calibrated_market_q3", "cmd_select"},   # 穴馬 AI（学習の教師・市場の較正・決める段。研究の CLI）
     "src/research/megu_cycles/mc_eval.py": {"confirm", "eval_only_guard"},
     "src/research/rules_council/rc_frame.py": {"build"},          # ルールの会議の全走の表（T-60 の再現のずれの元を読む。eval_only・研究の CLI）
     "src/research/rules_council/t60_check.py": {"main"},          # 本物の T-60 と再現の帯の確かめ（オッズだけ。eval_only）
@@ -428,7 +429,10 @@ _GUARD_ENTRY = {
     "src/research/rules_council/forward_union.py": {"cmd_build", "cmd_ledger"},   # RC-2 の和集合の前向きの台帳（eval_only・forward。研究の CLI）
     "src/research/rules_council/results_table.py": {"main"},   # R0-07 説明の結果の表（select。研究の CLI・1 回だけ）
     "src/research/pedigree_lab/pl_ledger.py": {"open_token"},     # 血統だけのモデルの研究（select・confirm・eval_only。研究の CLI からだけ）
+    "src/research/day_pedigree/day_ledger.py": {"open_token"},    # その日の血統の傾向（select・開発の行だけ。研究の CLI からだけ）
+    "src/research/pair_bets/pb_ledger.py": {"open_token"},        # 馬連・ワイドの段 1（着順・払戻なし。研究の CLI からだけ）
     "src/research/track_bias/tb_ledger.py": {"open_token"},       # トラックバイアスの記述（calibrate は select・build-all は eval_only。研究の CLI からだけ）
+    "src/research/aptitude_group/ag_ledger.py": {"open_token"},   # 適性グループ（select・開発の行だけ。研究の CLI からだけ）
     "src/research/megu_cycles/mc_final.py": {"cmd_final", "cmd_drift"},     # めぐサイクルの最後の 1 回の確かめ・再現の楽観の測り（eval_only）   # めぐサイクルの 2022〜24 の確かめ（confirm）・割引きと最後の確かめ（eval_only）
     "src/research/model_relabel/mr_labels.py": {"load_results"},   # 拡張ラベルの教師（reproduce・研究の CLI）
     "src/research/model_relabel/mr_train.py": {"run"},              # 拡張ラベルの学習（reproduce・研究の CLI）

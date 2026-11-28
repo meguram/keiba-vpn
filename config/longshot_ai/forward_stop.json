@@ -1,0 +1,27 @@
+{
+ "note": "穴馬 AI の前向きの記録の打ち切り（型だけ。la-2 の指示 7・3 号の 5）。線の値は 2019〜21 の select の後に、前向きの数を見る前に入れる",
+ "status": "型だけ（線の値は未定）",
+ "path": "開催の後の再生（案 A）。本番の経路は v5 の列を作れない",
+ "frozen": {
+  "model_sha": null,
+  "prereg": "config/longshot_ai/prereg.json la-2",
+  "start_date": null
+ },
+ "direction": "害が無いことの確かめ（良さの確かめには約 6,400 レースが要る）",
+ "stop_rules": [
+  {
+   "metric": "R_star = Σ y3 ÷ Σ T-60 の Harville q3（較正の後）",
+   "after_races": 1000,
+   "stop_if_below": null
+  },
+  {
+   "metric": "★ の 3 着内率 − 母集団の平均",
+   "after_races": 1000,
+   "stop_if_below_pt": null
+  }
+ ],
+ "notes": [
+  "skew の雑音（logit に N(0, 0.10)・N(0, 0.23)）で ★ が変わる割合は 13.6%・28.5%（2019〜21・再現 0）。前向きの記録で ★ が本番の値とずれる幅の目安",
+  "5 通りの再現で同じ ★ になる割合は 56〜57%、確定で決めた ★ との一致は 65.4%。★ は 10 倍の境目の近くでぶれやすい"
+ ]
+}

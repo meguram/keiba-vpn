@@ -1,0 +1,84 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>適性グループと組の馬券</title><style>
+:root { --bg:#f7f8fb; --panel:#ffffff; --panel2:#eef1f7; --border:#d5dbe7; --text:#1b2333; --muted:#5b6578; --accent:#2f5fc4; --ok:#1d7f45; --bad:#b4232c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --bad:#f87171; } }
+:root[data-theme="dark"] { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --bad:#f87171; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:16px/1.8 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:980px; margin:0 auto; padding:28px 16px 80px; }
+a { color:var(--accent); } h1 { font-size:25px; margin:0 0 6px; line-height:1.4; }
+h2 { font-size:20px; margin:40px 0 8px; padding-top:16px; border-top:1px solid var(--border); }
+p, li { overflow-wrap:anywhere; } .sub { color:var(--muted); font-size:14px; }
+.big { background:var(--panel); border:2px solid var(--accent); border-radius:14px; padding:14px 18px; margin:14px 0; }
+.scroll { overflow-x:auto; margin:8px 0 14px; border:1px solid var(--border); border-radius:8px; }
+table { border-collapse:collapse; width:100%; min-width:640px; font-size:14.5px; background:var(--panel); }
+th, td { border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:var(--panel2); color:var(--muted); font-weight:600; white-space:nowrap; } td.n { text-align:right; font-variant-numeric:tabular-nums; }
+.bad { color:var(--bad); font-weight:600; } .ok { color:var(--ok); font-weight:600; }
+</style></head><body><main>
+<h1>適性グループと組の馬券</h1>
+<p class="sub">作成 2026-11-27（JST）。担当 aptitude-group。記録は <code>docs/operations/aptitude_group/log.md</code>。道具は <code>src/research/aptitude_group/</code>。開発の行（2017〜24 年）の探す側 70% だけ。2025・26 年は読んでいない。費用 0 円。</p>
+
+<h2>ひとことで言うと</h2>
+<div class="big">
+<p><b>血統の適性が近い馬どうしは、一緒に上位に来やすくはなかった。</b> 段 1（ロジックの確かめ）で閉じ、場面の選び（段 2）と組み方（段 3）には進まない。</p>
+<ul>
+<li>ユーザーの仮説: 特殊なコース・条件では、適性の近い馬が一緒に来る。単勝・複勝の値段にはこの「結果の相関」が入らないので、組の馬券（馬連・ワイド・3連複）でだけ効くはず。</li>
+<li>測った結果、血統の近さの上乗せは −0.014（1 標準偏差あたり・区間 −0.03〜+0.004）。正の向きは無く、むしろ一緒に来にくい向きだった。</li>
+<li>馬連の確定オッズに対しても、近い組の当たりは見込みの 0.996 倍（区間 0.970〜1.023）。控除を越える線（約 1.29 倍）に遠く届かない。</li>
+<li>コースの型の揃い（2500m 以上・芝 1200m 以下・京都・小回り・洋芝・急坂）も、どれも線に届かない。</li>
+<li>組の相関の本体は<b>脚質</b>（その馬自身の前 3 走の位置取り）だった。血統ではない。これは別の議題（12/4 の A の門）へ渡した。</li>
+</ul></div>
+
+<h2>なぜ効くと考えたか（数字の前に書いた言葉）</h2>
+<ul>
+<li>距離やコースのような、発走前に分かる条件の効きは、1 頭ずつの強さに入り、単勝・複勝の値段に入る。</li>
+<li>組の相関を生むのは、発走前に分からない当日の揺れ（ペースの速さ・砂の含水・芝の重さ・前残りか差しか）。</li>
+<li>揺れに同じ向きで反応する血統の 2 頭なら、片方が来た日はもう片方も来やすいはず。</li>
+<li>組の市場は 1 頭ずつの評価を掛け合わせて買われるので、この分を安く付けるはず。</li>
+</ul>
+
+<h2>どう測ったか</h2>
+<ul>
+<li>血統の適性（揺れの次元 4 本: H ペース・スロー・道悪・先行力）を、父 ½・母父 ¼・牝系 3〜5 代 ¼ の血量で、その日より前の走りだけから作った。父は大系統 → 中系統 → 父の順に、件数で縮めた。</li>
+<li>2 着の段・3 着の段の条件付きロジットで、「似た馬が先に来た後に、もう 1 頭が来る上乗せ」を測った。1 頭の強さ（単勝のオッズ・平均の適性・前走・脚質・典型さ）は段ごとに吸わせた。</li>
+<li>対照: 人気の近さ（単勝から作る組の確率の偏りの大きさ）・前走の近さ・同じ父・同じ中系統・脚質の近さを同時に入れた。</li>
+<li>帰無: 当てはめた見込みから着順を引き直す 200 回と、開催の単位のブートストラップ 200 回。</li>
+</ul>
+
+<h2>数（探す側 19,168 レース・1 標準偏差あたり）</h2>
+<div class="scroll"><table>
+<tr><th>項</th><th>係数</th><th>標準誤差</th><th>読み</th></tr>
+<tr><td>血統の揺れの近さ（主）</td><td class="n">−0.014</td><td class="n">0.0095</td><td class="bad">正ではない</td></tr>
+<tr><td>同じ父</td><td class="n">+0.004</td><td class="n">0.006</td><td>≈0</td></tr>
+<tr><td>同じ中系統（父は違う）</td><td class="n">+0.002</td><td class="n">0.007</td><td>≈0</td></tr>
+<tr><td>脚質の近さ</td><td class="n">+0.045</td><td class="n">0.009</td><td class="ok">はっきり正（血統ではない）</td></tr>
+<tr><td>人気の近さ（対照）</td><td class="n">+0.112</td><td class="n">0.012</td><td>単勝から作る組の見込みの偏り</td></tr>
+</table></div>
+<ul>
+<li>2 期（2017〜19・2020〜24）・芝・ダート・揺れの大きい場面（道悪・芝 2400m 以上）のどれでも、血統の近さは負だった。</li>
+<li>2 体の専門家の案で、閉じる前に 1 本だけ作りを替えた（典型さを吸わせる・中心化した内積で測る）。それでも区間の下限は 0 を越えなかった（上限 +0.004〜+0.014）。</li>
+<li>試した数は 23 本。どれも線に届かないので、多重の割り引きは判定を変えない。</li>
+</ul>
+
+<h2>なぜ効かなかったか</h2>
+<ul>
+<li>血統から作った適性と、その馬自身の適性の相関は弱い（約 0.33）。組の項はその 2 乗で薄まり、脚質で見える効きも、血統を通すと約 1/10 になる。検出の下限より小さい。</li>
+<li>当日の揺れへの反応は、その馬自身の走り方（脚質）に出る。血統は平均の適性に薄く効くだけで、これは血統の研究の結論と同じ。</li>
+<li>負の向き（似た馬は一緒に来にくい）は、t が −1.5 で「負である」とまでは言えない。位置の取り合いという読みは後付けなので、知見としては書かない。</li>
+</ul>
+
+<h2>この後に作ったもの（ユーザーの追加の依頼）</h2>
+<ul>
+<li><a href="sire_vectors.html">種牡馬の血統ベクトル</a>: 種牡馬ごとの 13 本の適性（距離・芝ダ・道悪・前の位置・トップスピード・ギアチェンジ・コース 6 本）と、系統の中の近い・遠い。</li>
+<li>詳細系統: 大系統の中で種牡馬のベクトルを群に分けようとしたが、事前に決めた安定の線を越える群は無かった（ベクトルは連続に散らばる）。くわしくは血統ベクトルのページの先頭。</li>
+</ul>
+
+<h2>決まりと限界</h2>
+<ul>
+<li>着順を使ったのは探す側の 70%（seed 20261127・開催の単位）だけ。確かめの 30% は使わずに残した。一覧は <code>docs/operations/aptitude_group/split_search70_race_ids.txt</code>。</li>
+<li>新しい分け方を、着順を開く前に会議（rules-council）へ通さなかった。順番の逆として、会議の記録に自分から申告した。</li>
+<li>判定は確定オッズ。発走前の組のオッズは 2026-10-24 以降しか無い。</li>
+<li>書かない言葉: 「血統で組の馬券が勝てる」「割安」「回収率プラス」。</li>
+</ul>
+</main></body></html>
